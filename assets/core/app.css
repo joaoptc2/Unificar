@@ -1,0 +1,154 @@
+/* ============================================================
+   PLATAFORMA UNIFICADA — Design padrão
+   Topbar fixa (seletor de módulos) + sidebar por módulo.
+   ============================================================ */
+
+:root {
+    --portal-topbar-h: 56px;
+    --portal-sidebar-w: 248px;
+    --portal-primary: #0d5c8f;
+    --portal-primary-dark: #0a4a74;
+    --portal-sidebar-bg: #ffffff;
+    --portal-body-bg: #f4f6f9;
+}
+
+body.portal-body {
+    background: var(--portal-body-bg);
+    padding-top: var(--portal-topbar-h);
+    min-height: 100vh;
+}
+
+/* ---------- Topbar ---------- */
+.portal-topbar {
+    background: linear-gradient(90deg, var(--portal-primary-dark), var(--portal-primary));
+    min-height: var(--portal-topbar-h);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, .18);
+}
+
+.portal-topbar .navbar-brand { font-size: 1rem; }
+
+.portal-module-nav .nav-link {
+    color: rgba(255, 255, 255, .82);
+    border-radius: .5rem;
+    padding: .35rem .75rem;
+    margin: 0 .1rem;
+    white-space: nowrap;
+}
+
+.portal-module-nav .nav-link:hover { color: #fff; background: rgba(255, 255, 255, .12); }
+
+.portal-module-nav .nav-link.active {
+    color: #fff;
+    background: rgba(255, 255, 255, .22);
+    font-weight: 600;
+}
+
+.portal-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .25);
+    color: #fff;
+    font-weight: 600;
+    font-size: .85rem;
+}
+
+.portal-notif-menu { width: 340px; max-width: 92vw; }
+.portal-notif-list { max-height: 340px; overflow-y: auto; }
+
+/* ---------- Shell: sidebar + conteúdo ---------- */
+.portal-shell { display: flex; min-height: calc(100vh - var(--portal-topbar-h)); }
+
+.portal-sidebar {
+    width: var(--portal-sidebar-w);
+    background: var(--portal-sidebar-bg);
+    border-right: 1px solid #e3e7ec;
+}
+
+@media (min-width: 992px) {
+    .portal-shell.has-sidebar .portal-sidebar {
+        position: fixed;
+        top: var(--portal-topbar-h);
+        bottom: 0;
+        left: 0;
+        overflow-y: auto;
+        z-index: 1010;
+    }
+    .portal-shell.has-sidebar .portal-main { margin-left: var(--portal-sidebar-w); }
+}
+
+.portal-sidebar-brand {
+    align-items: center;
+    padding: .9rem 1rem .5rem;
+    font-weight: 700;
+    color: var(--portal-primary-dark);
+    font-size: .95rem;
+}
+
+.portal-sidebar-heading {
+    padding: .9rem 1rem .25rem;
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #8a94a3;
+}
+
+.portal-sidebar-nav .nav-link {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    color: #3d4756;
+    padding: .5rem 1rem;
+    font-size: .92rem;
+    border-left: 3px solid transparent;
+}
+
+.portal-sidebar-nav .nav-link i { font-size: 1.05rem; width: 1.2rem; text-align: center; }
+
+.portal-sidebar-nav .nav-link:hover { background: #f0f4f8; color: var(--portal-primary-dark); }
+
+.portal-sidebar-nav .nav-link.active {
+    background: #e8f1f8;
+    color: var(--portal-primary-dark);
+    font-weight: 600;
+    border-left-color: var(--portal-primary);
+}
+
+/* ---------- Conteúdo ---------- */
+.portal-main { flex: 1 1 auto; min-width: 0; }
+
+.portal-content { padding: 1.25rem; max-width: 1400px; }
+.portal-content-fluid { padding: 0; height: calc(100vh - var(--portal-topbar-h)); overflow: hidden; }
+
+.portal-main > .alert { margin: 1rem 1.25rem 0; }
+
+/* ---------- Login / páginas bare ---------- */
+body.portal-bare { background: linear-gradient(135deg, var(--portal-primary-dark), var(--portal-primary) 60%, #1178b5); }
+.portal-bare-card { width: 420px; max-width: 94vw; border: 0; border-radius: 1rem; }
+.portal-bare-logo {
+    width: 56px; height: 56px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 1rem; font-size: 1.6rem; color: #fff;
+    background: linear-gradient(135deg, var(--portal-primary), #1178b5);
+}
+
+/* ---------- Utilidades comuns aos módulos ---------- */
+.card { border: 1px solid #e6eaef; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+.table > :not(caption) > * > * { vertical-align: middle; }
+
+/* Portal home: cartões de módulos */
+.portal-module-card {
+    transition: transform .12s ease, box-shadow .12s ease;
+    text-decoration: none;
+}
+.portal-module-card:hover { transform: translateY(-3px); box-shadow: 0 8px 22px rgba(13, 92, 143, .15); }
+.portal-module-card .module-icon {
+    width: 52px; height: 52px; border-radius: .9rem;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem; color: #fff;
+    background: linear-gradient(135deg, var(--portal-primary), #1178b5);
+}

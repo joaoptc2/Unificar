@@ -1,0 +1,5 @@
+# Nunca executar código dentro de uploads
+<FilesMatch "\.(php|phar|phtml|php\d)$">
+    Require all denied
+</FilesMatch>
+php_flag engine off

@@ -1,0 +1,16 @@
+# Configuração local (gerada pelo instalador)
+/config/config.php
+
+# Dados de runtime
+/storage/logs/*
+/storage/cache/*
+!/storage/logs/.gitkeep
+!/storage/cache/.gitkeep
+/uploads/*
+!/uploads/.htaccess
+!/uploads/*/.gitkeep
+
+# SO / editores
+.DS_Store
+Thumbs.db
+*.swp
