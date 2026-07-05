@@ -515,8 +515,8 @@ if ($action === 'plans') {
     <div class="page-header">
         <h1><i class="bi bi-droplet-half me-2"></i>Execuções de limpeza</h1>
         <div class="d-flex gap-2">
-            <a class="btn btn-outline-primary btn-sm" href="export.php?type=cleaning&format=csv"><i class="bi bi-download me-1"></i> CSV</a>
-            <a class="btn btn-outline-primary btn-sm" href="export.php?type=cleaning&format=print" target="_blank"><i class="bi bi-printer me-1"></i> Imprimir</a>
+            <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=cleaning&format=csv"><i class="bi bi-download me-1"></i> CSV</a>
+            <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=cleaning&format=print" target="_blank"><i class="bi bi-printer me-1"></i> Imprimir</a>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo url('cleaning', ['action' => 'plans']); ?>"><i class="bi bi-card-checklist me-1"></i> Checklists</a>
             <?php if (canWrite()): ?>
                 <a class="btn btn-primary btn-sm" href="<?php echo url('cleaning', ['action' => 'record']); ?>"><i class="bi bi-plus-lg me-1"></i> Registrar</a>
@@ -547,7 +547,7 @@ if ($action === 'plans') {
 
     <div class="filter-panel">
         <form method="GET" class="row g-2 align-items-end">
-            <input type="hidden" name="page" value="cleaning">
+            <input type="hidden" name="m" value="manutencao"><input type="hidden" name="page" value="cleaning">
             <div class="col-md-3"><label class="form-label">Setor</label><select class="form-select" name="sector_id"><option value="0">Todos</option><?php foreach ($sectors as $s): ?><option value="<?php echo $s['id']; ?>" <?php echo $filterSector===(int)$s['id']?'selected':''; ?>><?php echo e($s['name']); ?></option><?php endforeach; ?></select></div>
             <div class="col-md-2"><label class="form-label">Tipo</label><select class="form-select" name="type"><option value="">Todos</option><?php foreach ($typeLabels as $k2 => $v): ?><option value="<?php echo $k2; ?>" <?php echo $filterType===$k2?'selected':''; ?>><?php echo $v; ?></option><?php endforeach; ?></select></div>
             <div class="col-md-2"><label class="form-label">De</label><input type="date" class="form-control" name="from" value="<?php echo e($filterFrom); ?>"></div>
@@ -578,7 +578,7 @@ if ($action === 'plans') {
                             <td><span class="badge <?php echo $pctClass; ?>"><?php echo $pct !== null ? $pct . '%' : '—'; ?></span></td>
                             <td>
                                 <?php if (!empty($r['photo_path'])): ?>
-                                    <a href="uploads/<?php echo e($r['photo_path']); ?>" target="_blank" class="btn btn-outline-secondary btn-action" title="Foto"><i class="bi bi-image"></i></a>
+                                    <a href="<?php echo e(uploadUrl($r['photo_path'])); ?>" target="_blank" class="btn btn-outline-secondary btn-action" title="Foto"><i class="bi bi-image"></i></a>
                                 <?php endif; ?>
                                 <?php if (!empty($r['signature_data'])): ?>
                                     <button class="btn btn-outline-secondary btn-action" onclick="openModal('sig<?php echo $r['id']; ?>')" title="Assinatura"><i class="bi bi-pen"></i></button>

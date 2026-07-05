@@ -477,7 +477,7 @@ if ($action === 'routes') {
                             <td class="text-muted"><?php echo e(mb_strimwidth($r['observation'] ?? '', 0, 40, '...')); ?></td>
                             <td>
                                 <?php if (!empty($r['photo_path'])): ?>
-                                    <a href="uploads/<?php echo e($r['photo_path']); ?>" target="_blank" class="btn btn-outline-secondary btn-action" title="Foto"><i class="bi bi-image"></i></a>
+                                    <a href="<?php echo e(uploadUrl($r['photo_path'])); ?>" target="_blank" class="btn btn-outline-secondary btn-action" title="Foto"><i class="bi bi-image"></i></a>
                                 <?php endif; ?>
                             </td>
                         </tr>

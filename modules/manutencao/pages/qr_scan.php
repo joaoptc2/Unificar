@@ -65,15 +65,13 @@ if ($loc && $_SERVER['REQUEST_METHOD'] === 'POST') {
             try { addOsHistory($newOsId, 'Solicitacao de limpeza via QR', 'Local: ' . $loc['name']); } catch (Throwable $ignored) {}
 
             try {
-                db()->prepare("
-                    INSERT INTO notifications (hospital_id, type, title, message, reference_id, created_at)
-                    VALUES (?, 'warning', ?, ?, ?, NOW())
-                ")->execute([
-                    (int)$loc['hospital_id'],
+                // Notificações globais (por usuário) para os gestores do módulo
+                manNotifyManagers(
+                    'warning',
                     'Solicitacao de limpeza',
                     'Local: ' . $loc['name'] . ($loc['sector_name'] ? ' - Setor: ' . $loc['sector_name'] : '') . ' (OS ' . $osNumber . ')',
-                    $newOsId,
-                ]);
+                    'index.php?m=manutencao&page=service-orders&action=edit&id=' . $newOsId
+                );
             } catch (Throwable $ignored) {}
 
             $view = 'done';
@@ -135,7 +133,7 @@ if ($loc && $_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Solicitação &middot; <?php echo e(APP_NAME); ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="assets/css/style.css" rel="stylesheet">
+    <link href="<?php echo core_asset('manutencao/style.css'); ?>" rel="stylesheet">
 </head>
 <body class="bg-light">
 

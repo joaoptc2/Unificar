@@ -315,7 +315,7 @@ else:
 <!-- FILTRO -->
 <div class="filter-panel">
     <form method="GET" class="row g-2 align-items-end">
-        <input type="hidden" name="page" value="stock">
+        <input type="hidden" name="m" value="manutencao"><input type="hidden" name="page" value="stock">
         <div class="col-md-5">
             <label class="form-label">Buscar</label>
             <input type="text" class="form-control" name="filter" value="<?php echo e($filter); ?>" placeholder="Nome ou código...">

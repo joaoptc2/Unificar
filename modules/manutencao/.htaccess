@@ -4,13 +4,9 @@
 # Desativar listagem de diretórios
 Options -Indexes
 
-# Proteger arquivos sensíveis
-<FilesMatch "^(config|db-config|db-config\.example|install)\.php$">
-    # install.php deve ser removido após uso; continua acessível enquanto existir
-    # os demais ficam bloqueados para acesso direto
-</FilesMatch>
-
-<FilesMatch "^(config|db-config|db-config\.example)\.php$">
+# Proteger arquivos sensíveis (o módulo só deve ser servido pelo
+# front controller da raiz: /index.php?m=manutencao)
+<FilesMatch "^(config|module|cron|export)\.php$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>

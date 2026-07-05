@@ -51,7 +51,7 @@ ob_start();
 
 <div class="filter-panel mb-3">
     <form method="GET" class="row g-2 align-items-end">
-        <input type="hidden" name="page" value="search">
+        <input type="hidden" name="m" value="manutencao"><input type="hidden" name="page" value="search">
         <div class="col">
             <input type="text" class="form-control" name="q" value="<?php echo e($q); ?>" placeholder="Buscar equipamentos, OS, peças, técnicos..." autofocus>
         </div>

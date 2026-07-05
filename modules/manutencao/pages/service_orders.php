@@ -200,10 +200,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             // Deduct from stock
             db()->prepare("UPDATE man_parts SET quantity = quantity - ? WHERE id=?")->execute([$qty, $partId]);
 
-            // Record stock movement
+            // Record stock movement (colunas do schema: type entry/exit + reason)
             try {
-                db()->prepare("INSERT INTO man_stock_movements (hospital_id, part_id, type, quantity, reference_type, reference_id, notes, created_by) VALUES (?,?,'out',?,'os',?,?,?)")
-                    ->execute([$hid, $partId, $qty, $osId, 'Peça utilizada na OS', $_SESSION['user_id'] ?? null]);
+                db()->prepare("INSERT INTO man_stock_movements (hospital_id, part_id, type, quantity, reason, created_by) VALUES (?,?,'exit',?,?,?)")
+                    ->execute([$hid, $partId, $qty, 'Peça utilizada na OS #' . $osId, $_SESSION['user_id'] ?? null]);
             } catch (\Throwable $ignored) {}
 
             flash('success', 'Peça adicionada.');
@@ -224,10 +224,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
                 db()->prepare("UPDATE man_parts SET quantity = quantity + ? WHERE id=?")->execute([$opRow['quantity'], $opRow['part_id']]);
                 db()->prepare("DELETE FROM man_os_parts WHERE id=?")->execute([$osPartId]);
 
-                // Record stock movement
+                // Record stock movement (colunas do schema: type entry/exit + reason)
                 try {
-                    db()->prepare("INSERT INTO man_stock_movements (hospital_id, part_id, type, quantity, reference_type, reference_id, notes, created_by) VALUES (?,?,'in',?,'os',?,?,?)")
-                        ->execute([$hid, $opRow['part_id'], $opRow['quantity'], $osId, 'Peça devolvida da OS', $_SESSION['user_id'] ?? null]);
+                    db()->prepare("INSERT INTO man_stock_movements (hospital_id, part_id, type, quantity, reason, created_by) VALUES (?,?,'entry',?,?,?)")
+                        ->execute([$hid, $opRow['part_id'], $opRow['quantity'], 'Peça devolvida da OS #' . $osId, $_SESSION['user_id'] ?? null]);
                 } catch (\Throwable $ignored) {}
 
                 flash('success', 'Peça removida.');
@@ -258,8 +258,16 @@ $equipments = db()->prepare("SELECT id, name, code FROM man_equipment WHERE hosp
 $equipments->execute([$hid]);
 $equipments = $equipments->fetchAll();
 
-$users = db()->prepare("SELECT id, name FROM users WHERE hospital_id = ? AND status = 'active' ORDER BY name");
-$users->execute([$hid]);
+// Usuários atribuíveis: quem tem acesso ao módulo (tabela global users +
+// user_module_access) ou é admin global da plataforma.
+$users = db()->prepare("
+    SELECT DISTINCT u.id, u.name
+    FROM users u
+    LEFT JOIN user_module_access uma ON uma.user_id = u.id AND uma.module_slug = 'manutencao'
+    WHERE u.active = 1 AND (uma.id IS NOT NULL OR u.is_admin = 1)
+    ORDER BY u.name
+");
+$users->execute();
 $users = $users->fetchAll();
 
 $statusLabels = ['open'=>'Aberta','in_progress'=>'Em Andamento','waiting_part'=>'Aguardando Peça','completed'=>'Concluída','cancelled'=>'Cancelada'];
@@ -570,7 +578,7 @@ try {
     <div class="card-header bg-white fw-semibold"><i class="bi bi-link-45deg me-1"></i> Link Anônimo</div>
     <div class="card-body">
         <?php if ($os['anonymous_token']): ?>
-            <p class="mb-0 small">Link: <code><?php echo e('index.php?page=anonymous-os&token=' . $os['anonymous_token']); ?></code></p>
+            <p class="mb-0 small">Link: <code><?php echo e(core_url('index.php') . '?m=manutencao&page=anonymous-os&token=' . $os['anonymous_token']); ?></code></p>
         <?php else: ?>
             <?php if (canWrite()): ?>
             <form method="POST" action="<?php echo url('service-orders'); ?>">
@@ -653,8 +661,8 @@ else:
 <div class="page-header">
     <h1><i class="bi bi-clipboard-check me-2"></i>Ordens de Serviço</h1>
     <div class="d-flex gap-2">
-        <a class="btn btn-outline-primary btn-sm" href="export.php?type=service_orders&format=csv"><i class="bi bi-download me-1"></i> CSV</a>
-        <a class="btn btn-outline-primary btn-sm" href="export.php?type=service_orders&format=print" target="_blank" rel="noopener"><i class="bi bi-printer me-1"></i> Imprimir</a>
+        <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=service_orders&format=csv"><i class="bi bi-download me-1"></i> CSV</a>
+        <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=service_orders&format=print" target="_blank" rel="noopener"><i class="bi bi-printer me-1"></i> Imprimir</a>
         <?php if (canWrite()): ?>
             <button onclick="openModal('modalAdd')" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nova OS</button>
         <?php endif; ?>
@@ -664,7 +672,7 @@ else:
 <!-- FILTRO -->
 <div class="filter-panel">
     <form method="GET" class="row g-2 align-items-end">
-        <input type="hidden" name="page" value="service-orders">
+        <input type="hidden" name="m" value="manutencao"><input type="hidden" name="page" value="service-orders">
         <div class="col-md-4">
             <label class="form-label">Buscar</label>
             <input type="text" class="form-control" name="filter" value="<?php echo e($filter); ?>" placeholder="Número ou título...">

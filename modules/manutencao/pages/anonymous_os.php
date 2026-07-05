@@ -37,7 +37,7 @@ $typeLabels   = ['preventive'=>'Preventiva','corrective'=>'Corretiva','predictiv
     <title>OS <?php echo $os ? e($os['os_number']) : 'Não encontrada'; ?> &middot; <?php echo e(APP_NAME); ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="assets/css/style.css" rel="stylesheet">
+    <link href="<?php echo core_asset('manutencao/style.css'); ?>" rel="stylesheet">
 </head>
 <body class="bg-light">
 

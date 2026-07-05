@@ -176,9 +176,7 @@ elseif ($action === 'detail'):
     $maintPlans->execute([$id, $hid]);
     $maintPlans = $maintPlans->fetchAll();
 
-    $baseUrl = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . dirname($_SERVER['SCRIPT_NAME'] ?? '/');
-    $baseUrl = rtrim($baseUrl, '/') . '/';
-    $eqPublicUrl = $baseUrl . 'index.php?page=anonymous-os&token=' . urlencode($eq['qr_token'] ?? '');
+    $eqPublicUrl = core_url('index.php') . '?m=manutencao&page=anonymous-os&token=' . urlencode($eq['qr_token'] ?? '');
     $qrImageUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . urlencode($eqPublicUrl);
 
     $freqLabels = ['daily'=>'Diária','weekly'=>'Semanal','biweekly'=>'Quinzenal','monthly'=>'Mensal','quarterly'=>'Trimestral','semiannual'=>'Semestral','annual'=>'Anual'];
@@ -418,7 +416,7 @@ else:
 
 <div class="filter-panel">
     <form method="GET" class="row g-2 align-items-end">
-        <input type="hidden" name="page" value="equipment">
+        <input type="hidden" name="m" value="manutencao"><input type="hidden" name="page" value="equipment">
         <div class="col-md-4">
             <label class="form-label">Buscar</label>
             <input type="text" class="form-control" name="filter" value="<?php echo e($filter); ?>" placeholder="Nome, código ou série...">

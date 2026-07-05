@@ -224,7 +224,7 @@ function getFlash(): ?array
 
 function redirect(string $url): void
 {
-    // URLs relativas legadas 'index.php?page=x' precisam carregar m=manutencao
+    // URLs relativas legadas (index.php + query 'page=x') ganham m=manutencao
     if (str_starts_with($url, 'index.php?') && strpos($url, 'm=') === false) {
         $url = MODULE_URL . '&' . substr($url, strlen('index.php?'));
     }

@@ -253,8 +253,8 @@ if ($action === 'execute'):
 <div class="page-header">
     <h1><i class="bi bi-rulers me-2"></i>Calibração de Equipamentos</h1>
     <div class="d-flex gap-2">
-        <a class="btn btn-outline-primary btn-sm" href="export.php?type=calibrations&format=csv<?php echo $filterStatus!=='all' ? '&status=' . e($filterStatus) : ''; ?>"><i class="bi bi-download me-1"></i> CSV</a>
-        <a class="btn btn-outline-primary btn-sm" href="export.php?type=calibrations&format=print<?php echo $filterStatus!=='all' ? '&status=' . e($filterStatus) : ''; ?>" target="_blank" rel="noopener"><i class="bi bi-printer me-1"></i> Imprimir/PDF</a>
+        <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=calibrations&format=csv<?php echo $filterStatus!=='all' ? '&status=' . e($filterStatus) : ''; ?>"><i class="bi bi-download me-1"></i> CSV</a>
+        <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=calibrations&format=print<?php echo $filterStatus!=='all' ? '&status=' . e($filterStatus) : ''; ?>" target="_blank" rel="noopener"><i class="bi bi-printer me-1"></i> Imprimir/PDF</a>
         <?php if (canWrite()): ?>
             <button onclick="openModal('modalAdd')" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nova calibração</button>
         <?php endif; ?>
@@ -301,7 +301,7 @@ if ($action === 'execute'):
 <!-- FILTERS -->
 <div class="filter-panel">
     <form method="GET" class="row g-2 align-items-end">
-        <input type="hidden" name="page" value="calibration">
+        <input type="hidden" name="m" value="manutencao"><input type="hidden" name="page" value="calibration">
         <div class="col-md-3">
             <label class="form-label">Situação</label>
             <select name="status" class="form-select">
@@ -369,7 +369,7 @@ if ($action === 'execute'):
                         <td><?php echo e($r['responsible_body'] ?? '-'); ?></td>
                         <td>
                             <?php if (!empty($r['certificate_path'])): ?>
-                                <a href="uploads/<?php echo e($r['certificate_path']); ?>" target="_blank" rel="noopener" class="text-decoration-none"><i class="bi bi-file-earmark-pdf me-1"></i>Ver</a>
+                                <a href="<?php echo e(uploadUrl($r['certificate_path'])); ?>" target="_blank" rel="noopener" class="text-decoration-none"><i class="bi bi-file-earmark-pdf me-1"></i>Ver</a>
                             <?php else: ?>-<?php endif; ?>
                         </td>
                         <td>
@@ -566,7 +566,7 @@ foreach ($rows as $r):
                             <input type="file" name="certificate" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
                             <?php if (!empty($r['certificate_path'])): ?>
                                 <div class="form-text">
-                                    Atual: <a href="uploads/<?php echo e($r['certificate_path']); ?>" target="_blank" rel="noopener">ver certificado</a>
+                                    Atual: <a href="<?php echo e(uploadUrl($r['certificate_path'])); ?>" target="_blank" rel="noopener">ver certificado</a>
                                 </div>
                             <?php endif; ?>
                         </div>

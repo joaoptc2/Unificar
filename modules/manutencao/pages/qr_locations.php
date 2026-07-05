@@ -62,10 +62,8 @@ $sectors = db()->prepare("SELECT id, name FROM man_sectors WHERE hospital_id = ?
 $sectors->execute([$hid]);
 $sectors = $sectors->fetchAll();
 
-$baseUrl = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http')
-         . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost')
-         . dirname($_SERVER['SCRIPT_NAME'] ?? '/');
-$baseUrl = rtrim($baseUrl, '/') . '/';
+// Link público absoluto (impresso no QR Code) — via BASE_URL do núcleo
+$qrScanBase = core_url('index.php') . '?m=manutencao&page=qr-scan&token=';
 
 $pageTitle = 'QR Codes';
 ob_start();
@@ -91,7 +89,7 @@ ob_start();
                     <tr><td colspan="5" class="text-center text-muted py-4">Nenhum local cadastrado.</td></tr>
                 <?php else: ?>
                     <?php foreach ($locs as $l):
-                        $scanUrl = $baseUrl . 'index.php?page=qr-scan&token=' . urlencode($l['token']);
+                        $scanUrl = $qrScanBase . urlencode($l['token']);
                     ?>
                     <tr>
                         <td><strong><?php echo e($l['name']); ?></strong>

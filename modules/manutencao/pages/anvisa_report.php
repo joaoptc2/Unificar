@@ -97,8 +97,8 @@ ob_start();
 <div class="page-header">
     <h1><i class="bi bi-shield-check me-2"></i>Relatório ANVISA</h1>
     <div class="d-flex gap-2">
-        <a class="btn btn-outline-primary btn-sm" href="export.php?type=calibrations&format=csv"><i class="bi bi-download me-1"></i> CSV Calibrações</a>
-        <a class="btn btn-outline-primary btn-sm" href="export.php?type=calibrations&format=print&status=overdue" target="_blank"><i class="bi bi-printer me-1"></i> Imprimir</a>
+        <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=calibrations&format=csv"><i class="bi bi-download me-1"></i> CSV Calibrações</a>
+        <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=calibrations&format=print&status=overdue" target="_blank"><i class="bi bi-printer me-1"></i> Imprimir</a>
     </div>
 </div>
 

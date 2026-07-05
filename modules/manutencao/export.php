@@ -2,17 +2,16 @@
 /**
  * EXPORTAÇÃO DE DADOS - ManuHosp
  *
- * Endpoints:
- *   export.php?type=calibrations[&format=csv|print][&status=overdue|due_soon|ok]
- *   export.php?type=service_orders[&format=csv]
- *   export.php?type=cleaning[&format=csv]
+ * Endpoints (rota 'export' do módulo — incluído por index.php):
+ *   index.php?m=manutencao&page=export&type=calibrations[&format=csv|print][&status=overdue|due_soon|ok]
+ *   index.php?m=manutencao&page=export&type=service_orders[&format=csv]
+ *   index.php?m=manutencao&page=export&type=cleaning[&format=csv]
  *
- * Apenas usuários logados. O filtro por hospital_id é aplicado sempre.
- * "format=print" renderiza HTML otimizado para impressão (sem layout
- * do sistema) — o usuário usa Ctrl+P para salvar em PDF.
+ * Apenas usuários logados (index.php aplica requireLogin antes do include).
+ * O filtro por hospital_id é aplicado sempre. "format=print" renderiza HTML
+ * otimizado para impressão — o usuário usa Ctrl+P para salvar em PDF.
  */
 
-require __DIR__ . '/config.php';
 requireLogin();
 
 $type   = preg_replace('/[^a-z_]/', '', strtolower($_GET['type'] ?? ''));

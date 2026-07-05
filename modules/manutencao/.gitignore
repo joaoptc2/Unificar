@@ -1,11 +1,4 @@
-# Credenciais do banco (nunca versionar)
-db-config.php
-
-# Uploads e logs gerados em runtime
-uploads/*
-!uploads/.gitkeep
-!uploads/.htaccess
-
+# Logs gerados em runtime (legado — o núcleo loga em /storage/logs)
 logs/*
 !logs/.gitkeep
 !logs/.htaccess

@@ -149,7 +149,7 @@
         var lastCheck = parseInt(localStorage.getItem('mh_notif_last') || '0', 10);
 
         function pollNotifications() {
-            fetch('index.php?page=notifications&format=json')
+            fetch('index.php?m=manutencao&page=notifications&format=json')
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (data) {
                     if (!data || !data.items) return;
