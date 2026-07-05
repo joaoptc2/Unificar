@@ -1,0 +1,127 @@
+<?php
+class Channel extends Model
+{
+    protected static string $table = 'channels';
+    protected static array  $fillable = [
+        'name', 'slug', 'description', 'type', 'topic',
+        'created_by', 'is_archived', 'is_general',
+        'is_readonly', 'retention_days', 'slow_mode_seconds', 'max_pinned', 'allow_threads', 'category_id',
+    ];
+
+    public static function findBySlug(string $slug): ?array
+    {
+        $db = Database::getInstance();
+        $stmt = $db->prepare('SELECT * FROM channels WHERE slug = ? LIMIT 1');
+        $stmt->execute([$slug]);
+        return $stmt->fetch() ?: null;
+    }
+
+    public static function userChannels(int $userId): array
+    {
+        $db = Database::getInstance();
+        $stmt = $db->prepare(
+            'SELECT c.*, cm.role AS member_role, cm.notifications, cm.last_read_message_id,
+                    (SELECT COUNT(*) FROM messages m WHERE m.channel_id = c.id AND m.deleted_at IS NULL AND m.id > COALESCE(cm.last_read_message_id, 0)) AS unread_count,
+                    (SELECT MAX(m2.created_at) FROM messages m2 WHERE m2.channel_id = c.id AND m2.deleted_at IS NULL) AS last_message_at
+             FROM channels c
+             INNER JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ?
+             WHERE c.is_archived = 0
+             ORDER BY c.is_general DESC, last_message_at IS NULL ASC, last_message_at DESC'
+        );
+        $stmt->execute([$userId]);
+        return $stmt->fetchAll();
+    }
+
+    public static function publicChannels(): array
+    {
+        return self::all([
+            'where' => 'type = "public" AND is_archived = 0',
+            'order' => 'name ASC',
+        ]);
+    }
+
+    public static function directChannel(int $userId1, int $userId2): ?array
+    {
+        $db = Database::getInstance();
+        $stmt = $db->prepare(
+            'SELECT c.* FROM channels c
+             INNER JOIN channel_members cm1 ON cm1.channel_id = c.id AND cm1.user_id = ?
+             INNER JOIN channel_members cm2 ON cm2.channel_id = c.id AND cm2.user_id = ?
+             WHERE c.type = "direct"
+             AND (SELECT COUNT(*) FROM channel_members cm3 WHERE cm3.channel_id = c.id) = 2
+             LIMIT 1'
+        );
+        $stmt->execute([$userId1, $userId2]);
+        return $stmt->fetch() ?: null;
+    }
+
+    public static function members(int $channelId): array
+    {
+        $db = Database::getInstance();
+        $stmt = $db->prepare(
+            'SELECT u.id, u.name, u.email, u.avatar, u.status, u.title, u.department,
+                    cm.role AS channel_role, cm.joined_at
+             FROM users u
+             INNER JOIN channel_members cm ON cm.user_id = u.id
+             WHERE cm.channel_id = ? AND u.is_active = 1
+             ORDER BY u.name ASC'
+        );
+        $stmt->execute([$channelId]);
+        return $stmt->fetchAll();
+    }
+
+    public static function memberCount(int $channelId): int
+    {
+        $db = Database::getInstance();
+        $stmt = $db->prepare('SELECT COUNT(*) FROM channel_members WHERE channel_id = ?');
+        $stmt->execute([$channelId]);
+        return (int) $stmt->fetchColumn();
+    }
+
+    public static function isMember(int $channelId, int $userId): bool
+    {
+        $db = Database::getInstance();
+        $stmt = $db->prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ? LIMIT 1');
+        $stmt->execute([$channelId, $userId]);
+        return (bool) $stmt->fetch();
+    }
+
+    public static function addMember(int $channelId, int $userId, string $role = 'member'): void
+    {
+        $db = Database::getInstance();
+        $stmt = $db->prepare(
+            'INSERT IGNORE INTO channel_members (channel_id, user_id, role, joined_at)
+             VALUES (?, ?, ?, NOW())'
+        );
+        $stmt->execute([$channelId, $userId, $role]);
+    }
+
+    public static function removeMember(int $channelId, int $userId): void
+    {
+        $db = Database::getInstance();
+        $db->prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?')
+           ->execute([$channelId, $userId]);
+    }
+
+    public static function updateLastRead(int $channelId, int $userId, int $messageId): void
+    {
+        $db = Database::getInstance();
+        $db->prepare(
+            'UPDATE channel_members SET last_read_message_id = GREATEST(COALESCE(last_read_message_id, 0), ?)
+             WHERE channel_id = ? AND user_id = ?'
+        )->execute([$messageId, $channelId, $userId]);
+    }
+
+    public static function dmPartner(int $channelId, int $currentUserId): ?array
+    {
+        $db = Database::getInstance();
+        $stmt = $db->prepare(
+            'SELECT u.* FROM users u
+             INNER JOIN channel_members cm ON cm.user_id = u.id
+             WHERE cm.channel_id = ? AND u.id != ?
+             LIMIT 1'
+        );
+        $stmt->execute([$channelId, $currentUserId]);
+        return $stmt->fetch() ?: null;
+    }
+}

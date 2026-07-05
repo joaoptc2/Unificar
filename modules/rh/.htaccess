@@ -1,0 +1,79 @@
+# RH Hospital - .htaccess principal
+# Compativel com Hostinger / cPanel (public_html)
+
+# Bloquear listagem de diretorios
+Options -Indexes
+
+# Habilitar rewrite
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Permitir acesso ao install.php
+    RewriteRule ^install\.php$ - [L]
+
+    # Permitir acesso direto a arquivos estaticos em public/
+    RewriteCond %{REQUEST_URI} ^/public/
+    RewriteRule ^(.*)$ - [L]
+
+    # Servir arquivos CSS, JS, imagens diretamente de public/
+    RewriteRule ^css/(.*)$ public/css/$1 [L]
+    RewriteRule ^js/(.*)$ public/js/$1 [L]
+    RewriteRule ^uploads/(.*)$ public/uploads/$1 [L]
+
+    # Bloquear acesso direto a pastas internas
+    RewriteRule ^app/ - [F,L]
+    RewriteRule ^config/ - [F,L]
+    RewriteRule ^cron/ - [F,L]
+    RewriteRule ^sql/ - [F,L]
+    RewriteRule ^logs/ - [F,L]
+    RewriteRule ^storage/ - [F,L]
+    RewriteRule ^vendor/ - [F,L]
+
+    # Rotear index.php para o bootstrap na raiz
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# Bloquear acesso a arquivos sensiveis
+<FilesMatch "\.(env|log|sql|md|json|lock|gitignore)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Configuracoes PHP
+<IfModule mod_php.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 12M
+    php_value max_execution_time 60
+    php_value session.cookie_httponly 1
+    php_value session.use_strict_mode 1
+</IfModule>
+
+<IfModule mod_php8.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 12M
+    php_value max_execution_time 60
+</IfModule>
+
+# Headers de seguranca
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Cache para assets estaticos
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+</IfModule>

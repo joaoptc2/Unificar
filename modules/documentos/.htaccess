@@ -1,0 +1,86 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  Sistema de Gestão Documental — Apache config
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Rewrite Engine ─────────────────────────────────────────────────────────
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Serve arquivos/diretórios existentes diretamente (assets, etc.)
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Tudo o mais vai para index.php?url=caminho
+    RewriteRule ^(.*)$ index.php?url=$1 [QSA,L]
+</IfModule>
+
+# ── Segurança: diretórios ───────────────────────────────────────────────────
+Options -Indexes
+
+# Bloqueia arquivos sensíveis
+<FilesMatch "^\.env|^\.git|\.(env|log|sql|md|json|lock|user\.ini|example)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order Allow,Deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Bloqueia pastas internas que não devem ser acessadas via HTTP
+<IfModule mod_rewrite.c>
+    RewriteRule ^(includes|models|controllers|logs|database|cron|cache)/ - [F,L]
+</IfModule>
+
+# Proíbe execução de PHP dentro de uploads/ (defesa em profundidade)
+<IfModule mod_rewrite.c>
+    RewriteRule ^uploads/.*\.(php|phtml|phar|php3|php4|php5|php7|phps|inc)$ - [F,L]
+</IfModule>
+
+# ── Headers de Segurança ────────────────────────────────────────────────────
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+
+    # HSTS apenas se servindo por HTTPS. Comentado por padrão; descomente após
+    # confirmar que o site funciona em HTTPS completamente.
+    # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
+# ── Cache de Assets ─────────────────────────────────────────────────────────
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css              "access plus 30 days"
+    ExpiresByType application/javascript "access plus 30 days"
+    ExpiresByType text/javascript       "access plus 30 days"
+    ExpiresByType image/jpeg            "access plus 30 days"
+    ExpiresByType image/png             "access plus 30 days"
+    ExpiresByType image/svg+xml         "access plus 30 days"
+    ExpiresByType image/webp            "access plus 30 days"
+    ExpiresByType image/x-icon          "access plus 30 days"
+    ExpiresByType font/woff             "access plus 90 days"
+    ExpiresByType font/woff2            "access plus 90 days"
+    ExpiresDefault                      "access plus 1 hour"
+</IfModule>
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(css|js|jpg|jpeg|png|gif|svg|ico|woff|woff2)$">
+        Header set Cache-Control "public, max-age=2592000"
+    </FilesMatch>
+</IfModule>
+
+# ── Compressão ──────────────────────────────────────────────────────────────
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css
+    AddOutputFilterByType DEFLATE application/javascript application/json application/xml
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# ── Página de erro amigável ─────────────────────────────────────────────────
+ErrorDocument 404 /index.php?url=_404

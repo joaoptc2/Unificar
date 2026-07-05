@@ -1,0 +1,24 @@
+# Credenciais do banco (nunca versionar)
+db-config.php
+
+# Uploads e logs gerados em runtime
+uploads/*
+!uploads/.gitkeep
+!uploads/.htaccess
+
+logs/*
+!logs/.gitkeep
+!logs/.htaccess
+
+# Arquivos do SO / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Backups e temporários
+*.bak
+*.tmp
+*~

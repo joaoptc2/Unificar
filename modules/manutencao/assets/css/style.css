@@ -1,0 +1,379 @@
+/* ==========================================================================
+   ManuHosp — Design System "RH Hospital"
+   Bootstrap 5.3 + Bootstrap Icons.  Estilos customizados deste projeto.
+   ========================================================================== */
+
+:root {
+    --sidebar-width: 250px;
+    --navbar-height: 56px;
+    --primary-color: #0d6efd;
+    --sidebar-bg: #1e293b;
+    --sidebar-text: #94a3b8;
+    --sidebar-active: #ffffff;
+    --sidebar-hover-bg: #334155;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background-color: #f1f5f9;
+    font-size: 0.9rem;
+    color: #1e293b;
+}
+
+/* ============================================================
+   NAVBAR
+   ============================================================ */
+.navbar.fixed-top {
+    height: var(--navbar-height);
+}
+.navbar-brand {
+    font-weight: 700;
+}
+
+/* ============================================================
+   SIDEBAR
+   ============================================================ */
+.sidebar {
+    background: var(--sidebar-bg);
+    width: var(--sidebar-width);
+}
+@media (min-width: 992px) {
+    .sidebar {
+        position: fixed;
+        top: var(--navbar-height);
+        left: 0;
+        bottom: 0;
+        overflow-y: auto;
+        z-index: 1030;
+    }
+    .sidebar.offcanvas-lg {
+        transform: none !important;
+        visibility: visible !important;
+    }
+}
+
+.sidebar-nav {
+    padding: 0.5rem 0;
+}
+.sidebar-nav .nav-link {
+    color: var(--sidebar-text);
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+    border-left: 3px solid transparent;
+    display: flex;
+    align-items: center;
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.sidebar-nav .nav-link:hover {
+    color: #fff;
+    background: var(--sidebar-hover-bg);
+}
+.sidebar-nav .nav-link.active {
+    color: var(--sidebar-active);
+    background: var(--sidebar-hover-bg);
+    border-left-color: var(--primary-color);
+    font-weight: 600;
+}
+.sidebar-nav .nav-header {
+    padding: 0.25rem 1rem;
+}
+.sidebar-nav .nav-header small {
+    color: #475569 !important;
+    letter-spacing: 0.5px;
+    font-size: 0.7rem;
+}
+
+.sidebar::-webkit-scrollbar {
+    width: 4px;
+}
+.sidebar::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 2px;
+}
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* ============================================================
+   MAIN CONTENT + FOOTER
+   ============================================================ */
+.main-content {
+    margin-top: var(--navbar-height);
+    min-height: calc(100vh - var(--navbar-height));
+}
+.main-footer {
+    border-top: 1px solid #e2e8f0;
+    background: #fff;
+}
+
+@media (min-width: 992px) {
+    .main-content,
+    .main-footer {
+        margin-left: var(--sidebar-width);
+    }
+}
+
+/* ============================================================
+   PAGE HEADER
+   ============================================================ */
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.2rem;
+}
+.page-header h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+}
+
+@media (max-width: 575.98px) {
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+.card {
+    border-radius: 0.5rem;
+}
+
+.stat-card {
+    border: none;
+    border-radius: 0.75rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+.stat-card .stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+}
+.stat-card .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.stat-card .stat-label {
+    font-size: 0.78rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+@media (max-width: 575.98px) {
+    .stat-card .stat-value { font-size: 1.2rem; }
+}
+
+/* ============================================================
+   TABELAS
+   ============================================================ */
+.table th {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #64748b;
+    font-weight: 600;
+    border-bottom-width: 2px;
+    white-space: nowrap;
+    background: #f8fafc;
+}
+.table td {
+    vertical-align: middle;
+    font-size: 0.85rem;
+}
+.btn-action {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.78rem;
+}
+
+@media (max-width: 575.98px) {
+    .table th, .table td { font-size: 0.8rem; }
+}
+
+/* ============================================================
+   BADGES DE STATUS
+   ============================================================ */
+.badge-ativo,
+.badge-valido,
+.badge-conforme,
+.badge-ok          { background-color: #10b981 !important; color: #fff; }
+.badge-afastado,
+.badge-proximo,
+.badge-pendente,
+.badge-aviso       { background-color: #f59e0b !important; color: #fff; }
+.badge-desligado,
+.badge-vencido,
+.badge-critico     { background-color: #ef4444 !important; color: #fff; }
+
+/* Status específicos de OS */
+.badge-open         { background-color: #3b82f6 !important; color: #fff; }
+.badge-in_progress  { background-color: #f59e0b !important; color: #fff; }
+.badge-waiting_part { background-color: #f97316 !important; color: #fff; }
+.badge-completed    { background-color: #10b981 !important; color: #fff; }
+.badge-cancelled    { background-color: #64748b !important; color: #fff; }
+
+/* Prioridade / Criticidade */
+.badge-low      { background-color: #10b981 !important; color: #fff; }
+.badge-medium   { background-color: #3b82f6 !important; color: #fff; }
+.badge-high     { background-color: #f59e0b !important; color: #fff; }
+.badge-critical { background-color: #ef4444 !important; color: #fff; }
+
+/* Status de equipamento / peça */
+.badge-active       { background-color: #10b981 !important; color: #fff; }
+.badge-inactive     { background-color: #64748b !important; color: #fff; }
+.badge-maintenance  { background-color: #f59e0b !important; color: #fff; }
+.badge-broken       { background-color: #ef4444 !important; color: #fff; }
+.badge-available    { background-color: #10b981 !important; color: #fff; }
+.badge-busy         { background-color: #f59e0b !important; color: #fff; }
+.badge-off          { background-color: #64748b !important; color: #fff; }
+
+/* ============================================================
+   FOTOS / AVATARES
+   ============================================================ */
+.employee-photo {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #e2e8f0;
+}
+.employee-photo-lg {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #e2e8f0;
+}
+
+/* ============================================================
+   FORMULÁRIOS
+   ============================================================ */
+.form-label {
+    font-weight: 500;
+    font-size: 0.82rem;
+    margin-bottom: 0.25rem;
+}
+.form-label.required::after,
+.required::after {
+    content: ' *';
+    color: #ef4444;
+}
+.filter-panel {
+    background: #fff;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid #e2e8f0;
+}
+
+/* ============================================================
+   LOGIN / PÁGINAS PÚBLICAS
+   ============================================================ */
+.login-icon {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+}
+.login-icon i { color: #fff !important; font-size: 2rem; }
+
+.hero-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+}
+.hero-brand-gradient {
+    background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+    color: #fff;
+}
+
+/* ============================================================
+   KANBAN (para uso futuro)
+   ============================================================ */
+.kanban-column {
+    min-width: 280px;
+    max-width: 320px;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+}
+.kanban-column .column-header {
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fff;
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+.kanban-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+    padding: 0.75rem;
+    margin: 0.5rem;
+    font-size: 0.82rem;
+    transition: box-shadow 0.2s;
+}
+.kanban-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* ============================================================
+   CALENDÁRIO (para uso futuro)
+   ============================================================ */
+.calendar-day {
+    min-height: 100px;
+    border: 1px solid #e2e8f0;
+    padding: 0.3rem;
+    font-size: 0.8rem;
+}
+.calendar-day.today {
+    background: #eff6ff;
+    border-color: #93c5fd;
+}
+.calendar-day .day-number {
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+.calendar-event {
+    background: #dbeafe;
+    border-left: 3px solid #3b82f6;
+    padding: 2px 4px;
+    margin-bottom: 2px;
+    border-radius: 2px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+.calendar-event:hover {
+    background: #bfdbfe;
+}
+
+/* ============================================================
+   UTILIDADES EXTRAS
+   ============================================================ */
+.text-slate-500 { color: #64748b !important; }
+.text-slate-700 { color: #334155 !important; }
+.text-slate-900 { color: #0f172a !important; }
+
+a.text-decoration-none-hover:hover { text-decoration: none !important; }

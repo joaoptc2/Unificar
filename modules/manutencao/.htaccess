@@ -1,0 +1,93 @@
+# ManuHosp - Sistema de Gestão de Manutenção Hospitalar
+# Configuração Apache para Hostinger
+
+# Desativar listagem de diretórios
+Options -Indexes
+
+# Proteger arquivos sensíveis
+<FilesMatch "^(config|db-config|db-config\.example|install)\.php$">
+    # install.php deve ser removido após uso; continua acessível enquanto existir
+    # os demais ficam bloqueados para acesso direto
+</FilesMatch>
+
+<FilesMatch "^(config|db-config|db-config\.example)\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Negar SQL, markdown interno, arquivos escondidos, composer etc.
+<FilesMatch "\.(sql|md|log|ini|yml|yaml|env|bak|swp)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Bloquear arquivos .git*, .ht*, etc.
+<FilesMatch "^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Proteger diretório de logs (redundante ao logs/.htaccess)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^logs/ - [F,L]
+    RewriteRule (^|/)\.git(/|$) - [F,L]
+    RewriteRule (^|/)\.OLD(/|$) - [F,L]
+</IfModule>
+
+# Limitar tamanho de upload (10MB)
+php_value upload_max_filesize 10M
+php_value post_max_size 12M
+
+# Charset UTF-8
+AddDefaultCharset UTF-8
+
+# Cache de arquivos estáticos
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/png  "access plus 1 month"
+    ExpiresByType image/gif  "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType text/css   "access plus 1 week"
+    ExpiresByType application/javascript "access plus 1 week"
+    ExpiresByType font/woff2 "access plus 1 month"
+</IfModule>
+
+# Mime types corretos para assets
+<IfModule mod_mime.c>
+    AddType text/css            .css
+    AddType application/javascript .js
+    AddType image/svg+xml       .svg
+</IfModule>
+
+# Headers de segurança (camada adicional aos emitidos pelo PHP)
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    Header unset Server
+    Header unset X-Powered-By
+</IfModule>
+
+# Compressão (economiza banda no plano Hostinger)
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript application/json
+</IfModule>
