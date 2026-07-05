@@ -90,8 +90,8 @@ if ($type === 'calibrations') {
     $sql = "SELECT e.name AS equipment, e.code AS equipment_code,
                    c.calibration_date, c.next_date, c.result, c.responsible_body,
                    c.responsible_person, c.cost, c.observations
-            FROM equipment_calibrations c
-            JOIN equipment e ON e.id = c.equipment_id
+            FROM man_equipment_calibrations c
+            JOIN man_equipment e ON e.id = c.equipment_id
             WHERE " . implode(' AND ', $where) . "
             ORDER BY c.next_date ASC";
     $st = db()->prepare($sql);
@@ -141,8 +141,8 @@ if ($type === 'service_orders') {
     $sql = "SELECT so.os_number, so.title, so.type, so.priority, so.status,
                    e.name AS equipment, u.name AS assigned,
                    so.scheduled_date, so.created_at, so.completed_at, so.cost
-            FROM service_orders so
-            LEFT JOIN equipment e ON e.id = so.equipment_id
+            FROM man_service_orders so
+            LEFT JOIN man_equipment e ON e.id = so.equipment_id
             LEFT JOIN users u     ON u.id = so.assigned_to
             WHERE so.hospital_id = ?
             ORDER BY so.created_at DESC";
@@ -183,9 +183,9 @@ if ($type === 'service_orders') {
 if ($type === 'cleaning') {
     $sql = "SELECT ce.executed_at, s.name AS sector, ce.type, cs.title AS checklist,
                    ce.executed_by_name, ce.compliance_pct, ce.observation
-            FROM cleaning_executions ce
-            LEFT JOIN sectors s            ON s.id  = ce.sector_id
-            LEFT JOIN cleaning_schedules cs ON cs.id = ce.schedule_id
+            FROM man_cleaning_executions ce
+            LEFT JOIN man_sectors s            ON s.id  = ce.sector_id
+            LEFT JOIN man_cleaning_schedules cs ON cs.id = ce.schedule_id
             WHERE ce.hospital_id = ?
             ORDER BY ce.executed_at DESC";
     $st = db()->prepare($sql);

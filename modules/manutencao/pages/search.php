@@ -13,25 +13,25 @@ if (strlen($q) >= 2) {
     $like = "%{$q}%";
 
     try {
-        $st = db()->prepare("SELECT id, name, code, status, criticality FROM equipment WHERE hospital_id = ? AND (name LIKE ? OR code LIKE ? OR serial_number LIKE ?) LIMIT 10");
+        $st = db()->prepare("SELECT id, name, code, status, criticality FROM man_equipment WHERE hospital_id = ? AND (name LIKE ? OR code LIKE ? OR serial_number LIKE ?) LIMIT 10");
         $st->execute([$hid, $like, $like, $like]);
         $results['equipment'] = $st->fetchAll();
     } catch (Throwable $ex) {}
 
     try {
-        $st = db()->prepare("SELECT id, os_number, title, status, type FROM service_orders WHERE hospital_id = ? AND (os_number LIKE ? OR title LIKE ?) LIMIT 10");
+        $st = db()->prepare("SELECT id, os_number, title, status, type FROM man_service_orders WHERE hospital_id = ? AND (os_number LIKE ? OR title LIKE ?) LIMIT 10");
         $st->execute([$hid, $like, $like]);
         $results['service_orders'] = $st->fetchAll();
     } catch (Throwable $ex) {}
 
     try {
-        $st = db()->prepare("SELECT id, name, code, quantity, min_quantity FROM parts WHERE hospital_id = ? AND (name LIKE ? OR code LIKE ?) LIMIT 10");
+        $st = db()->prepare("SELECT id, name, code, quantity, min_quantity FROM man_parts WHERE hospital_id = ? AND (name LIKE ? OR code LIKE ?) LIMIT 10");
         $st->execute([$hid, $like, $like]);
         $results['parts'] = $st->fetchAll();
     } catch (Throwable $ex) {}
 
     try {
-        $st = db()->prepare("SELECT id, name, specialty, status FROM technicians WHERE hospital_id = ? AND (name LIKE ? OR specialty LIKE ?) LIMIT 10");
+        $st = db()->prepare("SELECT id, name, specialty, status FROM man_technicians WHERE hospital_id = ? AND (name LIKE ? OR specialty LIKE ?) LIMIT 10");
         $st->execute([$hid, $like, $like]);
         $results['technicians'] = $st->fetchAll();
     } catch (Throwable $ex) {}

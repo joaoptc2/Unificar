@@ -11,14 +11,14 @@ $hid = hospitalId();
  * ------------------------------------------------------------------ */
 $stats   = [];
 $queries = [
-    'total_equipment'   => "SELECT COUNT(*) FROM equipment WHERE hospital_id = ?",
-    'active_equipment'  => "SELECT COUNT(*) FROM equipment WHERE hospital_id = ? AND status = 'active'",
-    'os_open'           => "SELECT COUNT(*) FROM service_orders WHERE hospital_id = ? AND status IN ('open','in_progress','waiting_part')",
-    'os_completed'      => "SELECT COUNT(*) FROM service_orders WHERE hospital_id = ? AND status = 'completed'",
-    'os_overdue'        => "SELECT COUNT(*) FROM service_orders WHERE hospital_id = ? AND status IN ('open','in_progress') AND scheduled_date < CURDATE()",
-    'low_stock'         => "SELECT COUNT(*) FROM parts WHERE hospital_id = ? AND quantity <= min_quantity AND status = 'active'",
-    'total_technicians' => "SELECT COUNT(*) FROM technicians WHERE hospital_id = ? AND status = 'active'",
-    'total_parts'       => "SELECT COUNT(*) FROM parts WHERE hospital_id = ? AND status = 'active'",
+    'total_equipment'   => "SELECT COUNT(*) FROM man_equipment WHERE hospital_id = ?",
+    'active_equipment'  => "SELECT COUNT(*) FROM man_equipment WHERE hospital_id = ? AND status = 'active'",
+    'os_open'           => "SELECT COUNT(*) FROM man_service_orders WHERE hospital_id = ? AND status IN ('open','in_progress','waiting_part')",
+    'os_completed'      => "SELECT COUNT(*) FROM man_service_orders WHERE hospital_id = ? AND status = 'completed'",
+    'os_overdue'        => "SELECT COUNT(*) FROM man_service_orders WHERE hospital_id = ? AND status IN ('open','in_progress') AND scheduled_date < CURDATE()",
+    'low_stock'         => "SELECT COUNT(*) FROM man_parts WHERE hospital_id = ? AND quantity <= min_quantity AND status = 'active'",
+    'total_technicians' => "SELECT COUNT(*) FROM man_technicians WHERE hospital_id = ? AND status = 'active'",
+    'total_parts'       => "SELECT COUNT(*) FROM man_parts WHERE hospital_id = ? AND status = 'active'",
 ];
 foreach ($queries as $key => $sql) {
     $stmt = db()->prepare($sql);
@@ -29,7 +29,7 @@ foreach ($queries as $key => $sql) {
 /* MTTR (Mean Time To Repair) — horas, últimos 90 dias */
 $mttr = db()->prepare("
     SELECT AVG(TIMESTAMPDIFF(MINUTE, created_at, completed_at)) / 60 AS mttr
-    FROM service_orders
+    FROM man_service_orders
     WHERE hospital_id = ? AND status = 'completed'
       AND completed_at IS NOT NULL
       AND completed_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
@@ -44,7 +44,7 @@ $calibRow = db()->prepare("
       COUNT(*) AS total
     FROM (
       SELECT equipment_id, MAX(next_date) AS next_date
-      FROM equipment_calibrations WHERE hospital_id = ?
+      FROM man_equipment_calibrations WHERE hospital_id = ?
       GROUP BY equipment_id
     ) t
 ");
@@ -55,7 +55,7 @@ $calibPct = $calib['total'] > 0 ? (int)round(($calib['ok'] / $calib['total']) * 
 /* OS por mês (6 meses) */
 $osMonthly = db()->prepare("
     SELECT DATE_FORMAT(created_at, '%Y-%m') AS ym, COUNT(*) AS total
-    FROM service_orders
+    FROM man_service_orders
     WHERE hospital_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
     GROUP BY ym ORDER BY ym
 ");
@@ -77,7 +77,7 @@ for ($i = 5; $i >= 0; $i--) {
 /* OS por status (doughnut) */
 $statusStmt = db()->prepare("
     SELECT status, COUNT(*) AS total
-    FROM service_orders WHERE hospital_id = ?
+    FROM man_service_orders WHERE hospital_id = ?
     GROUP BY status
 ");
 $statusStmt->execute([$hid]);
@@ -87,8 +87,8 @@ $statusLabels = ['open'=>'Abertas','in_progress'=>'Em andamento','waiting_part'=
 /* Últimas OS */
 $stmt = db()->prepare("
     SELECT so.*, e.name AS equip_name
-    FROM service_orders so
-    LEFT JOIN equipment e ON e.id = so.equipment_id
+    FROM man_service_orders so
+    LEFT JOIN man_equipment e ON e.id = so.equipment_id
     WHERE so.hospital_id = ?
     ORDER BY so.created_at DESC
     LIMIT 5
@@ -99,10 +99,10 @@ $recentOrders = $stmt->fetchAll();
 /* Calibrações vencidas */
 $calibOverdue = db()->prepare("
     SELECT e.name, c.next_date
-    FROM equipment_calibrations c
-    JOIN equipment e ON e.id = c.equipment_id
+    FROM man_equipment_calibrations c
+    JOIN man_equipment e ON e.id = c.equipment_id
     WHERE c.hospital_id = ?
-      AND c.next_date = (SELECT MAX(c2.next_date) FROM equipment_calibrations c2 WHERE c2.equipment_id = c.equipment_id)
+      AND c.next_date = (SELECT MAX(c2.next_date) FROM man_equipment_calibrations c2 WHERE c2.equipment_id = c.equipment_id)
       AND c.next_date < CURDATE()
     ORDER BY c.next_date ASC
     LIMIT 5

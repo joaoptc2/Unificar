@@ -28,9 +28,9 @@ try {
     $st = db()->prepare("
         SELECT s.id AS sector_id, s.name AS sector_name,
                COUNT(so.id) AS os_count
-        FROM sectors s
-        LEFT JOIN equipment e ON e.sector_id = s.id AND e.hospital_id = s.hospital_id
-        LEFT JOIN service_orders so ON so.equipment_id = e.id
+        FROM man_sectors s
+        LEFT JOIN man_equipment e ON e.sector_id = s.id AND e.hospital_id = s.hospital_id
+        LEFT JOIN man_service_orders so ON so.equipment_id = e.id
             AND so.created_at >= ?
         WHERE s.hospital_id = ? AND s.status = 'active'
         GROUP BY s.id, s.name
@@ -47,7 +47,7 @@ $qrData = [];
 try {
     $st = db()->prepare("
         SELECT ql.sector_id, COUNT(ql.id) AS qr_count
-        FROM qr_locations ql
+        FROM man_qr_locations ql
         WHERE ql.hospital_id = ? AND ql.sector_id IS NOT NULL
         GROUP BY ql.sector_id
     ");

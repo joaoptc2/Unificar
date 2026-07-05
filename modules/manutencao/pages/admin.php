@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             flash('error', 'Nome do hospital é obrigatório.');
         } else {
             db()->prepare("
-                UPDATE hospitals SET name=?, cnpj=?, address=?, city=?, state=?, phone=?, email=?, contact_person=?
+                UPDATE man_hospitals SET name=?, cnpj=?, address=?, city=?, state=?, phone=?, email=?, contact_person=?
                 WHERE id=?
             ")->execute([$name, $cnpj, $address, $city, $state, $phone, $email, $contact, $hid]);
             auditLog('update', 'hospitals', $hid);
@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         $name = trim($_POST['sector_name'] ?? '');
         $desc = trim($_POST['sector_desc'] ?? '') ?: null;
         if ($name !== '') {
-            db()->prepare("INSERT INTO sectors (hospital_id, name, description) VALUES (?, ?, ?)")->execute([$hid, $name, $desc]);
+            db()->prepare("INSERT INTO man_sectors (hospital_id, name, description) VALUES (?, ?, ?)")->execute([$hid, $name, $desc]);
             auditLog('create', 'sectors', (int)db()->lastInsertId());
             flash('success', 'Setor adicionado!');
         }
@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         $desc = trim($_POST['sector_desc'] ?? '') ?: null;
         $status = $_POST['sector_status'] ?? 'active';
         if ($name !== '') {
-            db()->prepare("UPDATE sectors SET name=?, description=?, status=? WHERE id=? AND hospital_id=?")->execute([$name, $desc, $status, $id, $hid]);
+            db()->prepare("UPDATE man_sectors SET name=?, description=?, status=? WHERE id=? AND hospital_id=?")->execute([$name, $desc, $status, $id, $hid]);
             auditLog('update', 'sectors', $id);
             flash('success', 'Setor atualizado!');
         }
@@ -63,8 +63,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
     if ($act === 'delete_sector') {
         $id = (int)($_POST['sector_id'] ?? 0);
-        db()->prepare("UPDATE equipment SET sector_id = NULL WHERE sector_id = ? AND hospital_id = ?")->execute([$id, $hid]);
-        db()->prepare("DELETE FROM sectors WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
+        db()->prepare("UPDATE man_equipment SET sector_id = NULL WHERE sector_id = ? AND hospital_id = ?")->execute([$id, $hid]);
+        db()->prepare("DELETE FROM man_sectors WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
         auditLog('delete', 'sectors', $id);
         flash('success', 'Setor removido.');
         redirect(url('admin', ['tab' => 'sectors']));
@@ -151,11 +151,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 // ============================================================
 // OBTER DADOS
 // ============================================================
-$hospital = db()->prepare("SELECT * FROM hospitals WHERE id = ?");
+$hospital = db()->prepare("SELECT * FROM man_hospitals WHERE id = ?");
 $hospital->execute([$hid]);
 $hospital = $hospital->fetch();
 
-$sectorsList = db()->prepare("SELECT * FROM sectors WHERE hospital_id = ? ORDER BY name");
+$sectorsList = db()->prepare("SELECT * FROM man_sectors WHERE hospital_id = ? ORDER BY name");
 $sectorsList->execute([$hid]);
 $sectorsList = $sectorsList->fetchAll();
 

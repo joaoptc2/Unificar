@@ -22,13 +22,13 @@ try {
         SELECT e.id AS equip_id, e.code, e.name AS equip_name, e.serial_number,
                s.name AS sector_name,
                ec.calibration_date, ec.next_date, ec.responsible_body, ec.result
-        FROM equipment e
-        INNER JOIN equipment_calibrations ec ON ec.id = (
-            SELECT ec2.id FROM equipment_calibrations ec2
+        FROM man_equipment e
+        INNER JOIN man_equipment_calibrations ec ON ec.id = (
+            SELECT ec2.id FROM man_equipment_calibrations ec2
             WHERE ec2.equipment_id = e.id
             ORDER BY ec2.calibration_date DESC LIMIT 1
         )
-        LEFT JOIN sectors s ON s.id = e.sector_id
+        LEFT JOIN man_sectors s ON s.id = e.sector_id
         WHERE e.hospital_id = ? AND ec.next_date < CURDATE()
         ORDER BY ec.next_date ASC
     ");
@@ -43,9 +43,9 @@ try {
     $stMaint = db()->prepare("
         SELECT mp.id, mp.title, mp.frequency, mp.next_date, mp.last_executed,
                e.name AS equip_name, e.code AS equip_code, s.name AS sector_name
-        FROM maintenance_plans mp
-        LEFT JOIN equipment e ON e.id = mp.equipment_id
-        LEFT JOIN sectors s ON s.id = e.sector_id
+        FROM man_maintenance_plans mp
+        LEFT JOIN man_equipment e ON e.id = mp.equipment_id
+        LEFT JOIN man_sectors s ON s.id = e.sector_id
         WHERE mp.hospital_id = ? AND mp.status = 'active' AND mp.next_date < CURDATE()
         ORDER BY mp.next_date ASC
     ");
@@ -60,11 +60,11 @@ try {
     $stNoPlan = db()->prepare("
         SELECT e.id, e.code, e.name, e.serial_number, e.criticality,
                s.name AS sector_name
-        FROM equipment e
-        LEFT JOIN sectors s ON s.id = e.sector_id
+        FROM man_equipment e
+        LEFT JOIN man_sectors s ON s.id = e.sector_id
         WHERE e.hospital_id = ? AND e.status = 'active'
           AND e.id NOT IN (
-              SELECT mp.equipment_id FROM maintenance_plans mp
+              SELECT mp.equipment_id FROM man_maintenance_plans mp
               WHERE mp.status = 'active' AND mp.equipment_id IS NOT NULL
           )
         ORDER BY e.name ASC

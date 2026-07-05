@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         }
 
         // Valida que o equipamento pertence ao hospital
-        $eq = db()->prepare("SELECT id FROM equipment WHERE id = ? AND hospital_id = ?");
+        $eq = db()->prepare("SELECT id FROM man_equipment WHERE id = ? AND hospital_id = ?");
         $eq->execute([$equipmentId, $hid]);
         if (!$eq->fetch()) {
             flash('error', 'Equipamento inválido.');
@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
         try {
             if ($act === 'add') {
-                $sql = "INSERT INTO equipment_calibrations
+                $sql = "INSERT INTO man_equipment_calibrations
                           (hospital_id, equipment_id, calibration_date, next_date,
                            responsible_body, responsible_person, result, certificate_path,
                            observations, cost, created_by)
@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             } else {
                 // Edit: mantém certificado anterior se nenhum novo foi enviado
                 if ($certPath === null) {
-                    $sql = "UPDATE equipment_calibrations SET
+                    $sql = "UPDATE man_equipment_calibrations SET
                               equipment_id=?, calibration_date=?, next_date=?,
                               responsible_body=?, responsible_person=?, result=?,
                               observations=?, cost=?
@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
                         $observations, $cost, $id, $hid,
                     ]);
                 } else {
-                    $sql = "UPDATE equipment_calibrations SET
+                    $sql = "UPDATE man_equipment_calibrations SET
                               equipment_id=?, calibration_date=?, next_date=?,
                               responsible_body=?, responsible_person=?, result=?,
                               certificate_path=?, observations=?, cost=?
@@ -112,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
     if ($act === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
-        db()->prepare("DELETE FROM equipment_calibrations WHERE id = ? AND hospital_id = ?")
+        db()->prepare("DELETE FROM man_equipment_calibrations WHERE id = ? AND hospital_id = ?")
             ->execute([$id, $hid]);
         auditLog('delete', 'equipment_calibrations', $id);
         flash('success', 'Registro de calibração removido.');
@@ -144,8 +144,8 @@ if ($filterStatus === 'overdue') {
 }
 
 $sql = "SELECT c.*, e.name AS equipment_name, e.code AS equipment_code
-        FROM equipment_calibrations c
-        JOIN equipment e ON e.id = c.equipment_id
+        FROM man_equipment_calibrations c
+        JOIN man_equipment e ON e.id = c.equipment_id
         WHERE " . implode(' AND ', $where) . "
         ORDER BY c.next_date ASC";
 
@@ -154,7 +154,7 @@ $stmt->execute($params);
 $rows = $stmt->fetchAll();
 
 // Equipamentos para os selects
-$equipStmt = db()->prepare("SELECT id, name, code FROM equipment WHERE hospital_id = ? ORDER BY name");
+$equipStmt = db()->prepare("SELECT id, name, code FROM man_equipment WHERE hospital_id = ? ORDER BY name");
 $equipStmt->execute([$hid]);
 $allEquipment = $equipStmt->fetchAll();
 
@@ -166,7 +166,7 @@ $kpiStmt = db()->prepare("
       COUNT(*) AS total
     FROM (
       SELECT equipment_id, MAX(next_date) AS next_date
-      FROM equipment_calibrations
+      FROM man_equipment_calibrations
       WHERE hospital_id = ?
       GROUP BY equipment_id
     ) c
@@ -207,7 +207,7 @@ if ($action === 'execute'):
     $execEqId = (int)($_GET['equipment_id'] ?? 0);
     $execEq = null;
     if ($execEqId) {
-        $st = db()->prepare("SELECT id, name, code FROM equipment WHERE id=? AND hospital_id=?");
+        $st = db()->prepare("SELECT id, name, code FROM man_equipment WHERE id=? AND hospital_id=?");
         $st->execute([$execEqId, $hid]);
         $execEq = $st->fetch();
     }
@@ -403,7 +403,7 @@ foreach ($rows as $r):
     $eqId = (int)$r['equipment_id'];
     if (isset($shownEquipHistory[$eqId])) continue;
     $shownEquipHistory[$eqId] = true;
-    $ch = db()->prepare("SELECT calibration_date, next_date, result, responsible_body, responsible_person, cost, observations FROM equipment_calibrations WHERE equipment_id=? AND hospital_id=? ORDER BY calibration_date DESC LIMIT 20");
+    $ch = db()->prepare("SELECT calibration_date, next_date, result, responsible_body, responsible_person, cost, observations FROM man_equipment_calibrations WHERE equipment_id=? AND hospital_id=? ORDER BY calibration_date DESC LIMIT 20");
     $ch->execute([$eqId, $hid]);
     $calibHistRows = $ch->fetchAll();
 ?>

@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         if ($name === '') {
             flash('error', 'Nome é obrigatório.');
         } else {
-            db()->prepare("INSERT INTO technicians (hospital_id, name, specialty, phone, email, crea, status) VALUES (?, ?, ?, ?, ?, ?, ?)")
+            db()->prepare("INSERT INTO man_technicians (hospital_id, name, specialty, phone, email, crea, status) VALUES (?, ?, ?, ?, ?, ?, ?)")
                 ->execute([$hid, $name, $specialty, $phone, $email, $crea, $status]);
             auditLog('create', 'technicians', (int)db()->lastInsertId());
             flash('success', 'Técnico adicionado!');
@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         if ($name === '') {
             flash('error', 'Nome é obrigatório.');
         } else {
-            db()->prepare("UPDATE technicians SET name=?, specialty=?, phone=?, email=?, crea=?, status=? WHERE id=? AND hospital_id=?")
+            db()->prepare("UPDATE man_technicians SET name=?, specialty=?, phone=?, email=?, crea=?, status=? WHERE id=? AND hospital_id=?")
                 ->execute([$name, $specialty, $phone, $email, $crea, $status, $id, $hid]);
             auditLog('update', 'technicians', $id);
             flash('success', 'Técnico atualizado!');
@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
     if ($act === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
-        db()->prepare("DELETE FROM technicians WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
+        db()->prepare("DELETE FROM man_technicians WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
         auditLog('delete', 'technicians', $id);
         flash('success', 'Técnico removido.');
         redirect(url('technicians'));
@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 // ============================================================
 // DADOS
 // ============================================================
-$techs = db()->prepare("SELECT * FROM technicians WHERE hospital_id = ? ORDER BY name");
+$techs = db()->prepare("SELECT * FROM man_technicians WHERE hospital_id = ? ORDER BY name");
 $techs->execute([$hid]);
 $techs = $techs->fetchAll();
 

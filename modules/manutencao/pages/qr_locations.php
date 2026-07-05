@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             flash('error', 'Nome do local é obrigatório.');
         } else {
             $token = generateToken(16);
-            db()->prepare("INSERT INTO qr_locations (hospital_id, sector_id, name, description, token) VALUES (?,?,?,?,?)")
+            db()->prepare("INSERT INTO man_qr_locations (hospital_id, sector_id, name, description, token) VALUES (?,?,?,?,?)")
                 ->execute([$hid, $sectorId, $name, $desc, $token]);
             auditLog('create', 'qr_locations', (int)db()->lastInsertId());
             flash('success', 'Local criado! Token: ' . $token);
@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         $desc     = trim($_POST['description'] ?? '') ?: null;
         $status   = $_POST['status'] ?? 'active';
         if ($name !== '') {
-            db()->prepare("UPDATE qr_locations SET name=?, sector_id=?, description=?, status=? WHERE id=? AND hospital_id=?")
+            db()->prepare("UPDATE man_qr_locations SET name=?, sector_id=?, description=?, status=? WHERE id=? AND hospital_id=?")
                 ->execute([$name, $sectorId, $desc, $status, $id, $hid]);
             auditLog('update', 'qr_locations', $id);
             flash('success', 'Local atualizado!');
@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
     if ($act === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
-        db()->prepare("DELETE FROM qr_locations WHERE id=? AND hospital_id=?")->execute([$id, $hid]);
+        db()->prepare("DELETE FROM man_qr_locations WHERE id=? AND hospital_id=?")->execute([$id, $hid]);
         auditLog('delete', 'qr_locations', $id);
         flash('success', 'Local removido.');
         redirect(url('qr-locations'));
@@ -50,15 +50,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
 $locs = db()->prepare("
     SELECT ql.*, s.name AS sector_name
-    FROM qr_locations ql
-    LEFT JOIN sectors s ON s.id = ql.sector_id
+    FROM man_qr_locations ql
+    LEFT JOIN man_sectors s ON s.id = ql.sector_id
     WHERE ql.hospital_id = ?
     ORDER BY ql.name
 ");
 $locs->execute([$hid]);
 $locs = $locs->fetchAll();
 
-$sectors = db()->prepare("SELECT id, name FROM sectors WHERE hospital_id = ? AND status='active' ORDER BY name");
+$sectors = db()->prepare("SELECT id, name FROM man_sectors WHERE hospital_id = ? AND status='active' ORDER BY name");
 $sectors->execute([$hid]);
 $sectors = $sectors->fetchAll();
 

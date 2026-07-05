@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         } else {
             try {
                 db()->prepare("
-                    INSERT INTO maintenance_plans (hospital_id, equipment_id, title, description, frequency, next_date, status)
+                    INSERT INTO man_maintenance_plans (hospital_id, equipment_id, title, description, frequency, next_date, status)
                     VALUES (?, ?, ?, ?, ?, ?, 'active')
                 ")->execute([$hid, $equipmentId, $title, $description, $frequency, $nextDate]);
                 auditLog('create', 'maintenance_plans', (int)db()->lastInsertId());
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             flash('error', 'Título e próxima data são obrigatórios.');
         } else {
             db()->prepare("
-                UPDATE maintenance_plans SET title=?, description=?, frequency=?, next_date=?, status=?
+                UPDATE man_maintenance_plans SET title=?, description=?, frequency=?, next_date=?, status=?
                 WHERE id=? AND hospital_id=?
             ")->execute([$title, $description, $frequency, $nextDate, $status, $id, $hid]);
             auditLog('update', 'maintenance_plans', $id);
@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         $id = (int)($_POST['id'] ?? 0);
         try {
             // Buscar plano
-            $stmt = db()->prepare("SELECT * FROM maintenance_plans WHERE id = ? AND hospital_id = ?");
+            $stmt = db()->prepare("SELECT * FROM man_maintenance_plans WHERE id = ? AND hospital_id = ?");
             $stmt->execute([$id, $hid]);
             $plan = $stmt->fetch();
 
@@ -72,13 +72,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
                 // Criar OS automaticamente
                 $osNumber = generateOsNumber();
                 db()->prepare("
-                    INSERT INTO service_orders (hospital_id, equipment_id, os_number, type, priority, status, title, description, created_by)
+                    INSERT INTO man_service_orders (hospital_id, equipment_id, os_number, type, priority, status, title, description, created_by)
                     VALUES (?, ?, ?, 'preventive', 'medium', 'open', ?, ?, ?)
                 ")->execute([$hid, $plan['equipment_id'], $osNumber, 'Manutenção: '.$plan['title'], $plan['description'], $_SESSION['user_id']]);
 
                 // Atualizar próxima data
                 $nextDate = calcNextDate($plan['next_date'], $plan['frequency']);
-                db()->prepare("UPDATE maintenance_plans SET last_executed = NOW(), next_date = ? WHERE id = ?")->execute([$nextDate, $id]);
+                db()->prepare("UPDATE man_maintenance_plans SET last_executed = NOW(), next_date = ? WHERE id = ?")->execute([$nextDate, $id]);
 
                 auditLog('execute', 'maintenance_plans', $id);
                 flash('success', "OS {$osNumber} criada! Próxima manutenção: {$nextDate}");
@@ -91,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
     if ($act === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
-        db()->prepare("DELETE FROM maintenance_plans WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
+        db()->prepare("DELETE FROM man_maintenance_plans WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
         auditLog('delete', 'maintenance_plans', $id);
         flash('success', 'Plano removido.');
         redirect(url('maintenance'));
@@ -101,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 // ============================================================
 // DADOS
 // ============================================================
-$equipments = db()->prepare("SELECT id, name, code FROM equipment WHERE hospital_id = ? AND status = 'active' ORDER BY name");
+$equipments = db()->prepare("SELECT id, name, code FROM man_equipment WHERE hospital_id = ? AND status = 'active' ORDER BY name");
 $equipments->execute([$hid]);
 $equipments = $equipments->fetchAll();
 
@@ -109,8 +109,8 @@ $freqLabels = ['daily'=>'Diária','weekly'=>'Semanal','biweekly'=>'Quinzenal','m
 
 $plans = db()->prepare("
     SELECT mp.*, e.name AS equip_name, e.code AS equip_code
-    FROM maintenance_plans mp
-    LEFT JOIN equipment e ON e.id = mp.equipment_id
+    FROM man_maintenance_plans mp
+    LEFT JOIN man_equipment e ON e.id = mp.equipment_id
     WHERE mp.hospital_id = ?
     ORDER BY mp.next_date ASC
 ");
@@ -197,7 +197,7 @@ ob_start();
 
 <!-- MODAIS DE HISTÓRICO -->
 <?php foreach ($plans as $p):
-    $planOs = db()->prepare("SELECT os_number, title, status, created_at, completed_at FROM service_orders WHERE hospital_id = ? AND equipment_id = ? AND type = 'preventive' ORDER BY created_at DESC LIMIT 20");
+    $planOs = db()->prepare("SELECT os_number, title, status, created_at, completed_at FROM man_service_orders WHERE hospital_id = ? AND equipment_id = ? AND type = 'preventive' ORDER BY created_at DESC LIMIT 20");
     $planOs->execute([$hid, $p['equipment_id']]);
     $planOsRows = $planOs->fetchAll();
 ?>

@@ -45,14 +45,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         try {
             if ($act === 'add_route') {
                 db()->prepare("
-                    INSERT INTO inspection_routes (hospital_id, title, description, locations, status)
+                    INSERT INTO man_inspection_routes (hospital_id, title, description, locations, status)
                     VALUES (?, ?, ?, ?, ?)
                 ")->execute([$hid, $title, $description, $locJson, 'active']);
                 auditLog('create', 'inspection_routes', (int)db()->lastInsertId());
                 flash('success', 'Rota de inspeção criada!');
             } else {
                 db()->prepare("
-                    UPDATE inspection_routes
+                    UPDATE man_inspection_routes
                     SET title = ?, description = ?, locations = ?, status = ?
                     WHERE id = ? AND hospital_id = ?
                 ")->execute([$title, $description, $locJson, $status, $id, $hid]);
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     if ($act === 'delete_route') {
         $id = (int)($_POST['id'] ?? 0);
         try {
-            db()->prepare("DELETE FROM inspection_routes WHERE id = ? AND hospital_id = ?")
+            db()->prepare("DELETE FROM man_inspection_routes WHERE id = ? AND hospital_id = ?")
                 ->execute([$id, $hid]);
             auditLog('delete', 'inspection_routes', $id);
             flash('success', 'Rota removida.');
@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
         // Validar que a rota pertence ao hospital
         try {
-            $chk = db()->prepare("SELECT id FROM inspection_routes WHERE id = ? AND hospital_id = ?");
+            $chk = db()->prepare("SELECT id FROM man_inspection_routes WHERE id = ? AND hospital_id = ?");
             $chk->execute([$routeId, $hid]);
             if (!$chk->fetch()) {
                 flash('error', 'Rota não encontrada.');
@@ -124,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
         try {
             db()->prepare("
-                INSERT INTO inspection_executions
+                INSERT INTO man_inspection_executions
                     (hospital_id, route_id, executed_by, executed_by_name, results, photo_path, observation)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ")->execute([
@@ -150,7 +150,7 @@ if ($action === 'routes') {
     $routes = [];
     try {
         $st = db()->prepare("
-            SELECT * FROM inspection_routes
+            SELECT * FROM man_inspection_routes
             WHERE hospital_id = ?
             ORDER BY title
         ");
@@ -285,7 +285,7 @@ if ($action === 'routes') {
 
     if ($routeId > 0) {
         try {
-            $st = db()->prepare("SELECT * FROM inspection_routes WHERE id = ? AND hospital_id = ?");
+            $st = db()->prepare("SELECT * FROM man_inspection_routes WHERE id = ? AND hospital_id = ?");
             $st->execute([$routeId, $hid]);
             $route = $st->fetch() ?: null;
             if ($route) {
@@ -300,7 +300,7 @@ if ($action === 'routes') {
     $allRoutes = [];
     if (!$route) {
         try {
-            $st = db()->prepare("SELECT id, title FROM inspection_routes WHERE hospital_id = ? AND status = 'active' ORDER BY title");
+            $st = db()->prepare("SELECT id, title FROM man_inspection_routes WHERE hospital_id = ? AND status = 'active' ORDER BY title");
             $st->execute([$hid]);
             $allRoutes = $st->fetchAll();
         } catch (\Throwable $ex) {
@@ -405,8 +405,8 @@ if ($action === 'routes') {
     try {
         $st = db()->prepare("
             SELECT ie.*, ir.title AS route_title
-            FROM inspection_executions ie
-            LEFT JOIN inspection_routes ir ON ir.id = ie.route_id
+            FROM man_inspection_executions ie
+            LEFT JOIN man_inspection_routes ir ON ir.id = ie.route_id
             WHERE ie.hospital_id = ?
             ORDER BY ie.created_at DESC
             LIMIT 200
@@ -422,7 +422,7 @@ if ($action === 'routes') {
     $kpiAvgOk = 0;
     try {
         $kst = db()->prepare("
-            SELECT COUNT(*) AS total FROM inspection_executions
+            SELECT COUNT(*) AS total FROM man_inspection_executions
             WHERE hospital_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
         ");
         $kst->execute([$hid]);

@@ -47,8 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 try {
     $stmt = db()->prepare("
         SELECT mp.id, mp.title, e.name AS equip_name
-        FROM maintenance_plans mp
-        LEFT JOIN equipment e ON e.id = mp.equipment_id
+        FROM man_maintenance_plans mp
+        LEFT JOIN man_equipment e ON e.id = mp.equipment_id
         WHERE mp.hospital_id = ? AND mp.status = 'active' AND mp.next_date < CURDATE()
     ");
     $stmt->execute([$hid]);
@@ -60,7 +60,7 @@ try {
                 ->execute([$hid, 'Manutenção Atrasada', "Manutenção \"{$m['title']}\" do equipamento \"{$m['equip_name']}\" está atrasada.", $m['id']]);
         }
     }
-    $stmt = db()->prepare("SELECT id, name, quantity, min_quantity FROM parts WHERE hospital_id = ? AND status = 'active' AND quantity <= min_quantity");
+    $stmt = db()->prepare("SELECT id, name, quantity, min_quantity FROM man_parts WHERE hospital_id = ? AND status = 'active' AND quantity <= min_quantity");
     $stmt->execute([$hid]);
     foreach ($stmt->fetchAll() as $p) {
         $exists = db()->prepare("SELECT id FROM notifications WHERE hospital_id = ? AND type = 'warning' AND reference_id = ? AND title = 'Estoque Baixo' AND DATE(created_at) = CURDATE()");

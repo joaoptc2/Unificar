@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
                 }
 
                 $stmt = db()->prepare("
-                    INSERT INTO service_orders (hospital_id, equipment_id, os_number, type, priority, status, title, description, observation, photo_path, assigned_to, created_by, scheduled_date)
+                    INSERT INTO man_service_orders (hospital_id, equipment_id, os_number, type, priority, status, title, description, observation, photo_path, assigned_to, created_by, scheduled_date)
                     VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?)
                 ");
                 $stmt->execute([$hid, $equipmentId, $osNumber, $type, $priority, $title, $description, $observation, $photoPath, $assignedTo, $_SESSION['user_id'], $scheduledDate]);
@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
                     $photoPath = uploadFile($_FILES['photo'], 'os_photos');
                 }
 
-                $sql = "UPDATE service_orders SET title=?, type=?, priority=?, equipment_id=?, assigned_to=?, scheduled_date=?, description=?, observation=?, solution=?";
+                $sql = "UPDATE man_service_orders SET title=?, type=?, priority=?, equipment_id=?, assigned_to=?, scheduled_date=?, description=?, observation=?, solution=?";
                 $params = [$title, $type, $priority, $equipmentId, $assignedTo, $scheduledDate, $description, $observation, $solution];
 
                 try {
@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
                 // Downtime tracking
                 try {
                     if ($status === 'in_progress') {
-                        $chkOs = db()->prepare("SELECT type, downtime_start FROM service_orders WHERE id=? AND hospital_id=?");
+                        $chkOs = db()->prepare("SELECT type, downtime_start FROM man_service_orders WHERE id=? AND hospital_id=?");
                         $chkOs->execute([$id, $hid]);
                         $chkRow = $chkOs->fetch();
                         if ($chkRow && $chkRow['type'] === 'corrective' && empty($chkRow['downtime_start'])) {
@@ -139,7 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
                 $params[] = $id;
                 $params[] = $hid;
-                db()->prepare("UPDATE service_orders SET status = ?{$extra} WHERE id = ? AND hospital_id = ?")->execute($params);
+                db()->prepare("UPDATE man_service_orders SET status = ?{$extra} WHERE id = ? AND hospital_id = ?")->execute($params);
                 auditLog('status_change', 'service_orders', $id, "Status: {$status}");
                 $statusLabelsHist = ['open'=>'Aberta','in_progress'=>'Em Andamento','waiting_part'=>'Ag. Peça','completed'=>'Concluída','cancelled'=>'Cancelada'];
                 addOsHistory($id, 'Status alterado', 'Novo status: ' . ($statusLabelsHist[$status] ?? $status));
@@ -154,8 +154,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     if ($act === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
         try {
-            db()->prepare("DELETE FROM os_history WHERE os_id = ?")->execute([$id]);
-            db()->prepare("DELETE FROM service_orders WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
+            db()->prepare("DELETE FROM man_os_history WHERE os_id = ?")->execute([$id]);
+            db()->prepare("DELETE FROM man_service_orders WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
             auditLog('delete', 'service_orders', $id);
             flash('success', 'OS excluída.');
         } catch (Exception $ex) {
@@ -167,7 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     if ($act === 'generate_anonymous_link') {
         $id = (int)($_POST['id'] ?? 0);
         $token = generateToken(16);
-        db()->prepare("UPDATE service_orders SET anonymous_token = ? WHERE id = ? AND hospital_id = ?")->execute([$token, $id, $hid]);
+        db()->prepare("UPDATE man_service_orders SET anonymous_token = ? WHERE id = ? AND hospital_id = ?")->execute([$token, $id, $hid]);
         flash('success', 'Link anônimo gerado! Token: ' . $token);
         redirect(url('service-orders', ['action' => 'edit', 'id' => $id]));
     }
@@ -179,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         if ($qty < 1) $qty = 1;
         try {
             // Get part info
-            $partStmt = db()->prepare("SELECT id, name, unit_cost, quantity FROM parts WHERE id=? AND hospital_id=?");
+            $partStmt = db()->prepare("SELECT id, name, unit_cost, quantity FROM man_parts WHERE id=? AND hospital_id=?");
             $partStmt->execute([$partId, $hid]);
             $part = $partStmt->fetch();
             if (!$part) { flash('error', 'Peça não encontrada.'); redirect(url('service-orders', ['action'=>'edit','id'=>$osId])); }
@@ -188,21 +188,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             $unitCost = (float)$part['unit_cost'];
 
             // Check if part already linked
-            $existing = db()->prepare("SELECT id, quantity FROM os_parts WHERE os_id=? AND part_id=?");
+            $existing = db()->prepare("SELECT id, quantity FROM man_os_parts WHERE os_id=? AND part_id=?");
             $existing->execute([$osId, $partId]);
             $exRow = $existing->fetch();
             if ($exRow) {
-                db()->prepare("UPDATE os_parts SET quantity = quantity + ?, unit_cost=? WHERE id=?")->execute([$qty, $unitCost, $exRow['id']]);
+                db()->prepare("UPDATE man_os_parts SET quantity = quantity + ?, unit_cost=? WHERE id=?")->execute([$qty, $unitCost, $exRow['id']]);
             } else {
-                db()->prepare("INSERT INTO os_parts (os_id, part_id, quantity, unit_cost) VALUES (?,?,?,?)")->execute([$osId, $partId, $qty, $unitCost]);
+                db()->prepare("INSERT INTO man_os_parts (os_id, part_id, quantity, unit_cost) VALUES (?,?,?,?)")->execute([$osId, $partId, $qty, $unitCost]);
             }
 
             // Deduct from stock
-            db()->prepare("UPDATE parts SET quantity = quantity - ? WHERE id=?")->execute([$qty, $partId]);
+            db()->prepare("UPDATE man_parts SET quantity = quantity - ? WHERE id=?")->execute([$qty, $partId]);
 
             // Record stock movement
             try {
-                db()->prepare("INSERT INTO stock_movements (hospital_id, part_id, type, quantity, reference_type, reference_id, notes, created_by) VALUES (?,?,'out',?,'os',?,?,?)")
+                db()->prepare("INSERT INTO man_stock_movements (hospital_id, part_id, type, quantity, reference_type, reference_id, notes, created_by) VALUES (?,?,'out',?,'os',?,?,?)")
                     ->execute([$hid, $partId, $qty, $osId, 'Peça utilizada na OS', $_SESSION['user_id'] ?? null]);
             } catch (\Throwable $ignored) {}
 
@@ -216,17 +216,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         $osPartId = (int)($_POST['os_part_id'] ?? 0);
         try {
             // Get os_part info
-            $opStmt = db()->prepare("SELECT op.part_id, op.quantity FROM os_parts op JOIN service_orders so ON so.id=op.os_id WHERE op.id=? AND so.hospital_id=?");
+            $opStmt = db()->prepare("SELECT op.part_id, op.quantity FROM man_os_parts op JOIN man_service_orders so ON so.id=op.os_id WHERE op.id=? AND so.hospital_id=?");
             $opStmt->execute([$osPartId, $hid]);
             $opRow = $opStmt->fetch();
             if ($opRow) {
                 // Restore stock
-                db()->prepare("UPDATE parts SET quantity = quantity + ? WHERE id=?")->execute([$opRow['quantity'], $opRow['part_id']]);
-                db()->prepare("DELETE FROM os_parts WHERE id=?")->execute([$osPartId]);
+                db()->prepare("UPDATE man_parts SET quantity = quantity + ? WHERE id=?")->execute([$opRow['quantity'], $opRow['part_id']]);
+                db()->prepare("DELETE FROM man_os_parts WHERE id=?")->execute([$osPartId]);
 
                 // Record stock movement
                 try {
-                    db()->prepare("INSERT INTO stock_movements (hospital_id, part_id, type, quantity, reference_type, reference_id, notes, created_by) VALUES (?,?,'in',?,'os',?,?,?)")
+                    db()->prepare("INSERT INTO man_stock_movements (hospital_id, part_id, type, quantity, reference_type, reference_id, notes, created_by) VALUES (?,?,'in',?,'os',?,?,?)")
                         ->execute([$hid, $opRow['part_id'], $opRow['quantity'], $osId, 'Peça devolvida da OS', $_SESSION['user_id'] ?? null]);
                 } catch (\Throwable $ignored) {}
 
@@ -241,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         $sigData = $_POST['signature_data'] ?? '';
         try {
             if (is_string($sigData) && strncmp($sigData, 'data:image/png;base64,', 22) === 0 && strlen($sigData) <= 150000) {
-                db()->prepare("UPDATE service_orders SET signature_data=? WHERE id=? AND hospital_id=?")->execute([$sigData, $osId, $hid]);
+                db()->prepare("UPDATE man_service_orders SET signature_data=? WHERE id=? AND hospital_id=?")->execute([$sigData, $osId, $hid]);
                 flash('success', 'Assinatura salva.');
             } else {
                 flash('error', 'Assinatura inválida.');
@@ -254,7 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 // ============================================================
 // OBTER DADOS
 // ============================================================
-$equipments = db()->prepare("SELECT id, name, code FROM equipment WHERE hospital_id = ? AND status = 'active' ORDER BY name");
+$equipments = db()->prepare("SELECT id, name, code FROM man_equipment WHERE hospital_id = ? AND status = 'active' ORDER BY name");
 $equipments->execute([$hid]);
 $equipments = $equipments->fetchAll();
 
@@ -274,7 +274,7 @@ ob_start();
 // ============================================================
 if ($action === 'edit'):
     $id = (int)($_GET['id'] ?? 0);
-    $stmt = db()->prepare("SELECT * FROM service_orders WHERE id = ? AND hospital_id = ?");
+    $stmt = db()->prepare("SELECT * FROM man_service_orders WHERE id = ? AND hospital_id = ?");
     $stmt->execute([$id, $hid]);
     $os = $stmt->fetch();
     if (!$os) { flash('error', 'OS não encontrada.'); redirect(url('service-orders')); }
@@ -381,12 +381,12 @@ $osParts = [];
 $partsList = [];
 $partsCostTotal = 0;
 try {
-    $opStmt = db()->prepare("SELECT op.id, op.quantity, op.unit_cost, p.name AS part_name, p.code AS part_code FROM os_parts op JOIN parts p ON p.id=op.part_id WHERE op.os_id=?");
+    $opStmt = db()->prepare("SELECT op.id, op.quantity, op.unit_cost, p.name AS part_name, p.code AS part_code FROM man_os_parts op JOIN man_parts p ON p.id=op.part_id WHERE op.os_id=?");
     $opStmt->execute([$os['id']]);
     $osParts = $opStmt->fetchAll();
     foreach ($osParts as $op) { $partsCostTotal += (float)$op['unit_cost'] * (int)$op['quantity']; }
 
-    $plStmt = db()->prepare("SELECT id, name, code, quantity FROM parts WHERE hospital_id=? AND quantity > 0 ORDER BY name");
+    $plStmt = db()->prepare("SELECT id, name, code, quantity FROM man_parts WHERE hospital_id=? AND quantity > 0 ORDER BY name");
     $plStmt->execute([$hid]);
     $partsList = $plStmt->fetchAll();
 } catch (\Throwable $ignored) {}
@@ -587,7 +587,7 @@ try {
 <?php
     $history = [];
     try {
-        $hst = db()->prepare("SELECT * FROM os_history WHERE os_id = ? ORDER BY created_at DESC");
+        $hst = db()->prepare("SELECT * FROM man_os_history WHERE os_id = ? ORDER BY created_at DESC");
         $hst->execute([$os['id']]);
         $history = $hst->fetchAll();
     } catch (Throwable $ignored) {}
@@ -640,8 +640,8 @@ else:
     }
 
     $baseQuery = "SELECT so.*, e.name AS equip_name, u1.name AS assigned_name, u2.name AS created_name
-                  FROM service_orders so
-                  LEFT JOIN equipment e ON e.id = so.equipment_id
+                  FROM man_service_orders so
+                  LEFT JOIN man_equipment e ON e.id = so.equipment_id
                   LEFT JOIN users u1 ON u1.id = so.assigned_to
                   LEFT JOIN users u2 ON u2.id = so.created_by
                   {$where}

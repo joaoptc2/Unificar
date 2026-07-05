@@ -9,11 +9,11 @@ $hid = hospitalId();
 // ============================================================
 // DADOS
 // ============================================================
-$totalEquip = db()->prepare("SELECT COUNT(*) FROM equipment WHERE hospital_id = ?");
+$totalEquip = db()->prepare("SELECT COUNT(*) FROM man_equipment WHERE hospital_id = ?");
 $totalEquip->execute([$hid]);
 $totalEquip = (int)$totalEquip->fetchColumn();
 
-$osStats = db()->prepare("SELECT status, COUNT(*) AS total FROM service_orders WHERE hospital_id = ? GROUP BY status");
+$osStats = db()->prepare("SELECT status, COUNT(*) AS total FROM man_service_orders WHERE hospital_id = ? GROUP BY status");
 $osStats->execute([$hid]);
 $osMap = [];
 foreach ($osStats->fetchAll() as $r) { $osMap[$r['status']] = (int)$r['total']; }
@@ -21,7 +21,7 @@ $totalOs = array_sum($osMap);
 
 $mttr = db()->prepare("
     SELECT AVG(TIMESTAMPDIFF(HOUR, started_at, completed_at)) AS mttr
-    FROM service_orders
+    FROM man_service_orders
     WHERE hospital_id = ? AND status = 'completed' AND started_at IS NOT NULL AND completed_at IS NOT NULL
 ");
 $mttr->execute([$hid]);
@@ -30,7 +30,7 @@ $mttrVal = round((float)$mttr->fetchColumn(), 1);
 $mtbfVal = 0;
 try {
     $stmt = db()->prepare("
-        SELECT equipment_id, created_at FROM service_orders
+        SELECT equipment_id, created_at FROM man_service_orders
         WHERE hospital_id = ? AND type = 'corrective' AND equipment_id IS NOT NULL
         ORDER BY equipment_id, created_at
     ");
@@ -53,25 +53,25 @@ $availability = ($mtbfVal > 0 && $mttrVal > 0)
 
 $osByMonth = db()->prepare("
     SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, COUNT(*) AS total
-    FROM service_orders WHERE hospital_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+    FROM man_service_orders WHERE hospital_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
     GROUP BY DATE_FORMAT(created_at, '%Y-%m') ORDER BY month
 ");
 $osByMonth->execute([$hid]);
 $osByMonth = $osByMonth->fetchAll();
 
-$osByType = db()->prepare("SELECT type, COUNT(*) AS total FROM service_orders WHERE hospital_id = ? GROUP BY type");
+$osByType = db()->prepare("SELECT type, COUNT(*) AS total FROM man_service_orders WHERE hospital_id = ? GROUP BY type");
 $osByType->execute([$hid]);
 $osByType = $osByType->fetchAll();
 
-$equipByCrit = db()->prepare("SELECT criticality, COUNT(*) AS total FROM equipment WHERE hospital_id = ? GROUP BY criticality");
+$equipByCrit = db()->prepare("SELECT criticality, COUNT(*) AS total FROM man_equipment WHERE hospital_id = ? GROUP BY criticality");
 $equipByCrit->execute([$hid]);
 $equipByCrit = $equipByCrit->fetchAll();
 
-$overdueCount = db()->prepare("SELECT COUNT(*) FROM maintenance_plans WHERE hospital_id = ? AND status = 'active' AND next_date < CURDATE()");
+$overdueCount = db()->prepare("SELECT COUNT(*) FROM man_maintenance_plans WHERE hospital_id = ? AND status = 'active' AND next_date < CURDATE()");
 $overdueCount->execute([$hid]);
 $overdueCount = (int)$overdueCount->fetchColumn();
 
-$lowStockCount = db()->prepare("SELECT COUNT(*) FROM parts WHERE hospital_id = ? AND status = 'active' AND quantity <= min_quantity");
+$lowStockCount = db()->prepare("SELECT COUNT(*) FROM man_parts WHERE hospital_id = ? AND status = 'active' AND quantity <= min_quantity");
 $lowStockCount->execute([$hid]);
 $lowStockCount = (int)$lowStockCount->fetchColumn();
 

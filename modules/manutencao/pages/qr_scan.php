@@ -23,9 +23,9 @@ if ($token === '') {
     try {
         $stmt = db()->prepare("
             SELECT ql.*, s.name AS sector_name, h.name AS hospital_name
-            FROM qr_locations ql
-            LEFT JOIN sectors s   ON s.id = ql.sector_id
-            LEFT JOIN hospitals h ON h.id = ql.hospital_id
+            FROM man_qr_locations ql
+            LEFT JOIN man_sectors s   ON s.id = ql.sector_id
+            LEFT JOIN man_hospitals h ON h.id = ql.hospital_id
             WHERE ql.token = ? AND ql.status = 'active'
         ");
         $stmt->execute([$token]);
@@ -49,7 +49,7 @@ if ($loc && $_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $osNumber = generateOsNumber();
             db()->prepare("
-                INSERT INTO service_orders
+                INSERT INTO man_service_orders
                     (hospital_id, equipment_id, os_number, type, priority, status,
                      title, description, observation, anonymous_token, created_at)
                 VALUES (?, NULL, ?, 'corrective', 'medium', 'open', ?, ?, ?, ?, NOW())
@@ -100,7 +100,7 @@ if ($loc && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 db()->prepare("
-                    INSERT INTO service_orders
+                    INSERT INTO man_service_orders
                         (hospital_id, equipment_id, os_number, type, priority, status,
                          title, description, photo_path, observation, anonymous_token, created_at)
                     VALUES (?, NULL, ?, 'corrective', 'medium', 'open', ?, ?, ?, ?, ?, NOW())

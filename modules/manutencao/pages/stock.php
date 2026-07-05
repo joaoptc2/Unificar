@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         } else {
             try {
                 $stmt = db()->prepare("
-                    INSERT INTO parts (hospital_id, code, name, description, unit, quantity, min_quantity, unit_cost, supplier, location)
+                    INSERT INTO man_parts (hospital_id, code, name, description, unit, quantity, min_quantity, unit_cost, supplier, location)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 $stmt->execute([$hid, $code, $name, $desc, $unit, $quantity, $minQty, $unitCost, $supplier, $location]);
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
                 // Registrar entrada inicial
                 if ($quantity > 0) {
-                    db()->prepare("INSERT INTO stock_movements (hospital_id, part_id, type, quantity, reason, created_by) VALUES (?, ?, 'entry', ?, 'Estoque inicial', ?)")
+                    db()->prepare("INSERT INTO man_stock_movements (hospital_id, part_id, type, quantity, reason, created_by) VALUES (?, ?, 'entry', ?, 'Estoque inicial', ?)")
                         ->execute([$hid, $partId, $quantity, $_SESSION['user_id']]);
                 }
 
@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         } else {
             try {
                 db()->prepare("
-                    UPDATE parts SET code=?, name=?, description=?, unit=?, min_quantity=?, unit_cost=?, supplier=?, location=?, status=?
+                    UPDATE man_parts SET code=?, name=?, description=?, unit=?, min_quantity=?, unit_cost=?, supplier=?, location=?, status=?
                     WHERE id=? AND hospital_id=?
                 ")->execute([$code, $name, $desc, $unit, $minQty, $unitCost, $supplier, $location, $status, $id, $hid]);
                 auditLog('update', 'parts', $id);
@@ -94,16 +94,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
                 db()->beginTransaction();
 
                 // Registrar movimentação
-                db()->prepare("INSERT INTO stock_movements (hospital_id, part_id, type, quantity, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)")
+                db()->prepare("INSERT INTO man_stock_movements (hospital_id, part_id, type, quantity, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)")
                     ->execute([$hid, $partId, $type, $qty, $reason, $_SESSION['user_id']]);
 
                 // Atualizar quantidade
                 if ($type === 'entry') {
-                    db()->prepare("UPDATE parts SET quantity = quantity + ? WHERE id = ? AND hospital_id = ?")->execute([$qty, $partId, $hid]);
+                    db()->prepare("UPDATE man_parts SET quantity = quantity + ? WHERE id = ? AND hospital_id = ?")->execute([$qty, $partId, $hid]);
                 } elseif ($type === 'exit') {
-                    db()->prepare("UPDATE parts SET quantity = GREATEST(0, quantity - ?) WHERE id = ? AND hospital_id = ?")->execute([$qty, $partId, $hid]);
+                    db()->prepare("UPDATE man_parts SET quantity = GREATEST(0, quantity - ?) WHERE id = ? AND hospital_id = ?")->execute([$qty, $partId, $hid]);
                 } else { // adjustment
-                    db()->prepare("UPDATE parts SET quantity = ? WHERE id = ? AND hospital_id = ?")->execute([$qty, $partId, $hid]);
+                    db()->prepare("UPDATE man_parts SET quantity = ? WHERE id = ? AND hospital_id = ?")->execute([$qty, $partId, $hid]);
                 }
 
                 db()->commit();
@@ -120,8 +120,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     if ($act === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
         try {
-            db()->prepare("DELETE FROM stock_movements WHERE part_id = ? AND hospital_id = ?")->execute([$id, $hid]);
-            db()->prepare("DELETE FROM parts WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
+            db()->prepare("DELETE FROM man_stock_movements WHERE part_id = ? AND hospital_id = ?")->execute([$id, $hid]);
+            db()->prepare("DELETE FROM man_parts WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
             auditLog('delete', 'parts', $id);
             flash('success', 'Peça removida do estoque.');
         } catch (Exception $ex) {
@@ -142,7 +142,7 @@ ob_start();
 // ============================================================
 if ($action === 'edit'):
     $id = (int)($_GET['id'] ?? 0);
-    $stmt = db()->prepare("SELECT * FROM parts WHERE id = ? AND hospital_id = ?");
+    $stmt = db()->prepare("SELECT * FROM man_parts WHERE id = ? AND hospital_id = ?");
     $stmt->execute([$id, $hid]);
     $part = $stmt->fetch();
     if (!$part) { flash('error', 'Peça não encontrada.'); redirect(url('stock')); }
@@ -150,7 +150,7 @@ if ($action === 'edit'):
     // Histórico de movimentações
     $stmt = db()->prepare("
         SELECT sm.*, u.name AS user_name
-        FROM stock_movements sm
+        FROM man_stock_movements sm
         LEFT JOIN users u ON u.id = sm.created_by
         WHERE sm.part_id = ? AND sm.hospital_id = ?
         ORDER BY sm.created_at DESC LIMIT 20
@@ -299,7 +299,7 @@ else:
         $where .= " AND p.quantity > p.min_quantity";
     }
 
-    $baseQuery = "SELECT p.* FROM parts p {$where} ORDER BY p.name ASC";
+    $baseQuery = "SELECT p.* FROM man_parts p {$where} ORDER BY p.name ASC";
     $pg = paginate($baseQuery, $params, 20);
 ?>
 

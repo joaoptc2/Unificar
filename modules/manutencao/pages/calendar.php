@@ -62,8 +62,8 @@ $events = []; // key = 'YYYY-MM-DD' => [array of events]
 try {
     $st = db()->prepare("
         SELECT mp.title, mp.next_date, e.name AS equip_name
-        FROM maintenance_plans mp
-        LEFT JOIN equipment e ON e.id = mp.equipment_id
+        FROM man_maintenance_plans mp
+        LEFT JOIN man_equipment e ON e.id = mp.equipment_id
         WHERE mp.hospital_id = ? AND mp.status = 'active'
           AND mp.next_date BETWEEN ? AND ?
         ORDER BY mp.next_date
@@ -83,8 +83,8 @@ try {
 try {
     $st = db()->prepare("
         SELECT ec.next_date, e.name AS equip_name, ec.responsible_body
-        FROM equipment_calibrations ec
-        INNER JOIN equipment e ON e.id = ec.equipment_id
+        FROM man_equipment_calibrations ec
+        INNER JOIN man_equipment e ON e.id = ec.equipment_id
         WHERE ec.hospital_id = ? AND ec.next_date BETWEEN ? AND ?
         ORDER BY ec.next_date
     ");

@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
         if ($act === 'plan_add') {
             db()->prepare("
-                INSERT INTO cleaning_schedules
+                INSERT INTO man_cleaning_schedules
                     (hospital_id, sector_id, title, type, frequency, checklist_items, instructions, status)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
             ")->execute([$hid, $sector, $title, $type, $freq, $json, $instr]);
@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             flash('success', 'Checklist criado!');
         } else {
             db()->prepare("
-                UPDATE cleaning_schedules
+                UPDATE man_cleaning_schedules
                 SET sector_id=?, title=?, type=?, frequency=?, checklist_items=?, instructions=?
                 WHERE id=? AND hospital_id=?
             ")->execute([$sector, $title, $type, $freq, $json, $instr, $id, $hid]);
@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
     if ($act === 'plan_delete') {
         $id = (int)($_POST['id'] ?? 0);
-        db()->prepare("DELETE FROM cleaning_schedules WHERE id = ? AND hospital_id = ?")
+        db()->prepare("DELETE FROM man_cleaning_schedules WHERE id = ? AND hospital_id = ?")
             ->execute([$id, $hid]);
         auditLog('delete', 'cleaning_schedules', $id);
         flash('success', 'Checklist removido.');
@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         $totalItems = 0;
         $template = null;
         if ($scheduleId) {
-            $st = db()->prepare("SELECT * FROM cleaning_schedules WHERE id = ? AND hospital_id = ?");
+            $st = db()->prepare("SELECT * FROM man_cleaning_schedules WHERE id = ? AND hospital_id = ?");
             $st->execute([$scheduleId, $hid]);
             $template = $st->fetch() ?: null;
             if ($template) {
@@ -134,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         $checkedJson = json_encode(array_values(array_map('intval', $checked)), JSON_UNESCAPED_UNICODE);
 
         db()->prepare("
-            INSERT INTO cleaning_executions
+            INSERT INTO man_cleaning_executions
                 (hospital_id, schedule_id, sector_id, type, executed_by_name,
                  executed_by_user, checked_items, compliance_pct, photo_path,
                  signature_data, observation)
@@ -153,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 // ============================================================
 // SETORES (reusados em várias views)
 // ============================================================
-$sectors = db()->prepare("SELECT id, name FROM sectors WHERE hospital_id = ? AND status = 'active' ORDER BY name");
+$sectors = db()->prepare("SELECT id, name FROM man_sectors WHERE hospital_id = ? AND status = 'active' ORDER BY name");
 $sectors->execute([$hid]);
 $sectors = $sectors->fetchAll();
 
@@ -169,8 +169,8 @@ ob_start();
 if ($action === 'plans') {
     $st = db()->prepare("
         SELECT cs.*, s.name AS sector_name
-        FROM cleaning_schedules cs
-        LEFT JOIN sectors s ON s.id = cs.sector_id
+        FROM man_cleaning_schedules cs
+        LEFT JOIN man_sectors s ON s.id = cs.sector_id
         WHERE cs.hospital_id = ?
         ORDER BY cs.title
     ");
@@ -320,7 +320,7 @@ if ($action === 'plans') {
     $plan = null;
     $items = [];
     if ($scheduleId) {
-        $st = db()->prepare("SELECT * FROM cleaning_schedules WHERE id = ? AND hospital_id = ?");
+        $st = db()->prepare("SELECT * FROM man_cleaning_schedules WHERE id = ? AND hospital_id = ?");
         $st->execute([$scheduleId, $hid]);
         $plan  = $st->fetch() ?: null;
         if ($plan) $items = json_decode($plan['checklist_items'] ?? '[]', true) ?: [];
@@ -329,7 +329,7 @@ if ($action === 'plans') {
     // Se não veio com schedule_id, permite escolher
     $allPlans = [];
     if (!$plan) {
-        $st = db()->prepare("SELECT id, title FROM cleaning_schedules WHERE hospital_id = ? AND status='active' ORDER BY title");
+        $st = db()->prepare("SELECT id, title FROM man_cleaning_schedules WHERE hospital_id = ? AND status='active' ORDER BY title");
         $st->execute([$hid]);
         $allPlans = $st->fetchAll();
     }
@@ -490,9 +490,9 @@ if ($action === 'plans') {
 
     $st = db()->prepare("
         SELECT ce.*, s.name AS sector_name, cs.title AS schedule_title
-        FROM cleaning_executions ce
-        LEFT JOIN sectors s            ON s.id = ce.sector_id
-        LEFT JOIN cleaning_schedules cs ON cs.id = ce.schedule_id
+        FROM man_cleaning_executions ce
+        LEFT JOIN man_sectors s            ON s.id = ce.sector_id
+        LEFT JOIN man_cleaning_schedules cs ON cs.id = ce.schedule_id
         WHERE " . implode(' AND ', $where) . "
         ORDER BY ce.executed_at DESC
         LIMIT 200
@@ -506,7 +506,7 @@ if ($action === 'plans') {
             COUNT(*) AS total,
             AVG(compliance_pct) AS avg_compliance,
             SUM(CASE WHEN compliance_pct = 100 THEN 1 ELSE 0 END) AS full_compliance
-        FROM cleaning_executions
+        FROM man_cleaning_executions
         WHERE hospital_id = ? AND executed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     ");
     $kpi->execute([$hid]);

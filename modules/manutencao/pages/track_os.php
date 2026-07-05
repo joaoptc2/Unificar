@@ -19,10 +19,10 @@ if ($token === '') {
         $stmt = db()->prepare("
             SELECT so.*, e.name AS equip_name, h.name AS hospital_name,
                    s.name AS sector_name
-            FROM service_orders so
-            LEFT JOIN equipment e ON e.id = so.equipment_id
-            LEFT JOIN hospitals h ON h.id = so.hospital_id
-            LEFT JOIN sectors s   ON s.id = e.sector_id
+            FROM man_service_orders so
+            LEFT JOIN man_equipment e ON e.id = so.equipment_id
+            LEFT JOIN man_hospitals h ON h.id = so.hospital_id
+            LEFT JOIN man_sectors s   ON s.id = e.sector_id
             WHERE so.tracking_token = ?
         ");
         $stmt->execute([$token]);
@@ -34,7 +34,7 @@ if ($token === '') {
             try {
                 $hst = db()->prepare("
                     SELECT action, details, user_name, created_at
-                    FROM os_history
+                    FROM man_os_history
                     WHERE os_id = ?
                     ORDER BY created_at ASC
                 ");

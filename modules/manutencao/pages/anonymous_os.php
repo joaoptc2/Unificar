@@ -13,9 +13,9 @@ if ($token === '') {
     try {
         $stmt = db()->prepare("
             SELECT so.*, e.name AS equip_name, h.name AS hospital_name
-            FROM service_orders so
-            LEFT JOIN equipment e ON e.id = so.equipment_id
-            LEFT JOIN hospitals h ON h.id = so.hospital_id
+            FROM man_service_orders so
+            LEFT JOIN man_equipment e ON e.id = so.equipment_id
+            LEFT JOIN man_hospitals h ON h.id = so.hospital_id
             WHERE so.anonymous_token = ?
         ");
         $stmt->execute([$token]);

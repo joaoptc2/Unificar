@@ -36,12 +36,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             try {
                 if ($act === 'add') {
                     $qrToken = generateToken(16);
-                    db()->prepare("INSERT INTO equipment (hospital_id, sector_id, category_id, code, name, manufacturer, model, serial_number, acquisition_date, criticality, status, description, qr_token, installation_date, useful_life_years) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                    db()->prepare("INSERT INTO man_equipment (hospital_id, sector_id, category_id, code, name, manufacturer, model, serial_number, acquisition_date, criticality, status, description, qr_token, installation_date, useful_life_years) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
                         ->execute([$hid, $sectorId, $categoryId, $code, $name, $manufacturer, $model, $serialNumber, $acqDate, $criticality, $status, $description, $qrToken, $installationDate, $usefulLifeYears]);
                     auditLog('create', 'equipment', (int)db()->lastInsertId());
                     flash('success', 'Equipamento adicionado!');
                 } else {
-                    db()->prepare("UPDATE equipment SET sector_id=?, category_id=?, code=?, name=?, manufacturer=?, model=?, serial_number=?, acquisition_date=?, criticality=?, status=?, description=?, installation_date=?, useful_life_years=? WHERE id=? AND hospital_id=?")
+                    db()->prepare("UPDATE man_equipment SET sector_id=?, category_id=?, code=?, name=?, manufacturer=?, model=?, serial_number=?, acquisition_date=?, criticality=?, status=?, description=?, installation_date=?, useful_life_years=? WHERE id=? AND hospital_id=?")
                         ->execute([$sectorId, $categoryId, $code, $name, $manufacturer, $model, $serialNumber, $acqDate, $criticality, $status, $description, $installationDate, $usefulLifeYears, $id, $hid]);
                     auditLog('update', 'equipment', $id);
                     flash('success', 'Equipamento atualizado!');
@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         $id = (int)($_POST['id'] ?? 0);
         $deactivationReason = trim($_POST['deactivation_reason'] ?? '');
         try {
-            db()->prepare("UPDATE equipment SET status='inactive', deactivation_date=NOW(), deactivation_reason=? WHERE id=? AND hospital_id=?")
+            db()->prepare("UPDATE man_equipment SET status='inactive', deactivation_date=NOW(), deactivation_reason=? WHERE id=? AND hospital_id=?")
                 ->execute([$deactivationReason ?: null, $id, $hid]);
             auditLog('deactivate', 'equipment', $id);
             flash('success', 'Equipamento desativado.');
@@ -63,25 +63,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
     if ($act === 'add_category') {
         $catName = trim($_POST['cat_name'] ?? '');
-        if ($catName !== '') { db()->prepare("INSERT INTO equipment_categories (hospital_id, name) VALUES (?, ?)")->execute([$hid, $catName]); flash('success', 'Categoria adicionada.'); }
+        if ($catName !== '') { db()->prepare("INSERT INTO man_equipment_categories (hospital_id, name) VALUES (?, ?)")->execute([$hid, $catName]); flash('success', 'Categoria adicionada.'); }
         redirect(url('equipment', ['action' => 'categories']));
     }
     if ($act === 'delete_category') {
         $catId = (int)($_POST['cat_id'] ?? 0);
-        db()->prepare("DELETE FROM equipment_categories WHERE id = ? AND hospital_id = ?")->execute([$catId, $hid]);
+        db()->prepare("DELETE FROM man_equipment_categories WHERE id = ? AND hospital_id = ?")->execute([$catId, $hid]);
         flash('success', 'Categoria removida.');
         redirect(url('equipment', ['action' => 'categories']));
     }
     if ($act === 'edit_category') {
         $catId = (int)($_POST['cat_id'] ?? 0);
         $catName = trim($_POST['cat_name'] ?? '');
-        if ($catName !== '') { db()->prepare("UPDATE equipment_categories SET name = ? WHERE id = ? AND hospital_id = ?")->execute([$catName, $catId, $hid]); flash('success', 'Categoria atualizada.'); }
+        if ($catName !== '') { db()->prepare("UPDATE man_equipment_categories SET name = ? WHERE id = ? AND hospital_id = ?")->execute([$catName, $catId, $hid]); flash('success', 'Categoria atualizada.'); }
         redirect(url('equipment', ['action' => 'categories']));
     }
 }
 
-$sectors    = db()->prepare("SELECT * FROM sectors WHERE hospital_id = ? ORDER BY name"); $sectors->execute([$hid]); $sectors = $sectors->fetchAll();
-$categories = db()->prepare("SELECT * FROM equipment_categories WHERE hospital_id = ? ORDER BY name"); $categories->execute([$hid]); $categories = $categories->fetchAll();
+$sectors    = db()->prepare("SELECT * FROM man_sectors WHERE hospital_id = ? ORDER BY name"); $sectors->execute([$hid]); $sectors = $sectors->fetchAll();
+$categories = db()->prepare("SELECT * FROM man_equipment_categories WHERE hospital_id = ? ORDER BY name"); $categories->execute([$hid]); $categories = $categories->fetchAll();
 
 $critLabels     = ['low'=>'Baixa','medium'=>'Média','high'=>'Alta','critical'=>'Crítica'];
 $statusLabels   = ['active'=>'Ativo','maintenance'=>'Em Manutenção','inactive'=>'Inativo','broken'=>'Quebrado'];
@@ -156,23 +156,23 @@ if ($action === 'categories'):
 // ============================================================
 elseif ($action === 'detail'):
     $id = (int)($_GET['id'] ?? 0);
-    $stmt = db()->prepare("SELECT e.*, s.name AS sector_name, c.name AS category_name FROM equipment e LEFT JOIN sectors s ON s.id=e.sector_id LEFT JOIN equipment_categories c ON c.id=e.category_id WHERE e.id=? AND e.hospital_id=?");
+    $stmt = db()->prepare("SELECT e.*, s.name AS sector_name, c.name AS category_name FROM man_equipment e LEFT JOIN man_sectors s ON s.id=e.sector_id LEFT JOIN man_equipment_categories c ON c.id=e.category_id WHERE e.id=? AND e.hospital_id=?");
     $stmt->execute([$id, $hid]);
     $eq = $stmt->fetch();
     if (!$eq) { flash('error', 'Equipamento não encontrado.'); redirect(url('equipment')); }
 
-    $osHistory = db()->prepare("SELECT os_number, title, type, status, priority, created_at, completed_at FROM service_orders WHERE equipment_id=? AND hospital_id=? ORDER BY created_at DESC LIMIT 50");
+    $osHistory = db()->prepare("SELECT os_number, title, type, status, priority, created_at, completed_at FROM man_service_orders WHERE equipment_id=? AND hospital_id=? ORDER BY created_at DESC LIMIT 50");
     $osHistory->execute([$id, $hid]);
     $osHistory = $osHistory->fetchAll();
 
     $calibHistory = [];
     try {
-        $st = db()->prepare("SELECT calibration_date, next_date, result, responsible_body, cost FROM equipment_calibrations WHERE equipment_id=? AND hospital_id=? ORDER BY calibration_date DESC LIMIT 20");
+        $st = db()->prepare("SELECT calibration_date, next_date, result, responsible_body, cost FROM man_equipment_calibrations WHERE equipment_id=? AND hospital_id=? ORDER BY calibration_date DESC LIMIT 20");
         $st->execute([$id, $hid]);
         $calibHistory = $st->fetchAll();
     } catch (Throwable $ignored) {}
 
-    $maintPlans = db()->prepare("SELECT title, frequency, next_date, last_executed, status FROM maintenance_plans WHERE equipment_id=? AND hospital_id=? ORDER BY next_date");
+    $maintPlans = db()->prepare("SELECT title, frequency, next_date, last_executed, status FROM man_maintenance_plans WHERE equipment_id=? AND hospital_id=? ORDER BY next_date");
     $maintPlans->execute([$id, $hid]);
     $maintPlans = $maintPlans->fetchAll();
 
@@ -319,7 +319,7 @@ elseif ($action === 'detail'):
 // ============================================================
 elseif ($action === 'edit'):
     $id = (int)($_GET['id'] ?? 0);
-    $stmt = db()->prepare("SELECT * FROM equipment WHERE id = ? AND hospital_id = ?");
+    $stmt = db()->prepare("SELECT * FROM man_equipment WHERE id = ? AND hospital_id = ?");
     $stmt->execute([$id, $hid]);
     $eq = $stmt->fetch();
     if (!$eq) { flash('error', 'Equipamento não encontrado.'); redirect(url('equipment')); }
@@ -401,7 +401,7 @@ else:
     if ($filterCrit !== '')   { $where .= " AND e.criticality = ?"; $params[] = $filterCrit; }
 
     $baseQuery = "SELECT e.*, s.name AS sector_name, c.name AS category_name
-                  FROM equipment e LEFT JOIN sectors s ON s.id = e.sector_id LEFT JOIN equipment_categories c ON c.id = e.category_id
+                  FROM man_equipment e LEFT JOIN man_sectors s ON s.id = e.sector_id LEFT JOIN man_equipment_categories c ON c.id = e.category_id
                   {$where} ORDER BY e.created_at DESC";
     $pg = paginate($baseQuery, $params, 20);
 ?>
