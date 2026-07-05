@@ -1,64 +1,37 @@
 <?php
 /**
- * Controller de Notificações (Módulo 9)
+ * Controller de Notificações — adaptado à tabela GLOBAL `notifications`
+ * da plataforma (module = 'rh', leitura marcada em read_at).
+ *
+ * A interface de leitura (listagem/sino) agora é do núcleo — a página do
+ * módulo redireciona para ?m=auth&a=notifications. Ficam aqui apenas os
+ * helpers de criação usados pelos outros controllers e pelos crons.
  */
 class NotificationController
 {
-    private PDO $db;
-
-    public function __construct()
-    {
-        $this->db = Database::getInstance();
-    }
-
     public function index(): void
     {
         Auth::requireLogin();
-
-        $userId = Session::userId();
-        $currentPage = max(1, Sanitize::int($_GET['p'] ?? 1));
-
-        $countStmt = $this->db->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ?');
-        $countStmt->execute([$userId]);
-        $total = (int)$countStmt->fetchColumn();
-
-        $pagination = new Pagination($total, $currentPage, 20);
-
-        $stmt = $this->db->prepare(
-            "SELECT * FROM notifications WHERE user_id = ?
-             ORDER BY is_read ASC, created_at DESC
-             LIMIT {$pagination->perPage} OFFSET {$pagination->offset}"
-        );
-        $stmt->execute([$userId]);
-        $notifications = $stmt->fetchAll();
-
-        $pageTitle = 'Notificações';
-        $page = 'notifications';
-        require __DIR__ . '/../views/layout/header.php';
-        require __DIR__ . '/../views/notifications/index.php';
-        require __DIR__ . '/../views/layout/footer.php';
+        core_redirect('index.php?m=auth&a=notifications');
     }
 
+    /**
+     * Compat: marca como lida e segue o link (o núcleo também faz isso).
+     */
     public function read(): void
     {
         Auth::requireLogin();
 
         $id = Sanitize::int($_GET['id'] ?? 0);
-        $userId = Session::userId();
+        $userId = (int)Session::userId();
 
-        // Marcar como lida
-        $stmt = $this->db->prepare('UPDATE notifications SET is_read = 1, read_at = NOW() WHERE id = ? AND user_id = ?');
-        $stmt->execute([$id, $userId]);
+        Core\Notifications::markRead($userId, $id ?: null);
 
-        // Redirecionar para link, se houver
-        $stmt = $this->db->prepare('SELECT link FROM notifications WHERE id = ? AND user_id = ?');
-        $stmt->execute([$id, $userId]);
-        $notification = $stmt->fetch();
-
-        if ($notification && $notification['link']) {
-            header('Location: ' . $notification['link']);
+        $row = Core\DB::queryOne('SELECT link FROM notifications WHERE id = ? AND user_id = ?', [$id, $userId]);
+        if ($row && $row['link']) {
+            header('Location: ' . $row['link']);
         } else {
-            header('Location: index.php?page=notifications');
+            core_redirect('index.php?m=auth&a=notifications');
         }
         exit;
     }
@@ -68,41 +41,18 @@ class NotificationController
         Auth::requireLogin();
         Csrf::check();
 
-        $userId = Session::userId();
-        $this->db->prepare('UPDATE notifications SET is_read = 1, read_at = NOW() WHERE user_id = ? AND is_read = 0')
-                 ->execute([$userId]);
-
-        Session::flash('success', 'Todas as notificações marcadas como lidas.');
-        header('Location: index.php?page=notifications');
-        exit;
-    }
-
-    public function delete(): void
-    {
-        Auth::requireLogin();
-        Csrf::check();
-
-        $id = Sanitize::int($_POST['id'] ?? 0);
-        $userId = Session::userId();
-
-        $this->db->prepare('DELETE FROM notifications WHERE id = ? AND user_id = ?')->execute([$id, $userId]);
-
-        Session::flash('success', 'Notificação excluída.');
-        header('Location: index.php?page=notifications');
-        exit;
+        Core\Notifications::markRead((int)Session::userId());
+        core_redirect('index.php?m=auth&a=notifications');
     }
 
     /**
-     * API: Contar notificações não lidas (para badge no header)
+     * API: Contar notificações não lidas do módulo (badge legado).
      */
     public function count_unread(): void
     {
         Auth::requireLogin();
 
-        $userId = Session::userId();
-        $stmt = $this->db->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0');
-        $stmt->execute([$userId]);
-        $count = (int)$stmt->fetchColumn();
+        $count = Core\Notifications::unreadCount((int)Session::userId(), 'rh');
 
         header('Content-Type: application/json');
         echo json_encode(['count' => $count]);
@@ -110,26 +60,29 @@ class NotificationController
     }
 
     /**
-     * Criar notificação (método estático para uso em outros controllers)
+     * Criar notificação (método estático para uso em outros controllers).
+     * Grava na tabela global com module='rh'.
      */
     public static function create(int $userId, string $title, string $message, string $type = 'info', string $link = ''): void
     {
-        $db = Database::getInstance();
-        $stmt = $db->prepare(
-            'INSERT INTO notifications (user_id, title, message, type, link) VALUES (?, ?, ?, ?, ?)'
-        );
-        $stmt->execute([$userId, $title, $message, $type, $link]);
+        Core\Notifications::add($userId, $title, $message, $link !== '' ? $link : null, $type, 'rh');
     }
 
     /**
-     * Notificar todos os admins
+     * Notificar todos os administradores do módulo RH (RBAC central) e os
+     * administradores globais da plataforma.
      */
     public static function notifyAdmins(string $title, string $message, string $type = 'warning', string $link = ''): void
     {
-        $db = Database::getInstance();
-        $admins = $db->query("SELECT id FROM users WHERE role = 'admin' AND active = 1")->fetchAll(PDO::FETCH_COLUMN);
-        foreach ($admins as $adminId) {
-            self::create($adminId, $title, $message, $type, $link);
+        $admins = Core\DB::query(
+            "SELECT DISTINCT u.id
+             FROM users u
+             LEFT JOIN user_module_access uma
+               ON uma.user_id = u.id AND uma.module_slug = 'rh'
+             WHERE u.active = 1 AND (u.is_admin = 1 OR uma.role = 'admin')"
+        );
+        foreach ($admins as $admin) {
+            self::create((int)$admin['id'], $title, $message, $type, $link);
         }
     }
 }

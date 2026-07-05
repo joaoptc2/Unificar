@@ -4,12 +4,12 @@
  */
 class EmployeeScore extends Model
 {
-    protected static string $table = 'employee_scores';
+    protected static string $table = 'rh_employee_scores';
     protected static array  $fillable = ['employee_id', 'points', 'reason', 'category', 'created_by'];
 
     public static function totalFor(int $employeeId): int
     {
-        $stmt = self::db()->prepare('SELECT COALESCE(SUM(points), 0) FROM employee_scores WHERE employee_id = ?');
+        $stmt = self::db()->prepare('SELECT COALESCE(SUM(points), 0) FROM rh_employee_scores WHERE employee_id = ?');
         $stmt->execute([$employeeId]);
         return (int)$stmt->fetchColumn();
     }
@@ -21,7 +21,7 @@ class EmployeeScore extends Model
     {
         $stmt = self::db()->prepare(
             'SELECT s.*, u.name AS created_by_name
-             FROM employee_scores s
+             FROM rh_employee_scores s
              LEFT JOIN users u ON s.created_by = u.id
              WHERE s.employee_id = ?
              ORDER BY s.created_at DESC'

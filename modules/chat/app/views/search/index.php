@@ -1,3 +1,10 @@
+<?php
+// Resultados vindos do SearchController (mantém as chaves usadas abaixo)
+$messages       = $results['messages'] ?? [];
+$users          = $results['users'] ?? [];
+$channelResults = $results['channels'] ?? [];
+$tasks          = $results['tasks'] ?? [];
+?>
 <div class="page-header">
     <h1><i class="bi bi-search me-2"></i>Busca</h1>
 </div>
@@ -5,10 +12,11 @@
 <div class="row justify-content-center">
     <div class="col-md-8">
         <form class="mb-4">
+            <input type="hidden" name="m" value="chat">
             <input type="hidden" name="page" value="search">
             <div class="input-group input-group-lg">
                 <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input type="text" name="q" class="form-control" placeholder="Buscar mensagens, pessoas, canais, tarefas..."
+                <input type="text" name="query" class="form-control" placeholder="Buscar mensagens, pessoas, canais, tarefas..."
                        value="<?= Sanitize::e($query ?? '') ?>" autofocus>
                 <button type="submit" class="btn btn-primary">Buscar</button>
             </div>
@@ -23,7 +31,7 @@
                 </div>
                 <div class="card-body p-0">
                     <?php foreach ($messages as $msg): ?>
-                    <a href="index.php?page=chat&channel_id=<?= $msg['channel_id'] ?>" class="search-result-item">
+                    <a href="index.php?m=chat&page=chat&channel_id=<?= $msg['channel_id'] ?>" class="search-result-item">
                         <div class="d-flex justify-content-between">
                             <strong><?= Sanitize::e($msg['user_name'] ?? 'Removido') ?></strong>
                             <span class="text-muted small">#<?= Sanitize::e($msg['channel_name'] ?? '') ?> · <?= Sanitize::timeAgo($msg['created_at']) ?></span>
@@ -49,7 +57,7 @@
                             <strong><?= Sanitize::e($u['name']) ?></strong>
                             <span class="text-muted ms-2"><?= Sanitize::e($u['email']) ?></span>
                         </div>
-                        <a href="index.php?page=channels&action=direct&user_id=<?= $u['id'] ?>" class="btn btn-outline-primary btn-sm ms-auto">
+                        <a href="index.php?m=chat&page=channels&action=direct&user_id=<?= $u['id'] ?>" class="btn btn-outline-primary btn-sm ms-auto">
                             <i class="bi bi-chat"></i>
                         </a>
                     </div>
@@ -66,7 +74,7 @@
                 </div>
                 <div class="card-body p-0">
                     <?php foreach ($channelResults as $ch): ?>
-                    <a href="index.php?page=chat&channel_id=<?= $ch['id'] ?>" class="search-result-item">
+                    <a href="index.php?m=chat&page=chat&channel_id=<?= $ch['id'] ?>" class="search-result-item">
                         <strong>#<?= Sanitize::e($ch['name']) ?></strong>
                         <?php if ($ch['description']): ?>
                         <p class="mb-0 text-muted small"><?= Sanitize::e(mb_substr($ch['description'], 0, 100)) ?></p>
@@ -85,7 +93,7 @@
                 </div>
                 <div class="card-body p-0">
                     <?php foreach ($tasks as $task): ?>
-                    <a href="index.php?page=tasks&action=show&id=<?= $task['id'] ?>" class="search-result-item">
+                    <a href="index.php?m=chat&page=tasks&action=show&id=<?= $task['id'] ?>" class="search-result-item">
                         <strong><?= Sanitize::e($task['title']) ?></strong>
                         <span class="badge bg-<?= match($task['status']) {
                             'todo' => 'secondary', 'in_progress' => 'primary', 'review' => 'warning', 'done' => 'success', default => 'secondary'

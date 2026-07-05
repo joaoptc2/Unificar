@@ -1,11 +1,11 @@
 <div class="page-header">
     <h1><i class="bi bi-briefcase me-2"></i>Processos Seletivos</h1>
     <div class="d-flex gap-2">
-        <a href="index.php?page=recruitment&status=aberta" class="btn btn-outline-success btn-sm <?= $status === 'aberta' ? 'active' : '' ?>">Abertas</a>
-        <a href="index.php?page=recruitment&status=fechada" class="btn btn-outline-secondary btn-sm <?= $status === 'fechada' ? 'active' : '' ?>">Fechadas</a>
-        <a href="index.php?page=recruitment" class="btn btn-outline-primary btn-sm <?= !$status ? 'active' : '' ?>">Todas</a>
+        <a href="index.php?m=rh&page=recruitment&status=aberta" class="btn btn-outline-success btn-sm <?= $status === 'aberta' ? 'active' : '' ?>">Abertas</a>
+        <a href="index.php?m=rh&page=recruitment&status=fechada" class="btn btn-outline-secondary btn-sm <?= $status === 'fechada' ? 'active' : '' ?>">Fechadas</a>
+        <a href="index.php?m=rh&page=recruitment" class="btn btn-outline-primary btn-sm <?= !$status ? 'active' : '' ?>">Todas</a>
         <?php if (Auth::can('recruitment', 'create')): ?>
-            <a href="index.php?page=recruitment&action=create" class="btn btn-primary btn-sm">
+            <a href="index.php?m=rh&page=recruitment&action=create" class="btn btn-primary btn-sm">
                 <i class="bi bi-plus-lg me-1"></i> Nova Vaga
             </a>
         <?php endif; ?>
@@ -25,7 +25,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <h6 class="fw-bold mb-0">
-                            <a href="index.php?page=recruitment&action=show&id=<?= $job['id'] ?>" class="text-decoration-none">
+                            <a href="index.php?m=rh&page=recruitment&action=show&id=<?= $job['id'] ?>" class="text-decoration-none">
                                 <?= Sanitize::e($job['title']) ?>
                             </a>
                         </h6>
@@ -45,7 +45,7 @@
                     </div>
                 </div>
                 <div class="card-footer bg-transparent">
-                    <a href="index.php?page=recruitment&action=show&id=<?= $job['id'] ?>" class="btn btn-outline-primary btn-sm w-100">
+                    <a href="index.php?m=rh&page=recruitment&action=show&id=<?= $job['id'] ?>" class="btn btn-outline-primary btn-sm w-100">
                         <i class="bi bi-kanban me-1"></i> Ver Processo
                     </a>
                 </div>

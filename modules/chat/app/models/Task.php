@@ -1,7 +1,7 @@
 <?php
 class Task extends Model
 {
-    protected static string $table = 'tasks';
+    protected static string $table = 'chat_tasks';
     protected static array  $fillable = [
         'channel_id', 'title', 'description', 'status',
         'priority', 'created_by', 'due_date', 'completed_at',
@@ -17,7 +17,7 @@ class Task extends Model
         $stmt = $db->prepare(
             'SELECT u.id, u.name, u.avatar, u.email
              FROM users u
-             INNER JOIN task_assignees ta ON ta.user_id = u.id
+             INNER JOIN chat_task_assignees ta ON ta.user_id = u.id
              WHERE ta.task_id = ?'
         );
         $stmt->execute([$id]);
@@ -25,7 +25,7 @@ class Task extends Model
 
         $stmt = $db->prepare(
             'SELECT tc.*, u.name AS user_name, u.avatar AS user_avatar
-             FROM task_comments tc
+             FROM chat_task_comments tc
              LEFT JOIN users u ON u.id = tc.user_id
              WHERE tc.task_id = ?
              ORDER BY tc.created_at ASC'
@@ -47,9 +47,9 @@ class Task extends Model
         $stmt = $db->prepare(
             'SELECT t.*, u.name AS creator_name,
                     GROUP_CONCAT(ua.name SEPARATOR ", ") AS assignee_names
-             FROM tasks t
+             FROM chat_tasks t
              LEFT JOIN users u ON u.id = t.created_by
-             LEFT JOIN task_assignees ta ON ta.task_id = t.id
+             LEFT JOIN chat_task_assignees ta ON ta.task_id = t.id
              LEFT JOIN users ua ON ua.id = ta.user_id
              WHERE t.channel_id = ?
              GROUP BY t.id
@@ -68,11 +68,11 @@ class Task extends Model
                 $stmt = $db->prepare(
                     'SELECT t.*, u.name AS creator_name,
                             GROUP_CONCAT(DISTINCT ua.name SEPARATOR ", ") AS assignee_names
-                     FROM tasks t
+                     FROM chat_tasks t
                      LEFT JOIN users u ON u.id = t.created_by
-                     LEFT JOIN task_assignees ta ON ta.task_id = t.id
+                     LEFT JOIN chat_task_assignees ta ON ta.task_id = t.id
                      LEFT JOIN users ua ON ua.id = ta.user_id
-                     WHERE t.status = ? AND (t.created_by = ? OR t.id IN (SELECT task_id FROM task_assignees WHERE user_id = ?))
+                     WHERE t.status = ? AND (t.created_by = ? OR t.id IN (SELECT task_id FROM chat_task_assignees WHERE user_id = ?))
                      GROUP BY t.id
                      ORDER BY FIELD(t.priority, "urgent", "high", "medium", "low"), t.created_at DESC'
                 );
@@ -81,9 +81,9 @@ class Task extends Model
                 $stmt = $db->prepare(
                     'SELECT t.*, u.name AS creator_name,
                             GROUP_CONCAT(DISTINCT ua.name SEPARATOR ", ") AS assignee_names
-                     FROM tasks t
+                     FROM chat_tasks t
                      LEFT JOIN users u ON u.id = t.created_by
-                     LEFT JOIN task_assignees ta ON ta.task_id = t.id
+                     LEFT JOIN chat_task_assignees ta ON ta.task_id = t.id
                      LEFT JOIN users ua ON ua.id = ta.user_id
                      WHERE t.status = ?
                      GROUP BY t.id
@@ -101,9 +101,9 @@ class Task extends Model
         $db = Database::getInstance();
         $stmt = $db->prepare(
             'SELECT t.*, u.name AS creator_name
-             FROM tasks t
+             FROM chat_tasks t
              LEFT JOIN users u ON u.id = t.created_by
-             INNER JOIN task_assignees ta ON ta.task_id = t.id AND ta.user_id = ?
+             INNER JOIN chat_task_assignees ta ON ta.task_id = t.id AND ta.user_id = ?
              WHERE t.status != "cancelled"
              ORDER BY FIELD(t.priority, "urgent", "high", "medium", "low"), t.due_date ASC'
         );
@@ -114,8 +114,8 @@ class Task extends Model
     public static function setAssignees(int $taskId, array $userIds): void
     {
         $db = Database::getInstance();
-        $db->prepare('DELETE FROM task_assignees WHERE task_id = ?')->execute([$taskId]);
-        $stmt = $db->prepare('INSERT INTO task_assignees (task_id, user_id, assigned_at) VALUES (?, ?, NOW())');
+        $db->prepare('DELETE FROM chat_task_assignees WHERE task_id = ?')->execute([$taskId]);
+        $stmt = $db->prepare('INSERT INTO chat_task_assignees (task_id, user_id, assigned_at) VALUES (?, ?, NOW())');
         foreach ($userIds as $uid) {
             $stmt->execute([$taskId, $uid]);
         }
@@ -125,7 +125,7 @@ class Task extends Model
     {
         $db = Database::getInstance();
         $stmt = $db->prepare(
-            'INSERT INTO task_comments (task_id, user_id, content, created_at) VALUES (?, ?, ?, NOW())'
+            'INSERT INTO chat_task_comments (task_id, user_id, content, created_at) VALUES (?, ?, ?, NOW())'
         );
         $stmt->execute([$taskId, $userId, $content]);
         return (int) $db->lastInsertId();
@@ -135,7 +135,7 @@ class Task extends Model
     {
         $db = Database::getInstance();
         $stmt = $db->query(
-            'SELECT status, COUNT(*) AS cnt FROM tasks WHERE status != "cancelled" GROUP BY status'
+            'SELECT status, COUNT(*) AS cnt FROM chat_tasks WHERE status != "cancelled" GROUP BY status'
         );
         $result = ['todo' => 0, 'in_progress' => 0, 'review' => 0, 'done' => 0];
         foreach ($stmt->fetchAll() as $row) {

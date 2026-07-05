@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-list-check me-2"></i><?= Sanitize::e($template['name']) ?></h1>
-    <a href="index.php?page=onboarding" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
+    <a href="index.php?m=rh&page=onboarding" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
 </div>
 <div class="card border-0 shadow-sm"><div class="card-body">
     <span class="badge <?= $template['type'] === 'onboarding' ? 'bg-success' : 'bg-warning text-dark' ?> mb-3"><?= ucfirst($template['type']) ?></span>

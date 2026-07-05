@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-list-check me-2"></i>Checklist: <?= Sanitize::e($employee['full_name']) ?></h1>
-    <a href="index.php?page=employees&action=show&id=<?= $employee['id'] ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
+    <a href="index.php?m=rh&page=employees&action=show&id=<?= $employee['id'] ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
 </div>
 <div class="mb-3">
     <div class="progress" style="height:24px">
@@ -17,7 +17,7 @@
             <tr class="<?= (int)$i['completed'] ? 'table-success' : '' ?>">
                 <td class="text-center">
                     <?php if (Auth::can('onboarding', 'edit')): ?>
-                        <form method="POST" action="index.php?page=onboarding&action=toggle_item" class="d-inline">
+                        <form method="POST" action="index.php?m=rh&page=onboarding&action=toggle_item" class="d-inline">
                             <?= Csrf::field() ?>
                             <input type="hidden" name="progress_id" value="<?= $i['id'] ?>">
                             <input type="hidden" name="employee_id" value="<?= $employee['id'] ?>">

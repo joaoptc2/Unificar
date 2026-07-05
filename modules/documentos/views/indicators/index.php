@@ -9,7 +9,9 @@
 
 <!-- Filtros -->
 <div class="filter-panel">
-    <form method="GET" action="<?php echo url('indicators'); ?>" class="row g-2 align-items-end">
+    <form method="GET" action="<?php echo core_url('index.php'); ?>" class="row g-2 align-items-end">
+        <input type="hidden" name="m" value="documentos">
+        <input type="hidden" name="url" value="indicators">
         <div class="col-md-2">
             <label class="form-label">Periodicidade</label>
             <select name="type" class="form-select form-select-sm">

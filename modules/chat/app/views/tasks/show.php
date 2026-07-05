@@ -1,10 +1,10 @@
 <div class="page-header">
     <h1><i class="bi bi-kanban me-2"></i>Tarefa #<?= $task['id'] ?></h1>
     <div class="d-flex gap-2">
-        <a href="index.php?page=tasks&action=edit&id=<?= $task['id'] ?>" class="btn btn-outline-warning btn-sm">
+        <a href="index.php?m=chat&page=tasks&action=edit&id=<?= $task['id'] ?>" class="btn btn-outline-warning btn-sm">
             <i class="bi bi-pencil me-1"></i> Editar
         </a>
-        <a href="index.php?page=tasks" class="btn btn-outline-secondary btn-sm">
+        <a href="index.php?m=chat&page=tasks" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i> Voltar
         </a>
     </div>
@@ -38,7 +38,7 @@
                     <?php endforeach; ?>
                 <?php endif; ?>
 
-                <form method="POST" action="index.php?page=tasks&action=comment" class="mt-3">
+                <form method="POST" action="index.php?m=chat&page=tasks&action=comment" class="mt-3">
                     <?= Csrf::field() ?>
                     <input type="hidden" name="task_id" value="<?= $task['id'] ?>">
                     <div class="input-group">

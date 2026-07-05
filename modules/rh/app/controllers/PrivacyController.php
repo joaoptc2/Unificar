@@ -7,9 +7,12 @@ class PrivacyController
 {
     public function index(): void
     {
-        $appConfig = require __DIR__ . '/../../config/app.php';
-        $hospitalName = $appConfig['app_name'] ?? 'Hospital';
-        $contactEmail = $appConfig['mail_from'] ?? '';
+        try {
+            $hospitalName = Core\Settings::get('org_name', 'Hospital');
+        } catch (\Throwable $e) {
+            $hospitalName = 'Hospital';
+        }
+        $contactEmail = (string)core_config('mail.from', '');
         require __DIR__ . '/../views/privacy/index.php';
     }
 
@@ -20,18 +23,18 @@ class PrivacyController
     public function delete_candidate(): void
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: index.php?page=public_recruitment&action=track');
+            header('Location: index.php?m=rh&page=public_recruitment&action=track');
             exit;
         }
         Csrf::check();
         $token = trim($_POST['token'] ?? '');
         if (strlen($token) < 12) {
             Session::flash('error', 'Token inválido.');
-            header('Location: index.php?page=public_recruitment&action=track&token=' . urlencode($token));
+            header('Location: index.php?m=rh&page=public_recruitment&action=track&token=' . urlencode($token));
             exit;
         }
         $db = Database::getInstance();
-        $stmt = $db->prepare('SELECT id FROM candidates WHERE access_token LIKE ? LIMIT 1');
+        $stmt = $db->prepare('SELECT id FROM rh_candidates WHERE access_token LIKE ? LIMIT 1');
         $stmt->execute([$token . '%']);
         $row = $stmt->fetch();
         if ($row && Lgpd::deleteCandidate((int)$row['id'])) {
@@ -39,7 +42,7 @@ class PrivacyController
         } else {
             Session::flash('error', 'Não foi possível localizar a candidatura.');
         }
-        header('Location: index.php?page=public_recruitment&action=track');
+        header('Location: index.php?m=rh&page=public_recruitment&action=track');
         exit;
     }
 }

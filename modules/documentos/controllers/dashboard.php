@@ -28,11 +28,11 @@ function dashboard_index($param = null) {
         $stats['valid_documents']    = $doc_stats['valid'];
 
         $stats['total_indicators']     = indicator_count($hospital_id);
-        $stats['unread_notifications'] = notification_unread_count($hospital_id, get_user_id());
+        $stats['unread_notifications'] = notification_unread_count(get_user_id());
 
         $expiring_docs = document_expiring_list($hospital_id, 10);
         $expired_docs  = document_expired_list($hospital_id, 10);
-        $notifications = notification_recent($hospital_id, get_user_id(), 5);
+        $notifications = notification_recent(get_user_id(), 5);
     } catch (Exception $ex) {
         log_error('dashboard_index', $ex);
     }

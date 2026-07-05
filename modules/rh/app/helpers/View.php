@@ -1,22 +1,22 @@
 <?php
 /**
- * View — renderiza templates com o layout padrão (header + footer).
+ * View — renderiza templates dentro do layout UNIFICADO da plataforma.
  *
- * Elimina a triplicata:
- *   require __DIR__ . '/../views/layout/header.php';
- *   require __DIR__ . '/../views/{modulo}/{tpl}.php';
- *   require __DIR__ . '/../views/layout/footer.php';
+ * O header/footer legados (navbar + sidebar próprias) foram substituídos
+ * por arquivos de COMPATIBILIDADE em views/layout/: o header abre um
+ * buffer de captura (e emite as flash messages) e o footer fecha o buffer
+ * e delega ao Core\Layout::render(). Assim, tanto View::render() quanto os
+ * controllers que fazem require manual de header + view + footer continuam
+ * funcionando sem reescrita.
  *
  * Uso típico em um controller:
  *   View::render('employees/index', [
  *       'pageTitle'   => 'Funcionários',
- *       'page'        => 'employees',
- *       'employees'   => $employees,
- *       'pagination'  => $pagination,
+ *       'page'        => 'employees',   // marca o item ativo da sidebar
  *   ]);
  *
- * Para páginas sem layout padrão (ex.: login, print, público):
- *   View::renderRaw('auth/login', ['error' => $error]);
+ * Para páginas sem layout (print, público, portal do funcionário):
+ *   View::renderRaw('my/index', [...]);
  */
 class View
 {
@@ -30,7 +30,7 @@ class View
     }
 
     /**
-     * Renderiza um template dentro do layout padrão.
+     * Renderiza um template dentro do layout unificado.
      *
      * @param string              $template  Caminho relativo sem .php (ex.: 'employees/index')
      * @param array<string,mixed> $data      Variáveis expostas no template
@@ -45,7 +45,7 @@ class View
     }
 
     /**
-     * Renderiza um template sem layout (login, print, público etc.).
+     * Renderiza um template sem layout (print, público, portal etc.).
      */
     public static function renderRaw(string $template, array $data = []): void
     {

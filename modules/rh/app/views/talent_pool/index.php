@@ -2,7 +2,7 @@
     <h1><i class="bi bi-person-lines-fill me-2"></i>Banco de Talentos</h1>
     <div class="d-flex gap-2">
         <?php if (Auth::can('talent_pool', 'export')): ?>
-            <a href="index.php?page=talent_pool&action=export" class="btn btn-outline-success btn-sm">
+            <a href="index.php?m=rh&page=talent_pool&action=export" class="btn btn-outline-success btn-sm">
                 <i class="bi bi-file-earmark-excel me-1"></i> Exportar
             </a>
         <?php endif; ?>
@@ -29,7 +29,7 @@
         </div>
         <div class="col-md-3 d-flex gap-1">
             <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>Filtrar</button>
-            <a href="index.php?page=talent_pool" class="btn btn-outline-secondary btn-sm">Limpar</a>
+            <a href="index.php?m=rh&page=talent_pool" class="btn btn-outline-secondary btn-sm">Limpar</a>
         </div>
     </form>
 </div>
@@ -67,9 +67,9 @@
                                 <?php endif; ?>
                             </td>
                             <td class="text-end">
-                                <a href="index.php?page=talent_pool&action=show&id=<?= $c['id'] ?>" class="btn btn-outline-primary btn-action" title="Ver"><i class="bi bi-eye"></i></a>
+                                <a href="index.php?m=rh&page=talent_pool&action=show&id=<?= $c['id'] ?>" class="btn btn-outline-primary btn-action" title="Ver"><i class="bi bi-eye"></i></a>
                                 <?php if (Auth::can('talent_pool', 'delete')): ?>
-                                    <form method="POST" action="index.php?page=talent_pool&action=remove" class="d-inline">
+                                    <form method="POST" action="index.php?m=rh&page=talent_pool&action=remove" class="d-inline">
                                         <?= Csrf::field() ?>
                                         <input type="hidden" name="id" value="<?= $c['id'] ?>">
                                         <button type="submit" class="btn btn-outline-danger btn-action" data-confirm="Remover do banco de talentos?"><i class="bi bi-trash"></i></button>

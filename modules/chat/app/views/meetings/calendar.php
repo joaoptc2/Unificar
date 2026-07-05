@@ -1,10 +1,10 @@
 <div class="page-header">
     <h1><i class="bi bi-calendar3 me-2"></i>Calendário</h1>
     <div class="d-flex gap-2">
-        <a href="index.php?page=meetings" class="btn btn-outline-secondary btn-sm">
+        <a href="index.php?m=chat&page=meetings" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-list me-1"></i> Lista
         </a>
-        <a href="index.php?page=meetings&action=create" class="btn btn-primary btn-sm">
+        <a href="index.php?m=chat&page=meetings&action=create" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i> Agendar
         </a>
     </div>
@@ -12,7 +12,7 @@
 
 <div class="card border-0 shadow-sm">
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <a href="index.php?page=meetings&action=calendar&month=<?= $prevMonth ?>&year=<?= $prevYear ?>" class="btn btn-outline-secondary btn-sm">
+        <a href="index.php?m=chat&page=meetings&action=calendar&month=<?= $prevMonth ?>&year=<?= $prevYear ?>" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-chevron-left"></i>
         </a>
         <h5 class="mb-0">
@@ -21,7 +21,7 @@
             echo $months[$month - 1] . ' ' . $year;
             ?>
         </h5>
-        <a href="index.php?page=meetings&action=calendar&month=<?= $nextMonth ?>&year=<?= $nextYear ?>" class="btn btn-outline-secondary btn-sm">
+        <a href="index.php?m=chat&page=meetings&action=calendar&month=<?= $nextMonth ?>&year=<?= $nextYear ?>" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-chevron-right"></i>
         </a>
     </div>
@@ -57,7 +57,7 @@
                         <td class="calendar-cell <?= $isToday ? 'calendar-today' : '' ?>">
                             <div class="calendar-day-num"><?= $day ?></div>
                             <?php foreach ($dayMeetings as $m): ?>
-                            <a href="index.php?page=meetings&action=show&id=<?= $m['id'] ?>"
+                            <a href="index.php?m=chat&page=meetings&action=show&id=<?= $m['id'] ?>"
                                class="calendar-event calendar-event-<?= $m['type'] ?? 'video' ?>"
                                title="<?= Sanitize::e($m['title']) ?>">
                                 <?= date('H:i', strtotime($m['scheduled_at'])) ?> <?= Sanitize::e(mb_substr($m['title'], 0, 20)) ?>

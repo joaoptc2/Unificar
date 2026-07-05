@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-bar-chart me-2"></i>Nova Enquete</h1>
-    <a href="index.php?page=<?= !empty($channelId) ? 'chat&channel_id=' . (int)$channelId : 'polls' ?>" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=chat&page=<?= !empty($channelId) ? 'chat&channel_id=' . (int)$channelId : 'polls' ?>" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>
@@ -9,7 +9,7 @@
     <div class="col-md-8">
         <div class="card border-0 shadow-sm">
             <div class="card-body">
-                <form method="POST" action="index.php?page=polls&action=store">
+                <form method="POST" action="index.php?m=chat&page=polls&action=store">
                     <?= Csrf::field() ?>
                     <?php if (!empty($channelId)): ?>
                         <input type="hidden" name="channel_id" value="<?= (int)$channelId ?>">
@@ -82,7 +82,7 @@
                         <?php endif; ?>
 
                         <div class="col-12 text-end">
-                            <a href="index.php?page=<?= !empty($channelId) ? 'chat&channel_id=' . (int)$channelId : 'polls' ?>"
+                            <a href="index.php?m=chat&page=<?= !empty($channelId) ? 'chat&channel_id=' . (int)$channelId : 'polls' ?>"
                                class="btn btn-outline-secondary me-2">Cancelar</a>
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-check-lg me-1"></i> Criar Enquete

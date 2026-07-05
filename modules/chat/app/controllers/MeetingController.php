@@ -41,14 +41,14 @@ class MeetingController
         $id = isset($_GET['id']) ? Sanitize::int($_GET['id']) : 0;
         if ($id <= 0) {
             Session::flash('error', 'Reunião inválida.');
-            header('Location: index.php?page=meetings');
+            header('Location: index.php?m=chat&page=meetings');
             exit;
         }
 
         $meeting = Meeting::withParticipants($id);
         if (!$meeting) {
             Session::flash('error', 'Reunião não encontrada.');
-            header('Location: index.php?page=meetings');
+            header('Location: index.php?m=chat&page=meetings');
             exit;
         }
 
@@ -102,7 +102,7 @@ class MeetingController
         // Validation
         if ($title === '' || $scheduledAt === '') {
             Session::flash('error', 'Título e data/hora são obrigatórios.');
-            header('Location: index.php?page=meetings&action=create');
+            header('Location: index.php?m=chat&page=meetings&action=create');
             exit;
         }
 
@@ -134,7 +134,7 @@ class MeetingController
                 'meeting',
                 'Nova reunião: ' . $title,
                 Session::userName() . ' agendou uma reunião para ' . Sanitize::formatDateTime($scheduledAt),
-                'index.php?page=meetings&action=show&id=' . $meetingId
+                'index.php?m=chat&page=meetings&action=show&id=' . $meetingId
             );
         }
 
@@ -154,7 +154,7 @@ class MeetingController
         ]);
 
         Session::flash('success', 'Reunião criada com sucesso.');
-        header('Location: index.php?page=meetings&action=show&id=' . $meetingId);
+        header('Location: index.php?m=chat&page=meetings&action=show&id=' . $meetingId);
         exit;
     }
 
@@ -171,14 +171,14 @@ class MeetingController
         $meeting = Meeting::withParticipants($id);
         if (!$meeting) {
             Session::flash('error', 'Reunião não encontrada.');
-            header('Location: index.php?page=meetings');
+            header('Location: index.php?m=chat&page=meetings');
             exit;
         }
 
         // Only the creator or an admin may edit
         if ((int) $meeting['created_by'] !== Session::userId() && !Auth::isAdmin()) {
             Session::flash('error', 'Sem permissão para editar esta reunião.');
-            header('Location: index.php?page=meetings&action=show&id=' . $id);
+            header('Location: index.php?m=chat&page=meetings&action=show&id=' . $id);
             exit;
         }
 
@@ -206,13 +206,13 @@ class MeetingController
         $meeting = Meeting::find($id);
         if (!$meeting) {
             Session::flash('error', 'Reunião não encontrada.');
-            header('Location: index.php?page=meetings');
+            header('Location: index.php?m=chat&page=meetings');
             exit;
         }
 
         if ((int) $meeting['created_by'] !== Session::userId() && !Auth::isAdmin()) {
             Session::flash('error', 'Sem permissão para editar esta reunião.');
-            header('Location: index.php?page=meetings&action=show&id=' . $id);
+            header('Location: index.php?m=chat&page=meetings&action=show&id=' . $id);
             exit;
         }
 
@@ -228,7 +228,7 @@ class MeetingController
 
         if ($title === '' || $scheduledAt === '') {
             Session::flash('error', 'Título e data/hora são obrigatórios.');
-            header('Location: index.php?page=meetings&action=edit&id=' . $id);
+            header('Location: index.php?m=chat&page=meetings&action=edit&id=' . $id);
             exit;
         }
 
@@ -259,7 +259,7 @@ class MeetingController
         ]);
 
         Session::flash('success', 'Reunião atualizada com sucesso.');
-        header('Location: index.php?page=meetings&action=show&id=' . $id);
+        header('Location: index.php?m=chat&page=meetings&action=show&id=' . $id);
         exit;
     }
 
@@ -277,7 +277,7 @@ class MeetingController
 
         if ($meetingId <= 0 || !in_array($status, ['accepted', 'declined', 'tentative'], true)) {
             Session::flash('error', 'Dados inválidos.');
-            header('Location: index.php?page=meetings');
+            header('Location: index.php?m=chat&page=meetings');
             exit;
         }
 
@@ -290,7 +290,7 @@ class MeetingController
         ];
 
         Session::flash('success', $labels[$status]);
-        header('Location: index.php?page=meetings&action=show&id=' . $meetingId);
+        header('Location: index.php?m=chat&page=meetings&action=show&id=' . $meetingId);
         exit;
     }
 
@@ -308,13 +308,13 @@ class MeetingController
 
         if (!$meeting) {
             Session::flash('error', 'Reunião não encontrada.');
-            header('Location: index.php?page=meetings');
+            header('Location: index.php?m=chat&page=meetings');
             exit;
         }
 
         if ((int) $meeting['created_by'] !== Session::userId() && !Auth::isAdmin()) {
             Session::flash('error', 'Sem permissão para cancelar esta reunião.');
-            header('Location: index.php?page=meetings&action=show&id=' . $id);
+            header('Location: index.php?m=chat&page=meetings&action=show&id=' . $id);
             exit;
         }
 
@@ -330,14 +330,14 @@ class MeetingController
                 'meeting',
                 'Reunião cancelada: ' . $meeting['title'],
                 Session::userName() . ' cancelou a reunião.',
-                'index.php?page=meetings&action=show&id=' . $id
+                'index.php?m=chat&page=meetings&action=show&id=' . $id
             );
         }
 
         AuditLog::log('cancel', 'meeting', $id, ['status' => $meeting['status']], ['status' => 'cancelled']);
 
         Session::flash('success', 'Reunião cancelada.');
-        header('Location: index.php?page=meetings');
+        header('Location: index.php?m=chat&page=meetings');
         exit;
     }
 

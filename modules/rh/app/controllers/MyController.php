@@ -1,10 +1,12 @@
 <?php
 /**
- * MyController — portal do funcionário (role = 'funcionario').
+ * MyController — portal do funcionário (papel 'funcionario' no módulo RH).
  *
- * Acesso via ?page=my  (action default = index).
- * O usuário autenticado deve estar vinculado a um employee via users.employee_id.
- * O layout é próprio (sem o header/sidebar padrão do RH).
+ * Acesso via ?m=rh&page=my  (action default = index).
+ * O usuário autenticado deve estar vinculado a um employee via
+ * rh_user_profile.employee_id (vínculo do módulo — a tabela global `users`
+ * não carrega mais employee_id/department_id/role).
+ * O layout é próprio (sem o layout padrão da plataforma).
  */
 class MyController
 {
@@ -19,31 +21,32 @@ class MyController
     {
         Auth::requireLogin();
 
-        // Admin/RH também podem "ver" o portal para inspeção — mas apenas
-        // se fornecerem ?id=, caso contrário precisamos do employee_id do user.
-        $user = $this->currentUserRow();
-        if (!$user || !$user['employee_id']) {
-            // Usuário sem vínculo com funcionário — redireciona para dashboard.
-            header('Location: index.php?page=dashboard');
+        $employeeId = $this->currentEmployeeId();
+        if (!$employeeId) {
+            // Usuário sem vínculo com funcionário.
+            if (Session::userRole() === 'funcionario') {
+                // Sem vínculo não há portal — volta ao portal inicial da
+                // plataforma (evita loop my ⇄ dashboard).
+                Session::flash('error', 'Seu usuário ainda não está vinculado a um funcionário. Procure o RH.');
+                core_redirect('index.php');
+            }
+            header('Location: index.php?m=rh&page=dashboard');
             exit;
         }
 
-        $employeeId = (int)$user['employee_id'];
-        $employee   = Employee::findWithRelations($employeeId);
+        $employee = Employee::findWithRelations($employeeId);
         if (!$employee) {
             Session::flash('error', 'Registro de funcionário não encontrado.');
-            Auth::logout();
-            header('Location: index.php?page=login');
-            exit;
+            core_redirect('index.php');
         }
 
         $scores      = EmployeeScore::listFor($employeeId);
         $scoresTotal = EmployeeScore::totalFor($employeeId);
         $compliments = EmployeeCompliment::listFor($employeeId);
 
-        // Próximos vencimentos do próprio funcionário (30 dias).
+        // Próximos vencimentos do próprio funcionário (60 dias).
         $stmt = $this->db->prepare(
-            "SELECT * FROM expirations
+            "SELECT * FROM rh_expirations
              WHERE employee_id = ?
                AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 60 DAY)
              ORDER BY expiry_date ASC"
@@ -51,8 +54,7 @@ class MyController
         $stmt->execute([$employeeId]);
         $upcoming = $stmt->fetchAll();
 
-        $appConfig    = require __DIR__ . '/../../config/app.php';
-        $hospitalName = $appConfig['app_name'] ?? 'Hospital';
+        $hospitalName = Core\Settings::get('org_name', 'Hospital');
 
         View::renderRaw('my/index', [
             'hospitalName' => $hospitalName,
@@ -66,11 +68,10 @@ class MyController
         ]);
     }
 
-    private function currentUserRow(): ?array
+    private function currentEmployeeId(): int
     {
-        $stmt = $this->db->prepare('SELECT id, email, employee_id, role FROM users WHERE id = ?');
+        $stmt = $this->db->prepare('SELECT employee_id FROM rh_user_profile WHERE user_id = ?');
         $stmt->execute([Session::userId()]);
-        $row = $stmt->fetch();
-        return $row ?: null;
+        return (int)($stmt->fetchColumn() ?: 0);
     }
 }

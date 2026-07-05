@@ -1,7 +1,34 @@
 <div class="page-header">
     <h1><i class="bi bi-speedometer2 me-2"></i>Dashboard</h1>
-    <div class="text-muted small">
-        <i class="bi bi-calendar me-1"></i><?php echo date('d/m/Y H:i'); ?>
+    <div class="d-flex align-items-center gap-3">
+        <?php
+            // Seletor de setor em foco (movido da navbar legada para o conteúdo)
+            $nav_sectors = get_user_sectors();
+            if (count($nav_sectors) > 1):
+        ?>
+        <form method="POST" action="<?php echo url('profile/switch-sector'); ?>" class="d-flex align-items-center gap-2">
+            <?php echo csrf_field(); ?>
+            <label class="form-label mb-0 small text-muted" for="dash-sector">
+                <i class="bi bi-diagram-3 me-1"></i>Setor:
+            </label>
+            <select name="sector_id" id="dash-sector" class="form-select form-select-sm"
+                    onchange="this.form.submit()" style="min-width:160px">
+                <?php foreach ($nav_sectors as $ns): ?>
+                    <option value="<?php echo (int) $ns['id']; ?>"
+                            <?php echo (int) $ns['id'] === get_sector_id() ? 'selected' : ''; ?>>
+                        <?php echo e($ns['name']); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </form>
+        <?php elseif (get_sector_name()): ?>
+        <span class="text-muted small">
+            <i class="bi bi-diagram-3 me-1"></i><?php echo e(get_sector_name()); ?>
+        </span>
+        <?php endif; ?>
+        <div class="text-muted small">
+            <i class="bi bi-calendar me-1"></i><?php echo date('d/m/Y H:i'); ?>
+        </div>
     </div>
 </div>
 

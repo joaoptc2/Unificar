@@ -53,7 +53,7 @@
                                     <span class="badge bg-warning text-dark mb-2">Hoje!</span>
                                 <?php endif; ?>
                                 <?php if ($b['photo']): ?>
-                                    <img src="<?= ASSET_URL . Sanitize::e($b['photo']) ?>" class="employee-photo-lg mb-2" alt="">
+                                    <img src="<?= Sanitize::e(Upload::publicUrl($b['photo'])) ?>" class="employee-photo-lg mb-2" alt="">
                                 <?php else: ?>
                                     <div class="employee-photo-lg bg-light d-flex align-items-center justify-content-center mx-auto mb-2">
                                         <i class="bi bi-person fs-1 text-muted"></i>

@@ -1,43 +1,26 @@
 <?php
 /**
- * Proteção CSRF via token por formulário
+ * Csrf — adaptador do token CSRF único da plataforma (Core\Csrf).
+ * O mesmo token ($_SESSION['csrf_token']) vale em qualquer módulo;
+ * o campo continua sendo emitido como `_csrf_token` (aceito pelo núcleo).
  */
 class Csrf
 {
-    /**
-     * Gera ou retorna o token CSRF da sessão
-     */
     public static function token(): string
     {
-        if (empty($_SESSION['_csrf_token'])) {
-            $_SESSION['_csrf_token'] = bin2hex(random_bytes(32));
-        }
-        return $_SESSION['_csrf_token'];
+        return Core\Csrf::token();
     }
 
-    /**
-     * Retorna o campo hidden HTML com o token
-     */
     public static function field(): string
     {
-        return '<input type="hidden" name="_csrf_token" value="' . self::token() . '">';
+        return Core\Csrf::field();
     }
 
-    /**
-     * Valida o token enviado no formulário
-     */
     public static function validate(?string $token = null): bool
     {
-        $token = $token ?? ($_POST['_csrf_token'] ?? '');
-        if (empty($token) || empty($_SESSION['_csrf_token'])) {
-            return false;
-        }
-        return hash_equals($_SESSION['_csrf_token'], $token);
+        return Core\Csrf::validate($token);
     }
 
-    /**
-     * Valida e aborta se inválido
-     */
     public static function check(): void
     {
         if (!self::validate()) {
@@ -46,11 +29,8 @@ class Csrf
         }
     }
 
-    /**
-     * Regenera o token (após uso)
-     */
+    /** O token é único por sessão no núcleo — regenerar é no-op. */
     public static function regenerate(): void
     {
-        $_SESSION['_csrf_token'] = bin2hex(random_bytes(32));
     }
 }

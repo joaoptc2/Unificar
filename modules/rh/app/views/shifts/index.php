@@ -15,9 +15,9 @@
         </div>
         <div class="col-md-4">
             <div class="d-flex gap-2 align-items-center">
-                <a href="index.php?page=shifts&department=<?= $deptId ?>&week=<?= $prevWeek ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i></a>
+                <a href="index.php?m=rh&page=shifts&department=<?= $deptId ?>&week=<?= $prevWeek ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i></a>
                 <span class="fw-semibold small"><?= date('d/m', strtotime($weekStart)) ?> - <?= date('d/m/Y', strtotime($weekEnd)) ?></span>
-                <a href="index.php?page=shifts&department=<?= $deptId ?>&week=<?= $nextWeek ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-right"></i></a>
+                <a href="index.php?m=rh&page=shifts&department=<?= $deptId ?>&week=<?= $nextWeek ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-right"></i></a>
             </div>
         </div>
     </form>
@@ -26,7 +26,7 @@
 <?php if ($deptId): ?>
 <?php if (Auth::can('shifts', 'create')): ?>
 <div class="card border-0 shadow-sm mb-3"><div class="card-header bg-white fw-semibold"><i class="bi bi-plus-circle me-1"></i> Adicionar escala</div><div class="card-body">
-<form method="POST" action="index.php?page=shifts&action=store" class="row g-2 align-items-end">
+<form method="POST" action="index.php?m=rh&page=shifts&action=store" class="row g-2 align-items-end">
     <?= Csrf::field() ?>
     <input type="hidden" name="department_id" value="<?= $deptId ?>">
     <div class="col-md-3">
@@ -74,7 +74,7 @@
                 <td><span class="badge <?= match($s['status']) { 'realizado' => 'bg-success', 'falta' => 'bg-danger', 'troca_pendente' => 'bg-warning text-dark', default => 'bg-secondary' } ?>"><?= ucfirst(str_replace('_',' ',$s['status'])) ?></span></td>
                 <td class="text-end">
                     <?php if (Auth::can('shifts', 'delete')): ?>
-                        <form method="POST" action="index.php?page=shifts&action=delete" class="d-inline"><?= Csrf::field() ?><input type="hidden" name="id" value="<?= $s['id'] ?>"><button type="submit" class="btn btn-outline-danger btn-action" data-confirm="Remover?"><i class="bi bi-trash"></i></button></form>
+                        <form method="POST" action="index.php?m=rh&page=shifts&action=delete" class="d-inline"><?= Csrf::field() ?><input type="hidden" name="id" value="<?= $s['id'] ?>"><button type="submit" class="btn btn-outline-danger btn-action" data-confirm="Remover?"><i class="bi bi-trash"></i></button></form>
                     <?php endif; ?>
                 </td>
             </tr>

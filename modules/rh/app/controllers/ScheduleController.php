@@ -16,7 +16,7 @@ class ScheduleController
         Auth::requirePermission('schedules', 'view');
 
         $employees = $this->db->query(
-            "SELECT id, full_name FROM employees WHERE status = 'ativo' ORDER BY full_name"
+            "SELECT id, full_name FROM rh_employees WHERE status = 'ativo' ORDER BY full_name"
         )->fetchAll();
 
         View::render('schedules/index', [
@@ -39,8 +39,8 @@ class ScheduleController
 
         $stmt = $this->db->prepare(
             'SELECT s.*, e.full_name AS employee_name
-             FROM schedules s
-             LEFT JOIN employees e ON s.employee_id = e.id
+             FROM rh_schedules s
+             LEFT JOIN rh_employees e ON s.employee_id = e.id
              WHERE s.event_date BETWEEN ? AND ?
              ORDER BY s.event_date ASC, s.event_time ASC'
         );
@@ -63,7 +63,7 @@ class ScheduleController
                     'type'        => $ev['event_type'],
                     'description' => $ev['description'],
                     'employee'    => $ev['employee_name'],
-                    'editUrl'     => 'index.php?page=schedules&action=edit&id=' . (int)$ev['id'],
+                    'editUrl'     => 'index.php?m=rh&page=schedules&action=edit&id=' . (int)$ev['id'],
                 ],
             ];
         }
@@ -77,7 +77,7 @@ class ScheduleController
     {
         Auth::requirePermission('schedules', 'create');
 
-        $employees = $this->db->query("SELECT id, full_name FROM employees WHERE status = 'ativo' ORDER BY full_name")->fetchAll();
+        $employees = $this->db->query("SELECT id, full_name FROM rh_employees WHERE status = 'ativo' ORDER BY full_name")->fetchAll();
         $defaultDate = Sanitize::date($_GET['date'] ?? '') ?: date('Y-m-d');
         $schedule = ['event_date' => $defaultDate];
 
@@ -99,12 +99,12 @@ class ScheduleController
 
         if (empty($data['title']) || empty($data['event_date'])) {
             Session::flash('error', 'Preencha os campos obrigatórios.');
-            header('Location: index.php?page=schedules&action=create');
+            header('Location: index.php?m=rh&page=schedules&action=create');
             exit;
         }
 
         $stmt = $this->db->prepare(
-            'INSERT INTO schedules (employee_id, title, description, event_date, event_time, end_time, event_type, color, created_by)
+            'INSERT INTO rh_schedules (employee_id, title, description, event_date, event_time, end_time, event_type, color, created_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
@@ -116,7 +116,7 @@ class ScheduleController
         AuditLog::log('create', 'schedules', (int)$this->db->lastInsertId());
 
         Session::flash('success', 'Compromisso cadastrado com sucesso.');
-        header('Location: index.php?page=schedules&date=' . $data['event_date']);
+        header('Location: index.php?m=rh&page=schedules&date=' . $data['event_date']);
         exit;
     }
 
@@ -125,17 +125,17 @@ class ScheduleController
         Auth::requirePermission('schedules', 'edit');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
-        $stmt = $this->db->prepare('SELECT * FROM schedules WHERE id = ?');
+        $stmt = $this->db->prepare('SELECT * FROM rh_schedules WHERE id = ?');
         $stmt->execute([$id]);
         $schedule = $stmt->fetch();
 
         if (!$schedule) {
             Session::flash('error', 'Compromisso não encontrado.');
-            header('Location: index.php?page=schedules');
+            header('Location: index.php?m=rh&page=schedules');
             exit;
         }
 
-        $employees = $this->db->query("SELECT id, full_name FROM employees WHERE status = 'ativo' ORDER BY full_name")->fetchAll();
+        $employees = $this->db->query("SELECT id, full_name FROM rh_employees WHERE status = 'ativo' ORDER BY full_name")->fetchAll();
 
         View::render('schedules/form', [
             'pageTitle' => 'Editar Compromisso',
@@ -155,7 +155,7 @@ class ScheduleController
         $data = $this->getFormData();
 
         $stmt = $this->db->prepare(
-            'UPDATE schedules SET employee_id=?, title=?, description=?, event_date=?, event_time=?, end_time=?, event_type=?, color=?
+            'UPDATE rh_schedules SET employee_id=?, title=?, description=?, event_date=?, event_time=?, end_time=?, event_type=?, color=?
              WHERE id=?'
         );
         $stmt->execute([
@@ -167,7 +167,7 @@ class ScheduleController
         AuditLog::log('update', 'schedules', $id);
 
         Session::flash('success', 'Compromisso atualizado.');
-        header('Location: index.php?page=schedules&date=' . $data['event_date']);
+        header('Location: index.php?m=rh&page=schedules&date=' . $data['event_date']);
         exit;
     }
 
@@ -177,11 +177,11 @@ class ScheduleController
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
-        $this->db->prepare('DELETE FROM schedules WHERE id = ?')->execute([$id]);
+        $this->db->prepare('DELETE FROM rh_schedules WHERE id = ?')->execute([$id]);
         AuditLog::log('delete', 'schedules', $id);
 
         Session::flash('success', 'Compromisso excluído.');
-        header('Location: index.php?page=schedules');
+        header('Location: index.php?m=rh&page=schedules');
         exit;
     }
 

@@ -4,7 +4,7 @@
  */
 class Expiration extends Model
 {
-    protected static string $table = 'expirations';
+    protected static string $table = 'rh_expirations';
 
     protected static array $fillable = [
         'employee_id', 'type', 'title', 'description',
@@ -16,8 +16,8 @@ class Expiration extends Model
     {
         $stmt = self::db()->prepare(
             "SELECT ex.*, e.full_name AS employee_name
-             FROM expirations ex
-             JOIN employees e ON ex.employee_id = e.id
+             FROM rh_expirations ex
+             JOIN rh_employees e ON ex.employee_id = e.id
              WHERE e.status = 'ativo'
                AND ex.expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)
              ORDER BY ex.expiry_date ASC
@@ -32,8 +32,8 @@ class Expiration extends Model
     public static function expiredCount(): int
     {
         return (int)self::db()->query(
-            "SELECT COUNT(*) FROM expirations ex
-             JOIN employees e ON ex.employee_id = e.id
+            "SELECT COUNT(*) FROM rh_expirations ex
+             JOIN rh_employees e ON ex.employee_id = e.id
              WHERE ex.expiry_date < CURDATE() AND e.status = 'ativo'"
         )->fetchColumn();
     }
@@ -45,7 +45,7 @@ class Expiration extends Model
     {
         return self::db()->query(
             "SELECT type, COUNT(*) AS total
-             FROM expirations
+             FROM rh_expirations
              GROUP BY type
              ORDER BY total DESC"
         )->fetchAll();
@@ -59,8 +59,8 @@ class Expiration extends Model
         $stmt = self::db()->prepare(
             "SELECT DATE_FORMAT(ex.expiry_date, '%Y-%m') AS ym,
                     COUNT(*) AS total
-             FROM expirations ex
-             JOIN employees e ON ex.employee_id = e.id
+             FROM rh_expirations ex
+             JOIN rh_employees e ON ex.employee_id = e.id
              WHERE e.status = 'ativo'
                AND ex.expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? MONTH)
              GROUP BY ym

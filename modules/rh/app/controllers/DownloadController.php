@@ -4,7 +4,7 @@
  * arquivos de vencimentos) armazenados em `storage/uploads/`, fora do webroot.
  *
  * Requer autenticação e valida a permissão baseada no tipo de recurso.
- * Rota: index.php?page=files&action=get&type=<tipo>&id=<id>
+ * Rota: index.php?m=rh&page=files&action=get&type=<tipo>&id=<id>
  */
 class DownloadController
 {
@@ -53,7 +53,7 @@ class DownloadController
             case 'document': // employee_documents
                 Auth::requirePermission('documents', 'view');
                 $stmt = $this->db->prepare(
-                    'SELECT file_path, file_original_name FROM employee_documents WHERE id = ?'
+                    'SELECT file_path, file_original_name FROM rh_employee_documents WHERE id = ?'
                 );
                 $stmt->execute([$id]);
                 $row = $stmt->fetch();
@@ -61,14 +61,14 @@ class DownloadController
 
             case 'certificate': // medical_certificates
                 Auth::requirePermission('certificates', 'view');
-                $stmt = $this->db->prepare('SELECT file_path FROM medical_certificates WHERE id = ?');
+                $stmt = $this->db->prepare('SELECT file_path FROM rh_medical_certificates WHERE id = ?');
                 $stmt->execute([$id]);
                 $row = $stmt->fetch();
                 return $row ? [$row['file_path'], null] : [null, null];
 
             case 'expiration':
                 Auth::requirePermission('expirations', 'view');
-                $stmt = $this->db->prepare('SELECT file_path, title FROM expirations WHERE id = ?');
+                $stmt = $this->db->prepare('SELECT file_path, title FROM rh_expirations WHERE id = ?');
                 $stmt->execute([$id]);
                 $row = $stmt->fetch();
                 return $row ? [$row['file_path'], $row['title']] : [null, null];
@@ -78,7 +78,7 @@ class DownloadController
                 if (!Auth::can('recruitment', 'view') && !Auth::can('talent_pool', 'view')) {
                     $this->abort(403, 'Sem permissão.');
                 }
-                $stmt = $this->db->prepare('SELECT resume_path, full_name FROM candidates WHERE id = ?');
+                $stmt = $this->db->prepare('SELECT resume_path, full_name FROM rh_candidates WHERE id = ?');
                 $stmt->execute([$id]);
                 $row = $stmt->fetch();
                 return $row ? [$row['resume_path'], $row['full_name']] : [null, null];

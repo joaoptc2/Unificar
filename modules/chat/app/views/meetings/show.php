@@ -2,11 +2,11 @@
     <h1><i class="bi bi-calendar-event me-2"></i><?= Sanitize::e($meeting['title']) ?></h1>
     <div class="d-flex gap-2">
         <?php if ((int)$meeting['created_by'] === Session::userId() || Auth::isAdmin()): ?>
-        <a href="index.php?page=meetings&action=edit&id=<?= $meeting['id'] ?>" class="btn btn-outline-warning btn-sm">
+        <a href="index.php?m=chat&page=meetings&action=edit&id=<?= $meeting['id'] ?>" class="btn btn-outline-warning btn-sm">
             <i class="bi bi-pencil me-1"></i> Editar
         </a>
         <?php endif; ?>
-        <a href="index.php?page=meetings" class="btn btn-outline-secondary btn-sm">
+        <a href="index.php?m=chat&page=meetings" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i> Voltar
         </a>
     </div>
@@ -92,7 +92,7 @@
             <div class="card-body">
                 <h6>Sua resposta</h6>
                 <div class="d-grid gap-2">
-                    <form method="POST" action="index.php?page=meetings&action=respond">
+                    <form method="POST" action="index.php?m=chat&page=meetings&action=respond">
                         <?= Csrf::field() ?>
                         <input type="hidden" name="meeting_id" value="<?= $meeting['id'] ?>">
                         <div class="d-grid gap-2">

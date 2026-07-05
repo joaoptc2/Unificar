@@ -1,11 +1,11 @@
 <?php
 $isEdit = !empty($expiration);
-$formAction = $isEdit ? 'index.php?page=expirations&action=update' : 'index.php?page=expirations&action=store';
+$formAction = $isEdit ? 'index.php?m=rh&page=expirations&action=update' : 'index.php?m=rh&page=expirations&action=store';
 ?>
 
 <div class="page-header">
     <h1><i class="bi bi-clock me-2"></i><?= $isEdit ? 'Editar Vencimento' : 'Novo Vencimento' ?></h1>
-    <a href="index.php?page=expirations" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=rh&page=expirations" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>

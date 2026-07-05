@@ -17,7 +17,7 @@ class ScoreController
 
     public function index(): void
     {
-        header('Location: index.php?page=employees');
+        header('Location: index.php?m=rh&page=employees');
         exit;
     }
 
@@ -34,12 +34,12 @@ class ScoreController
 
         if ($employeeId <= 0 || $points === 0 || $reason === '') {
             Session::flash('error', 'Preencha funcionário, pontuação (diferente de zero) e motivo.');
-            header('Location: index.php?page=employees&action=show&id=' . $employeeId);
+            header('Location: index.php?m=rh&page=employees&action=show&id=' . $employeeId);
             exit;
         }
         if (abs($points) > 1000) {
             Session::flash('error', 'Valor fora da faixa permitida (-1000 a +1000).');
-            header('Location: index.php?page=employees&action=show&id=' . $employeeId);
+            header('Location: index.php?m=rh&page=employees&action=show&id=' . $employeeId);
             exit;
         }
 
@@ -55,7 +55,7 @@ class ScoreController
             ['employee_id' => $employeeId, 'points' => $points, 'reason' => $reason]);
 
         Session::flash('success', 'Pontos lançados com sucesso.');
-        header('Location: index.php?page=employees&action=show&id=' . $employeeId);
+        header('Location: index.php?m=rh&page=employees&action=show&id=' . $employeeId);
         exit;
     }
 
@@ -71,7 +71,7 @@ class ScoreController
         AuditLog::log('delete', 'employee_scores', $id);
 
         Session::flash('success', 'Lançamento removido.');
-        header('Location: index.php?page=employees&action=show&id=' . $employeeId);
+        header('Location: index.php?m=rh&page=employees&action=show&id=' . $employeeId);
         exit;
     }
 }

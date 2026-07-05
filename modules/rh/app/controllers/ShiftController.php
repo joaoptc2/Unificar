@@ -10,11 +10,11 @@ class ShiftController
         $deptId = Sanitize::int($_GET['department'] ?? 0);
         $weekStart = Sanitize::date($_GET['week'] ?? '') ?: date('Y-m-d', strtotime('monday this week'));
         $weekEnd = date('Y-m-d', strtotime($weekStart . ' +6 days'));
-        $departments = $this->db->query('SELECT id, name FROM departments WHERE active = 1 ORDER BY name')->fetchAll();
+        $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
         $templates = ShiftTemplate::allActive();
         $shifts = $deptId ? Shift::forDepartmentRange($deptId, $weekStart, $weekEnd) : [];
         $employees = $deptId
-            ? $this->db->prepare("SELECT id, full_name FROM employees WHERE department_id = ? AND status = 'ativo' ORDER BY full_name")
+            ? $this->db->prepare("SELECT id, full_name FROM rh_employees WHERE department_id = ? AND status = 'ativo' ORDER BY full_name")
             : null;
         if ($employees) { $employees->execute([$deptId]); $employees = $employees->fetchAll(); } else { $employees = []; }
         $prevWeek = date('Y-m-d', strtotime($weekStart . ' -7 days'));
@@ -40,11 +40,11 @@ class ShiftController
         $tplId = Sanitize::int($_POST['template_id'] ?? 0);
         if (!$empId || !$date || !$start || !$end) {
             Session::flash('error', 'Preencha todos os campos obrigatorios.');
-            header('Location: index.php?page=shifts&department=' . $deptId); exit;
+            header('Location: index.php?m=rh&page=shifts&department=' . $deptId); exit;
         }
         if (Shift::hasConflict($empId, $date, $start, $end)) {
             Session::flash('error', 'Conflito: funcionario ja tem escala neste horario.');
-            header('Location: index.php?page=shifts&department=' . $deptId); exit;
+            header('Location: index.php?m=rh&page=shifts&department=' . $deptId); exit;
         }
         $id = Shift::insert([
             'employee_id' => $empId, 'department_id' => $deptId ?: null,
@@ -55,7 +55,7 @@ class ShiftController
         ]);
         AuditLog::log('create', 'shifts', $id);
         Session::flash('success', 'Escala cadastrada.');
-        header('Location: index.php?page=shifts&department=' . $deptId . '&week=' . $date); exit;
+        header('Location: index.php?m=rh&page=shifts&department=' . $deptId . '&week=' . $date); exit;
     }
 
     public function delete(): void
@@ -68,7 +68,7 @@ class ShiftController
         AuditLog::log('delete', 'shifts', $id);
         Session::flash('success', 'Escala removida.');
         $dept = $shift['department_id'] ?? 0;
-        header('Location: index.php?page=shifts&department=' . $dept); exit;
+        header('Location: index.php?m=rh&page=shifts&department=' . $dept); exit;
     }
 
     public function swap(): void
@@ -78,11 +78,11 @@ class ShiftController
         $shiftId = Sanitize::int($_POST['shift_id'] ?? 0);
         $withEmpId = Sanitize::int($_POST['swap_employee_id'] ?? 0);
         $shift = Shift::find($shiftId);
-        if (!$shift) { Session::flash('error', 'Escala nao encontrada.'); header('Location: index.php?page=shifts'); exit; }
+        if (!$shift) { Session::flash('error', 'Escala nao encontrada.'); header('Location: index.php?m=rh&page=shifts'); exit; }
         Shift::update($shiftId, ['status' => 'troca_pendente', 'swap_with_id' => $withEmpId]);
         AuditLog::log('swap_request', 'shifts', $shiftId);
         Session::flash('success', 'Solicitacao de troca enviada para aprovacao.');
-        header('Location: index.php?page=shifts&department=' . ($shift['department_id'] ?? 0)); exit;
+        header('Location: index.php?m=rh&page=shifts&department=' . ($shift['department_id'] ?? 0)); exit;
     }
 
     public function approve_swap(): void
@@ -92,13 +92,13 @@ class ShiftController
         $shiftId = Sanitize::int($_POST['shift_id'] ?? 0);
         $shift = Shift::find($shiftId);
         if (!$shift || $shift['status'] !== 'troca_pendente') {
-            Session::flash('error', 'Troca invalida.'); header('Location: index.php?page=shifts'); exit;
+            Session::flash('error', 'Troca invalida.'); header('Location: index.php?m=rh&page=shifts'); exit;
         }
         $newEmp = (int)$shift['swap_with_id'];
         Shift::update($shiftId, ['employee_id' => $newEmp, 'status' => 'trocado', 'swap_with_id' => null]);
         AuditLog::log('swap_approved', 'shifts', $shiftId);
         Session::flash('success', 'Troca aprovada.');
-        header('Location: index.php?page=shifts&department=' . ($shift['department_id'] ?? 0)); exit;
+        header('Location: index.php?m=rh&page=shifts&department=' . ($shift['department_id'] ?? 0)); exit;
     }
 
     public function events(): void

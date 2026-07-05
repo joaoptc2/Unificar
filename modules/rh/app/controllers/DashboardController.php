@@ -21,7 +21,7 @@ class DashboardController
 
         // Funcionário comum não tem acesso ao dashboard de RH — redireciona ao portal.
         if (Session::userRole() === 'funcionario') {
-            header('Location: index.php?page=my');
+            header('Location: index.php?m=rh&page=my');
             exit;
         }
 
@@ -35,8 +35,8 @@ class DashboardController
             // Compromissos do dia (sempre curtos, pode entrar no cache global).
             $stmt = $this->db->prepare(
                 "SELECT s.*, e.full_name AS employee_name
-                 FROM schedules s
-                 LEFT JOIN employees e ON s.employee_id = e.id
+                 FROM rh_schedules s
+                 LEFT JOIN rh_employees e ON s.employee_id = e.id
                  WHERE s.event_date = ?
                  ORDER BY s.event_time ASC"
             );
@@ -62,7 +62,7 @@ class DashboardController
                 'birthdays'          => Employee::birthdaysInMonth($currentMonth),
                 'todayEvents'        => $todayEvents,
                 'openJobs'           => (int)$this->db->query(
-                    "SELECT COUNT(*) FROM recruitment_jobs WHERE status = 'aberta'"
+                    "SELECT COUNT(*) FROM rh_recruitment_jobs WHERE status = 'aberta'"
                 )->fetchColumn(),
                 'recentAdmissions'   => Employee::recentAdmissions(30),
                 'expByType'          => $expByType,
@@ -72,7 +72,7 @@ class DashboardController
         });
 
         // --- Dados por-usuário (fora do cache compartilhado) ---------------
-        $stmt = $this->db->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0');
+        $stmt = $this->db->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND module = 'rh' AND read_at IS NULL');
         $stmt->execute([Session::userId()]);
         $unreadNotifications = (int)$stmt->fetchColumn();
 

@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-file-medical me-2"></i>Novo Atestado</h1>
-    <a href="index.php?page=employees&action=show&id=<?= $employee['id'] ?>" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=rh&page=employees&action=show&id=<?= $employee['id'] ?>" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>
@@ -12,7 +12,7 @@
                 Atestado para: <?= Sanitize::e($employee['full_name']) ?>
             </div>
             <div class="card-body">
-                <form method="POST" action="index.php?page=certificates&action=store" enctype="multipart/form-data">
+                <form method="POST" action="index.php?m=rh&page=certificates&action=store" enctype="multipart/form-data">
                     <?= Csrf::field() ?>
                     <input type="hidden" name="employee_id" value="<?= $employee['id'] ?>">
 

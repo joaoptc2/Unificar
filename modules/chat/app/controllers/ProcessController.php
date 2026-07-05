@@ -40,14 +40,14 @@ class ProcessController
         $id = isset($_GET['id']) ? Sanitize::int($_GET['id']) : 0;
         if ($id <= 0) {
             Session::flash('error', 'Processo inválido.');
-            header('Location: index.php?page=processes');
+            header('Location: index.php?m=chat&page=processes');
             exit;
         }
 
         $process = Process::withSteps($id);
         if (!$process) {
             Session::flash('error', 'Processo não encontrado.');
-            header('Location: index.php?page=processes');
+            header('Location: index.php?m=chat&page=processes');
             exit;
         }
 
@@ -94,7 +94,7 @@ class ProcessController
 
         if ($title === '') {
             Session::flash('error', 'O título é obrigatório.');
-            header('Location: index.php?page=processes&action=create');
+            header('Location: index.php?m=chat&page=processes&action=create');
             exit;
         }
 
@@ -135,7 +135,7 @@ class ProcessController
         ]);
 
         Session::flash('success', 'Processo criado com sucesso.');
-        header('Location: index.php?page=processes&action=show&id=' . $processId);
+        header('Location: index.php?m=chat&page=processes&action=show&id=' . $processId);
         exit;
     }
 
@@ -152,7 +152,7 @@ class ProcessController
         $process = Process::withSteps($id);
         if (!$process) {
             Session::flash('error', 'Processo não encontrado.');
-            header('Location: index.php?page=processes');
+            header('Location: index.php?m=chat&page=processes');
             exit;
         }
 
@@ -180,7 +180,7 @@ class ProcessController
         $process = Process::find($id);
         if (!$process) {
             Session::flash('error', 'Processo não encontrado.');
-            header('Location: index.php?page=processes');
+            header('Location: index.php?m=chat&page=processes');
             exit;
         }
 
@@ -190,7 +190,7 @@ class ProcessController
 
         if ($title === '') {
             Session::flash('error', 'O título é obrigatório.');
-            header('Location: index.php?page=processes&action=edit&id=' . $id);
+            header('Location: index.php?m=chat&page=processes&action=edit&id=' . $id);
             exit;
         }
 
@@ -203,7 +203,7 @@ class ProcessController
         ]);
 
         // Delete old steps and recreate from form arrays
-        $this->db->prepare('DELETE FROM process_steps WHERE process_id = ?')->execute([$id]);
+        $this->db->prepare('DELETE FROM chat_process_steps WHERE process_id = ?')->execute([$id]);
 
         $stepTitles       = $_POST['step_title'] ?? [];
         $stepDescriptions = $_POST['step_description'] ?? [];
@@ -232,7 +232,7 @@ class ProcessController
         ]);
 
         Session::flash('success', 'Processo atualizado com sucesso.');
-        header('Location: index.php?page=processes&action=show&id=' . $id);
+        header('Location: index.php?m=chat&page=processes&action=show&id=' . $id);
         exit;
     }
 
@@ -257,7 +257,7 @@ class ProcessController
         }
 
         // Fetch the step to get its process_id
-        $stmt = $this->db->prepare('SELECT process_id FROM process_steps WHERE id = ? LIMIT 1');
+        $stmt = $this->db->prepare('SELECT process_id FROM chat_process_steps WHERE id = ? LIMIT 1');
         $stmt->execute([$stepId]);
         $step = $stmt->fetch();
 
@@ -296,7 +296,7 @@ class ProcessController
 
         if (!$process) {
             Session::flash('error', 'Processo não encontrado.');
-            header('Location: index.php?page=processes');
+            header('Location: index.php?m=chat&page=processes');
             exit;
         }
 
@@ -305,7 +305,7 @@ class ProcessController
         AuditLog::log('pause', 'process', $id, ['status' => $process['status']], ['status' => 'paused']);
 
         Session::flash('success', 'Processo pausado.');
-        header('Location: index.php?page=processes&action=show&id=' . $id);
+        header('Location: index.php?m=chat&page=processes&action=show&id=' . $id);
         exit;
     }
 
@@ -323,7 +323,7 @@ class ProcessController
 
         if (!$process) {
             Session::flash('error', 'Processo não encontrado.');
-            header('Location: index.php?page=processes');
+            header('Location: index.php?m=chat&page=processes');
             exit;
         }
 
@@ -332,7 +332,7 @@ class ProcessController
         AuditLog::log('resume', 'process', $id, ['status' => $process['status']], ['status' => 'active']);
 
         Session::flash('success', 'Processo retomado.');
-        header('Location: index.php?page=processes&action=show&id=' . $id);
+        header('Location: index.php?m=chat&page=processes&action=show&id=' . $id);
         exit;
     }
 
@@ -350,7 +350,7 @@ class ProcessController
 
         if (!$process) {
             Session::flash('error', 'Processo não encontrado.');
-            header('Location: index.php?page=processes');
+            header('Location: index.php?m=chat&page=processes');
             exit;
         }
 
@@ -359,7 +359,7 @@ class ProcessController
         AuditLog::log('complete', 'process', $id, ['status' => $process['status']], ['status' => 'completed']);
 
         Session::flash('success', 'Processo concluído.');
-        header('Location: index.php?page=processes&action=show&id=' . $id);
+        header('Location: index.php?m=chat&page=processes&action=show&id=' . $id);
         exit;
     }
 
@@ -377,7 +377,7 @@ class ProcessController
 
         if (!$process) {
             Session::flash('error', 'Processo não encontrado.');
-            header('Location: index.php?page=processes');
+            header('Location: index.php?m=chat&page=processes');
             exit;
         }
 
@@ -386,7 +386,7 @@ class ProcessController
         AuditLog::log('delete', 'process', $id, ['status' => $process['status']], ['status' => 'cancelled']);
 
         Session::flash('success', 'Processo cancelado.');
-        header('Location: index.php?page=processes');
+        header('Location: index.php?m=chat&page=processes');
         exit;
     }
 }

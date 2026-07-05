@@ -10,7 +10,7 @@
 <body class="bg-light">
     <nav class="navbar navbar-dark bg-primary">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="index.php?page=public_recruitment">
+            <a class="navbar-brand fw-bold" href="index.php?m=rh&page=public_recruitment">
                 <i class="bi bi-hospital me-1"></i> <?= Sanitize::e($hospitalName) ?>
             </a>
         </div>
@@ -68,7 +68,7 @@
                         </ul>
                         <p class="alert alert-info">
                             <strong>Candidatos:</strong> use o
-                            <a href="index.php?page=public_recruitment&action=track">acompanhamento da candidatura</a>
+                            <a href="index.php?m=rh&page=public_recruitment&action=track">acompanhamento da candidatura</a>
                             para visualizar e excluir seus dados, ou escreva para
                             <strong><?= Sanitize::e($contactEmail ?: 'rh@hospital.com.br') ?></strong>.
                         </p>
@@ -84,7 +84,7 @@
                         <strong><?= Sanitize::e($contactEmail ?: 'rh@hospital.com.br') ?></strong>.</p>
 
                         <hr class="my-4">
-                        <a href="index.php?page=public_recruitment" class="btn btn-outline-primary">
+                        <a href="index.php?m=rh&page=public_recruitment" class="btn btn-outline-primary">
                             <i class="bi bi-arrow-left me-1"></i> Voltar
                         </a>
                     </div>

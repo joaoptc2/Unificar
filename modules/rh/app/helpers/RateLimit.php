@@ -1,15 +1,17 @@
 <?php
 /**
- * RateLimit — controle de tentativas por IP/identificador.
+ * RateLimit — controle de envios do formulário PÚBLICO de vagas.
  *
- * Usa as tabelas `login_attempts` e `public_submissions` (criadas pela
- * migração 001). Todas as chaves são indexadas para performance.
+ * O rate-limit de login saiu do módulo: autenticação (e suas tentativas)
+ * é responsabilidade do núcleo (Core\RateLimit + tabela login_attempts).
+ * Aqui fica apenas o controle da página pública de recrutamento
+ * (tabela rh_public_submissions).
  */
 class RateLimit
 {
     /**
      * Retorna o IP real do cliente, considerando proxies comuns
-     * (Cloudflare, cPanel, etc.) da Hostinger.
+     * (Cloudflare, cPanel, etc.).
      */
     public static function clientIp(): string
     {
@@ -23,87 +25,6 @@ class RateLimit
     }
 
     // -----------------------------------------------------------------
-    // Login
-    // -----------------------------------------------------------------
-
-    /**
-     * Registra uma tentativa de login (sucesso ou falha).
-     */
-    public static function recordLogin(string $ip, ?string $email, bool $success): void
-    {
-        try {
-            $db = Database::getInstance();
-            $stmt = $db->prepare(
-                'INSERT INTO login_attempts (ip_address, email, success, user_agent)
-                 VALUES (?, ?, ?, ?)'
-            );
-            $stmt->execute([
-                $ip,
-                $email ? mb_substr($email, 0, 200) : null,
-                $success ? 1 : 0,
-                mb_substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 500),
-            ]);
-        } catch (\Exception $e) {
-            error_log('RateLimit::recordLogin: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Conta falhas recentes para um IP dentro da janela (minutos).
-     */
-    public static function recentLoginFailures(string $ip, ?string $email, int $windowMinutes): int
-    {
-        try {
-            $db = Database::getInstance();
-            $sql = 'SELECT COUNT(*) FROM login_attempts
-                     WHERE success = 0
-                       AND attempted_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)
-                       AND (ip_address = ?';
-            $params = [$windowMinutes, $ip];
-            if ($email) {
-                $sql .= ' OR email = ?';
-                $params[] = $email;
-            }
-            $sql .= ')';
-            $stmt = $db->prepare($sql);
-            $stmt->execute($params);
-            return (int)$stmt->fetchColumn();
-        } catch (\Exception $e) {
-            // Se a tabela ainda não existir (migração não rodada), não bloquear login.
-            error_log('RateLimit::recentLoginFailures: ' . $e->getMessage());
-            return 0;
-        }
-    }
-
-    /**
-     * Em quantos segundos o bloqueio expira (0 = não bloqueado).
-     */
-    public static function loginLockoutRemaining(string $ip, ?string $email, int $windowMinutes): int
-    {
-        try {
-            $db = Database::getInstance();
-            $sql = 'SELECT MAX(attempted_at) FROM login_attempts
-                     WHERE success = 0
-                       AND attempted_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)
-                       AND (ip_address = ?';
-            $params = [$windowMinutes, $ip];
-            if ($email) {
-                $sql .= ' OR email = ?';
-                $params[] = $email;
-            }
-            $sql .= ')';
-            $stmt = $db->prepare($sql);
-            $stmt->execute($params);
-            $last = $stmt->fetchColumn();
-            if (!$last) return 0;
-            $unlocksAt = strtotime($last) + ($windowMinutes * 60);
-            return max(0, $unlocksAt - time());
-        } catch (\Exception $e) {
-            return 0;
-        }
-    }
-
-    // -----------------------------------------------------------------
     // Recrutamento público
     // -----------------------------------------------------------------
 
@@ -112,7 +33,7 @@ class RateLimit
         try {
             $db = Database::getInstance();
             $stmt = $db->prepare(
-                'INSERT INTO public_submissions (ip_address, job_id, email) VALUES (?, ?, ?)'
+                'INSERT INTO rh_public_submissions (ip_address, job_id, email) VALUES (?, ?, ?)'
             );
             $stmt->execute([$ip, $jobId ?: null, $email ? mb_substr($email, 0, 200) : null]);
         } catch (\Exception $e) {
@@ -125,7 +46,7 @@ class RateLimit
         try {
             $db = Database::getInstance();
             $stmt = $db->prepare(
-                'SELECT COUNT(*) FROM public_submissions
+                'SELECT COUNT(*) FROM rh_public_submissions
                  WHERE ip_address = ?
                    AND submitted_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)'
             );
@@ -141,7 +62,7 @@ class RateLimit
         try {
             $db = Database::getInstance();
             $stmt = $db->prepare(
-                'SELECT 1 FROM candidates WHERE job_id = ? AND email = ? LIMIT 1'
+                'SELECT 1 FROM rh_candidates WHERE job_id = ? AND email = ? LIMIT 1'
             );
             $stmt->execute([$jobId, $email]);
             return (bool)$stmt->fetchColumn();

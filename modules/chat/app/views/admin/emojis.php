@@ -4,7 +4,7 @@
         <button class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#addEmojiForm">
             <i class="bi bi-plus-lg me-1"></i> Adicionar Emoji
         </button>
-        <a href="index.php?page=admin" class="btn btn-outline-secondary btn-sm ms-1">
+        <a href="index.php?m=chat&page=admin" class="btn btn-outline-secondary btn-sm ms-1">
             <i class="bi bi-arrow-left me-1"></i> Voltar
         </a>
     </div>
@@ -14,7 +14,7 @@
     <div class="card border-0 shadow-sm">
         <div class="card-body">
             <h6 class="card-title mb-3">Enviar novo emoji</h6>
-            <form method="POST" action="index.php?page=admin&action=storeEmoji" enctype="multipart/form-data">
+            <form method="POST" action="index.php?m=chat&page=admin&action=storeEmoji" enctype="multipart/form-data">
                 <?= Csrf::field() ?>
                 <div class="row g-3 align-items-end">
                     <div class="col-md-4">
@@ -55,7 +55,7 @@
                 <img src="<?= Sanitize::e($emoji['image_path']) ?>" alt="<?= Sanitize::e($emoji['name']) ?>"
                      width="48" height="48" class="mb-2" style="object-fit: contain;">
                 <div class="small fw-semibold mb-2"><?= Sanitize::e($emoji['name']) ?></div>
-                <form method="POST" action="index.php?page=admin&action=deleteEmoji"
+                <form method="POST" action="index.php?m=chat&page=admin&action=deleteEmoji"
                       onsubmit="return confirm('Excluir este emoji?')">
                     <?= Csrf::field() ?>
                     <input type="hidden" name="id" value="<?= (int)$emoji['id'] ?>">

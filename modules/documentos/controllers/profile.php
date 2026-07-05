@@ -1,117 +1,19 @@
 <?php
 /**
- * Controller de Perfil do Usuário
+ * Controller de Perfil — módulo DOCUMENTOS.
  *
- * Permite que o usuário veja seus dados e troque a própria senha.
+ * Perfil e troca de senha agora são do núcleo (?m=auth&a=profile|security).
+ * Aqui permanece apenas a troca de SETOR em foco (contexto do módulo).
  */
 
+/** Ver perfil → tela central do núcleo. */
 function profile_index($param = null) {
-    require_login();
-
-    $user = null;
-    try {
-        $user = user_find(get_user_id());
-    } catch (Exception $ex) {
-        log_error('profile_index', $ex);
-    }
-
-    view('profile/index', [
-        'page_title' => 'Meu Perfil',
-        'user'       => $user,
-    ]);
+    core_redirect('index.php?m=auth&a=profile');
 }
 
-function profile_update($param = null) {
-    require_login();
-    if (!is_post()) redirect('profile');
-    csrf_validate();
-
-    $name  = clean(input('name'));
-    $email = sanitize_email(input('email'));
-
-    $errors = [];
-    if (empty($name))  $errors[] = 'Nome é obrigatório.';
-    if (!is_valid_email($email)) $errors[] = 'E-mail inválido.';
-
-    // Checa e-mail duplicado no mesmo hospital
-    if (empty($errors) && user_email_exists($email, get_hospital_id(), get_user_id())) {
-        $errors[] = 'Este e-mail já está em uso por outro usuário.';
-    }
-
-    if (!empty($errors)) {
-        set_flash('error', implode('<br>', $errors));
-        redirect('profile');
-    }
-
-    try {
-        user_update(get_user_id(), ['name' => $name, 'email' => $email]);
-        $_SESSION['user_name']  = $name;
-        $_SESSION['user_email'] = $email;
-        audit_log('profile_updated', "user_id=" . get_user_id());
-        set_flash('success', 'Perfil atualizado com sucesso.');
-    } catch (Exception $ex) {
-        log_error('profile_update', $ex);
-        set_flash('error', 'Erro ao atualizar perfil.');
-    }
-
-    redirect('profile');
-}
-
+/** Alterar senha → tela central do núcleo. */
 function profile_change_password($param = null) {
-    require_login();
-
-    if (is_post()) {
-        csrf_validate();
-        $current = (string) input('current_password');
-        $new     = (string) input('new_password');
-        $confirm = (string) input('new_password_confirm');
-
-        $errors = [];
-
-        // Se for troca voluntária (não forçada), exige senha atual
-        $is_forced = !empty($_SESSION['force_password_change']);
-
-        try {
-            $user = user_find(get_user_id());
-        } catch (Exception $ex) {
-            log_error('profile_change_password:user', $ex);
-            set_flash('error', 'Erro ao carregar usuário.');
-            redirect('profile/change-password');
-        }
-
-        if (!$is_forced) {
-            if (empty($current) || !verify_password($current, $user['password'])) {
-                $errors[] = 'Senha atual incorreta.';
-            }
-        }
-
-        $errors = array_merge($errors, validate_password_strength($new));
-        if ($new !== $confirm) $errors[] = 'A confirmação não coincide com a nova senha.';
-        if (!empty($current) && $current === $new) $errors[] = 'A nova senha deve ser diferente da atual.';
-
-        if (!empty($errors)) {
-            set_flash('error', implode('<br>', $errors));
-            redirect('profile/change-password');
-        }
-
-        try {
-            user_set_password(get_user_id(), hash_password($new), false);
-            $_SESSION['force_password_change'] = false;
-            audit_log('password_changed', 'user_id=' . get_user_id());
-            set_flash('success', 'Senha alterada com sucesso.');
-        } catch (Exception $ex) {
-            log_error('profile_change_password:update', $ex);
-            set_flash('error', 'Erro ao alterar senha.');
-            redirect('profile/change-password');
-        }
-
-        redirect($is_forced ? 'dashboard' : 'profile');
-    }
-
-    view('profile/change_password', [
-        'page_title' => 'Alterar Senha',
-        'is_forced'  => !empty($_SESSION['force_password_change']),
-    ]);
+    core_redirect('index.php?m=auth&a=security');
 }
 
 /**
@@ -147,15 +49,8 @@ function profile_switch_sector($param = null) {
     }
 
     switch_sector_context($sector_id, $sector_name);
-    $_SESSION['user_sectors'] = $user_sectors;
+    $_SESSION['doc_user_sectors'] = $user_sectors;
     audit_log('sector_context_switch', "sector_id=$sector_id");
     set_flash('success', 'Setor alterado para: ' . $sector_name);
-    redirect('dashboard');
-}
-
-/**
- * @deprecated Mantido para não quebrar URLs antigas. Redireciona para dashboard.
- */
-function profile_switch_hospital($param = null) {
     redirect('dashboard');
 }

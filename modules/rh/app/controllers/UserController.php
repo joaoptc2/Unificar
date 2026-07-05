@@ -1,6 +1,12 @@
 <?php
 /**
- * Controller de Gestão de Usuários (Módulo 10 — Administração)
+ * UserController — "Vínculos de usuários" (administração do módulo).
+ *
+ * O CRUD de usuários (criação, edição, senha, papel) agora é da
+ * administração CENTRAL da plataforma (?m=admin&a=users). Esta tela lista
+ * os usuários globais com acesso ao módulo RH (user_module_access) e
+ * permite definir o vínculo funcional do módulo (rh_user_profile:
+ * employee_id / department_id).
  */
 class UserController
 {
@@ -13,185 +19,86 @@ class UserController
 
     public function index(): void
     {
-        Auth::requirePermission('users', 'view');
+        Auth::requirePermission('users', 'view'); // apenas admin do módulo
 
         $users = $this->db->query(
-            'SELECT u.*, (SELECT MAX(al.created_at) FROM audit_log al WHERE al.user_id = u.id) as last_action
-             FROM users u ORDER BY u.name'
+            "SELECT u.id, u.name, u.email, u.active, u.is_admin, u.last_login_at,
+                    uma.role AS rh_role,
+                    p.employee_id, p.department_id,
+                    e.full_name AS employee_name,
+                    d.name AS department_name
+             FROM users u
+             LEFT JOIN user_module_access uma
+               ON uma.user_id = u.id AND uma.module_slug = 'rh'
+             LEFT JOIN rh_user_profile p ON p.user_id = u.id
+             LEFT JOIN rh_employees e ON e.id = p.employee_id
+             LEFT JOIN rh_departments d ON d.id = p.department_id
+             WHERE uma.id IS NOT NULL OR u.is_admin = 1
+             ORDER BY u.name"
         )->fetchAll();
 
-        $pageTitle = 'Usuários';
+        $employees = $this->db->query(
+            "SELECT id, full_name FROM rh_employees ORDER BY full_name"
+        )->fetchAll();
+
+        $departments = $this->db->query(
+            'SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name'
+        )->fetchAll();
+
+        $pageTitle = 'Vínculos de usuários';
         $page = 'users';
         require __DIR__ . '/../views/layout/header.php';
         require __DIR__ . '/../views/users/index.php';
         require __DIR__ . '/../views/layout/footer.php';
     }
 
-    public function create(): void
-    {
-        Auth::requirePermission('users', 'create');
-        $user = null;
-        $pageTitle = 'Novo Usuário';
-        $page = 'users';
-        require __DIR__ . '/../views/layout/header.php';
-        require __DIR__ . '/../views/users/form.php';
-        require __DIR__ . '/../views/layout/footer.php';
-    }
-
-    public function store(): void
-    {
-        Auth::requirePermission('users', 'create');
-        Csrf::check();
-
-        $name     = Sanitize::post('name');
-        $email    = Sanitize::email($_POST['email'] ?? '');
-        $password = $_POST['password'] ?? '';
-        $role     = Sanitize::post('role');
-        $active   = isset($_POST['active']) ? 1 : 0;
-
-        if (empty($name) || empty($email) || empty($password)) {
-            Session::flash('error', 'Preencha todos os campos obrigatórios.');
-            header('Location: index.php?page=users&action=create');
-            exit;
-        }
-
-        if (strlen($password) < 8) {
-            Session::flash('error', 'A senha deve ter no mínimo 8 caracteres.');
-            header('Location: index.php?page=users&action=create');
-            exit;
-        }
-
-        // Verificar e-mail duplicado
-        $stmt = $this->db->prepare('SELECT id FROM users WHERE email = ?');
-        $stmt->execute([$email]);
-        if ($stmt->fetch()) {
-            Session::flash('error', 'E-mail já cadastrado.');
-            header('Location: index.php?page=users&action=create');
-            exit;
-        }
-
-        $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
-
-        $stmt = $this->db->prepare('INSERT INTO users (name, email, password, role, active) VALUES (?, ?, ?, ?, ?)');
-        $stmt->execute([$name, $email, $hash, $role, $active]);
-        AuditLog::log('create', 'users', (int)$this->db->lastInsertId());
-
-        Session::flash('success', 'Usuário criado com sucesso.');
-        header('Location: index.php?page=users');
-        exit;
-    }
-
-    public function edit(): void
+    /**
+     * Define/atualiza o vínculo (employee_id / department_id) de um usuário.
+     */
+    public function link(): void
     {
         Auth::requirePermission('users', 'edit');
+        Csrf::check();
 
-        $id = Sanitize::int($_GET['id'] ?? 0);
-        $stmt = $this->db->prepare('SELECT * FROM users WHERE id = ?');
-        $stmt->execute([$id]);
-        $user = $stmt->fetch();
+        $userId       = Sanitize::int($_POST['user_id'] ?? 0);
+        $employeeId   = Sanitize::int($_POST['employee_id'] ?? 0) ?: null;
+        $departmentId = Sanitize::int($_POST['department_id'] ?? 0) ?: null;
 
-        if (!$user) {
+        $stmt = $this->db->prepare('SELECT id FROM users WHERE id = ?');
+        $stmt->execute([$userId]);
+        if (!$stmt->fetch()) {
             Session::flash('error', 'Usuário não encontrado.');
-            header('Location: index.php?page=users');
+            header('Location: index.php?m=rh&page=users');
             exit;
         }
 
-        $pageTitle = 'Editar Usuário';
-        $page = 'users';
-        require __DIR__ . '/../views/layout/header.php';
-        require __DIR__ . '/../views/users/form.php';
-        require __DIR__ . '/../views/layout/footer.php';
-    }
-
-    public function update(): void
-    {
-        Auth::requirePermission('users', 'edit');
-        Csrf::check();
-
-        $id       = Sanitize::int($_POST['id'] ?? 0);
-        $name     = Sanitize::post('name');
-        $email    = Sanitize::email($_POST['email'] ?? '');
-        $password = $_POST['password'] ?? '';
-        $role     = Sanitize::post('role');
-        $active   = isset($_POST['active']) ? 1 : 0;
-
-        // Verificar e-mail duplicado
-        $stmt = $this->db->prepare('SELECT id FROM users WHERE email = ? AND id != ?');
-        $stmt->execute([$email, $id]);
-        if ($stmt->fetch()) {
-            Session::flash('error', 'E-mail já cadastrado por outro usuário.');
-            header('Location: index.php?page=users&action=edit&id=' . $id);
-            exit;
-        }
-
-        if ($password) {
-            if (strlen($password) < 8) {
-                Session::flash('error', 'A senha deve ter no mínimo 8 caracteres.');
-                header('Location: index.php?page=users&action=edit&id=' . $id);
+        // Evita vincular o mesmo funcionário a dois usuários.
+        if ($employeeId) {
+            $stmt = $this->db->prepare(
+                'SELECT user_id FROM rh_user_profile WHERE employee_id = ? AND user_id <> ?'
+            );
+            $stmt->execute([$employeeId, $userId]);
+            if ($stmt->fetch()) {
+                Session::flash('error', 'Este funcionário já está vinculado a outro usuário.');
+                header('Location: index.php?m=rh&page=users');
                 exit;
             }
-            $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
-            $stmt = $this->db->prepare('UPDATE users SET name=?, email=?, password=?, role=?, active=? WHERE id=?');
-            $stmt->execute([$name, $email, $hash, $role, $active, $id]);
-        } else {
-            $stmt = $this->db->prepare('UPDATE users SET name=?, email=?, role=?, active=? WHERE id=?');
-            $stmt->execute([$name, $email, $role, $active, $id]);
         }
-
-        AuditLog::log('update', 'users', $id);
-        Session::flash('success', 'Usuário atualizado.');
-        header('Location: index.php?page=users');
-        exit;
-    }
-
-    public function delete(): void
-    {
-        Auth::requirePermission('users', 'delete');
-        Csrf::check();
-
-        $id = Sanitize::int($_POST['id'] ?? 0);
-
-        // Não permitir excluir a si mesmo
-        if ($id === Session::userId()) {
-            Session::flash('error', 'Você não pode excluir seu próprio usuário.');
-            header('Location: index.php?page=users');
-            exit;
-        }
-
-        $this->db->prepare('DELETE FROM users WHERE id = ?')->execute([$id]);
-        AuditLog::log('delete', 'users', $id);
-
-        Session::flash('success', 'Usuário excluído.');
-        header('Location: index.php?page=users');
-        exit;
-    }
-
-    /**
-     * Log de auditoria
-     */
-    public function audit_log(): void
-    {
-        Auth::requirePermission('users', 'view');
-
-        $currentPage = max(1, Sanitize::int($_GET['p'] ?? 1));
-
-        $total = (int)$this->db->query('SELECT COUNT(*) FROM audit_log')->fetchColumn();
-        $pagination = new Pagination($total, $currentPage, 30);
 
         $stmt = $this->db->prepare(
-            "SELECT al.*, u.name as user_name
-             FROM audit_log al
-             LEFT JOIN users u ON al.user_id = u.id
-             ORDER BY al.created_at DESC
-             LIMIT {$pagination->perPage} OFFSET {$pagination->offset}"
+            'INSERT INTO rh_user_profile (user_id, employee_id, department_id)
+             VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE employee_id = VALUES(employee_id),
+                                     department_id = VALUES(department_id)'
         );
-        $stmt->execute();
-        $logs = $stmt->fetchAll();
+        $stmt->execute([$userId, $employeeId, $departmentId]);
 
-        $pageTitle = 'Log de Auditoria';
-        $page = 'users';
-        require __DIR__ . '/../views/layout/header.php';
-        require __DIR__ . '/../views/users/audit_log.php';
-        require __DIR__ . '/../views/layout/footer.php';
+        AuditLog::log('link', 'rh_user_profile', $userId, null, [
+            'employee_id' => $employeeId, 'department_id' => $departmentId,
+        ]);
+
+        Session::flash('success', 'Vínculo atualizado.');
+        header('Location: index.php?m=rh&page=users');
+        exit;
     }
 }

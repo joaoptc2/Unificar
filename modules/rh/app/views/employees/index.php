@@ -3,13 +3,13 @@
     <h1><i class="bi bi-people me-2"></i>Funcionários</h1>
     <div class="d-flex gap-2">
         <?php if (Auth::can('employees', 'export')): ?>
-            <a href="index.php?page=employees&action=export&<?= http_build_query(array_filter(['status' => $status, 'department' => $department])) ?>"
+            <a href="index.php?m=rh&page=employees&action=export&<?= http_build_query(array_filter(['status' => $status, 'department' => $department])) ?>"
                class="btn btn-outline-success btn-sm">
                 <i class="bi bi-file-earmark-excel me-1"></i> Exportar CSV
             </a>
         <?php endif; ?>
         <?php if (Auth::can('employees', 'create')): ?>
-            <a href="index.php?page=employees&action=create" class="btn btn-primary btn-sm">
+            <a href="index.php?m=rh&page=employees&action=create" class="btn btn-primary btn-sm">
                 <i class="bi bi-plus-lg me-1"></i> Novo Funcionário
             </a>
         <?php endif; ?>
@@ -58,7 +58,7 @@
         </div>
         <div class="col-md-3 d-flex gap-1">
             <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>Filtrar</button>
-            <a href="index.php?page=employees" class="btn btn-outline-secondary btn-sm">Limpar</a>
+            <a href="index.php?m=rh&page=employees" class="btn btn-outline-secondary btn-sm">Limpar</a>
         </div>
     </form>
 </div>
@@ -87,14 +87,14 @@
                             <td>
                                 <div class="d-flex align-items-center">
                                     <?php if ($emp['photo']): ?>
-                                        <img src="<?= ASSET_URL . Sanitize::e($emp['photo']) ?>" class="employee-photo me-2" alt="">
+                                        <img src="<?= Sanitize::e(Upload::publicUrl($emp['photo'])) ?>" class="employee-photo me-2" alt="">
                                     <?php else: ?>
                                         <div class="employee-photo me-2 bg-light d-flex align-items-center justify-content-center">
                                             <i class="bi bi-person text-muted"></i>
                                         </div>
                                     <?php endif; ?>
                                     <div>
-                                        <a href="index.php?page=employees&action=show&id=<?= $emp['id'] ?>" class="fw-semibold text-decoration-none">
+                                        <a href="index.php?m=rh&page=employees&action=show&id=<?= $emp['id'] ?>" class="fw-semibold text-decoration-none">
                                             <?= Sanitize::e($emp['full_name']) ?>
                                         </a>
                                         <?php if ($emp['email']): ?>
@@ -119,12 +119,12 @@
                                 <span class="badge <?= $badgeClass ?>"><?= ucfirst($emp['status']) ?></span>
                             </td>
                             <td class="text-end">
-                                <a href="index.php?page=employees&action=show&id=<?= $emp['id'] ?>"
+                                <a href="index.php?m=rh&page=employees&action=show&id=<?= $emp['id'] ?>"
                                    class="btn btn-outline-primary btn-action" title="Ver">
                                     <i class="bi bi-eye"></i>
                                 </a>
                                 <?php if (Auth::can('employees', 'edit')): ?>
-                                    <a href="index.php?page=employees&action=edit&id=<?= $emp['id'] ?>"
+                                    <a href="index.php?m=rh&page=employees&action=edit&id=<?= $emp['id'] ?>"
                                        class="btn btn-outline-warning btn-action" title="Editar">
                                         <i class="bi bi-pencil"></i>
                                     </a>

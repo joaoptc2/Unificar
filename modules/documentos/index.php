@@ -1,8 +1,11 @@
 <?php
 /**
  * ╔══════════════════════════════════════════════════════════════════════╗
- * ║  Sistema de Gestão Documental — Ponto de Entrada                    ║
- * ║  Todas as requisições passam por aqui via .htaccess                 ║
+ * ║  Módulo DOCUMENTOS — Ponto de Entrada                                ║
+ * ║  Executado pelo front controller da plataforma:                      ║
+ * ║  /index.php?m=documentos&url=pagina/acao                             ║
+ * ║  O núcleo já resolveu: sessão, login, acesso ao módulo e             ║
+ * ║  $GLOBALS['MODULE_ROLE']; headers de segurança também são dele.      ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 
@@ -13,7 +16,6 @@ require_once __DIR__ . '/includes/cache.php';
 require_once __DIR__ . '/includes/security.php';
 require_once __DIR__ . '/includes/session.php';
 require_once __DIR__ . '/includes/helpers.php';
-require_once __DIR__ . '/includes/rate_limit.php';
 require_once __DIR__ . '/includes/mailer.php';
 require_once __DIR__ . '/includes/formula.php';
 require_once __DIR__ . '/includes/analysis.php';
@@ -24,17 +26,12 @@ foreach (glob(MODELS_PATH . '/*.php') as $model_file) {
     require_once $model_file;
 }
 
-// ── 3. Sessão ──────────────────────────────────────────────────────────────
-session_init();
+// ── 3. Contexto de setor (primeiro acesso ao módulo nesta sessão) ──────────
+if (is_logged_in()) {
+    doc_sectors_ensure_loaded();
+}
 
-// ── 4. Headers de segurança ────────────────────────────────────────────────
-header('X-Content-Type-Options: nosniff');
-header('X-Frame-Options: SAMEORIGIN');
-header('X-XSS-Protection: 1; mode=block');
-header('Referrer-Policy: strict-origin-when-cross-origin');
-header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
-
-// ── 5. Rota ────────────────────────────────────────────────────────────────
+// ── 4. Rota ─────────────────────────────────────────────────────────────────
 $url = isset($_GET['url']) ? trim($_GET['url'], '/') : '';
 $segments = $url !== '' ? explode('/', $url) : [];
 
@@ -42,38 +39,37 @@ $page   = $segments[0] ?? 'dashboard';
 $action = $segments[1] ?? 'index';
 $param  = $segments[2] ?? null;
 
-// Normaliza hífens para underscore: "change-password" -> "change_password"
+// Normaliza hífens para underscore: "switch-sector" -> "switch_sector"
 $action = str_replace('-', '_', $action);
 $page   = str_replace('-', '_', $page);
 
-// ── 6. Mapa de rotas ───────────────────────────────────────────────────────
+// Logout → núcleo (fluxos de login/senha saíram do módulo)
+if ($page === 'logout') {
+    core_redirect('index.php?m=auth&a=logout');
+}
+
+// ── 5. Mapa de rotas ────────────────────────────────────────────────────────
 $routes = [
-    ''                => ['dashboard',      'index'],
-    'dashboard'       => ['dashboard',      'index'],
-    'login'           => ['auth',           'login'],
-    'process_login'   => ['auth',           'process_login'],
-    'logout'          => ['auth',           'logout'],
-    'forgot_password' => ['password_reset', 'forgot'],
-    'reset_password'  => ['password_reset', 'reset'],
-    'documents'       => ['documents',      $action],
-    'indicators'      => ['indicators',     $action],
-    'notifications'   => ['notifications',  $action],
-    'admin'           => ['admin',          $action],
-    'profile'         => ['profile',        $action],
-    'api'             => ['api',            $action],
-    'reports'         => ['reports',        $action],
+    ''              => ['dashboard',     'index'],
+    'dashboard'     => ['dashboard',     'index'],
+    'documents'     => ['documents',     $action],
+    'indicators'    => ['indicators',    $action],
+    'notifications' => ['notifications', $action],
+    'admin'         => ['admin',         $action],
+    'profile'       => ['profile',       $action],
+    'api'           => ['api',           $action],
+    'reports'       => ['reports',       $action],
 ];
 
 if (!isset($routes[$page])) {
-    http_response_code(404);
-    require VIEWS_PATH . '/layouts/404.php';
+    Core\Layout::renderError(404, 'Página não encontrada neste módulo.');
     exit;
 }
 
 $controller_file   = $routes[$page][0];
 $controller_action = $routes[$page][1];
 
-// ── 7. Controller ──────────────────────────────────────────────────────────
+// ── 6. Controller ───────────────────────────────────────────────────────────
 $controller_path = CONTROLLERS_PATH . '/' . $controller_file . '.php';
 
 if (!file_exists($controller_path)) {
@@ -84,13 +80,15 @@ if (!file_exists($controller_path)) {
 
 require_once $controller_path;
 
-// ── 8. Ação ────────────────────────────────────────────────────────────────
+// ── 7. Ação ─────────────────────────────────────────────────────────────────
 $function_name = $controller_file . '_' . $controller_action;
 
 if (!function_exists($function_name)) {
-    http_response_code(404);
-    if (APP_DEBUG) die('Ação não encontrada: ' . $function_name . '()');
-    require VIEWS_PATH . '/layouts/404.php';
+    if (APP_DEBUG) {
+        http_response_code(404);
+        die('Ação não encontrada: ' . $function_name . '()');
+    }
+    Core\Layout::renderError(404, 'Página não encontrada neste módulo.');
     exit;
 }
 

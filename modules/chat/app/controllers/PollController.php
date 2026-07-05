@@ -51,7 +51,7 @@ class PollController
         // --- validation ---------------------------------------------------
         if ($question === '') {
             Session::flash('error', 'A pergunta da enquete é obrigatória.');
-            header('Location: index.php?page=polls&action=create&channel_id=' . $channelId);
+            header('Location: index.php?m=chat&page=polls&action=create&channel_id=' . $channelId);
             exit;
         }
 
@@ -66,19 +66,19 @@ class PollController
 
         if (count($options) < 2) {
             Session::flash('error', 'A enquete precisa de pelo menos 2 opções.');
-            header('Location: index.php?page=polls&action=create&channel_id=' . $channelId);
+            header('Location: index.php?m=chat&page=polls&action=create&channel_id=' . $channelId);
             exit;
         }
 
         if ($channelId <= 0 || !Channel::find($channelId)) {
             Session::flash('error', 'Canal inválido.');
-            header('Location: index.php?page=polls&action=create');
+            header('Location: index.php?m=chat&page=polls&action=create');
             exit;
         }
 
         if (!Channel::isMember($channelId, $userId)) {
             Session::flash('error', 'Você não é membro deste canal.');
-            header('Location: index.php?page=polls&action=create');
+            header('Location: index.php?m=chat&page=polls&action=create');
             exit;
         }
 
@@ -119,7 +119,7 @@ class PollController
         );
 
         if (!empty($notifyIds)) {
-            $link = 'index.php?page=chat&channel_id=' . $channelId;
+            $link = 'index.php?m=chat&page=chat&channel_id=' . $channelId;
             Notification::createForMany(
                 $notifyIds,
                 'poll',
@@ -136,7 +136,7 @@ class PollController
         ]);
 
         Session::flash('success', 'Enquete criada com sucesso.');
-        header('Location: index.php?page=chat&channel_id=' . $channelId);
+        header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
         exit;
     }
 
@@ -282,7 +282,7 @@ class PollController
                 $this->jsonResponse(false, 'Enquete não encontrada.', 404);
             } else {
                 Session::flash('error', 'Enquete não encontrada.');
-                header('Location: index.php?page=chat');
+                header('Location: index.php?m=chat&page=chat');
             }
             return;
         }
@@ -293,7 +293,7 @@ class PollController
                 $this->jsonResponse(false, 'Sem permissão para encerrar esta enquete.', 403);
             } else {
                 Session::flash('error', 'Sem permissão para encerrar esta enquete.');
-                header('Location: index.php?page=chat&channel_id=' . $poll['channel_id']);
+                header('Location: index.php?m=chat&page=chat&channel_id=' . $poll['channel_id']);
             }
             return;
         }
@@ -309,7 +309,7 @@ class PollController
             ]);
         } else {
             Session::flash('success', 'Enquete encerrada com sucesso.');
-            header('Location: index.php?page=chat&channel_id=' . $poll['channel_id']);
+            header('Location: index.php?m=chat&page=chat&channel_id=' . $poll['channel_id']);
             exit;
         }
     }

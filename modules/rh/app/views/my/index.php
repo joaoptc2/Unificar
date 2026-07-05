@@ -6,7 +6,7 @@
     <title>Minha Área — <?= Sanitize::e($hospitalName) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="<?= ASSET_URL ?>css/style.css" rel="stylesheet">
+    <link href="<?= ASSET_URL ?>style.css" rel="stylesheet">
     <style>
         .my-hero { background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%); color: #fff; }
         .my-photo {
@@ -31,7 +31,7 @@
         <span class="navbar-brand fw-bold">
             <i class="bi bi-hospital me-1"></i> <?= Sanitize::e($hospitalName) ?>
         </span>
-        <a href="index.php?page=logout&action=logout" class="btn btn-outline-light btn-sm">
+        <a href="<?php echo core_url('index.php?m=auth&a=logout'); ?>" class="btn btn-outline-light btn-sm">
             <i class="bi bi-box-arrow-right me-1"></i> Sair
         </a>
     </div>
@@ -183,7 +183,7 @@
     <?php endif; ?>
 
     <div class="text-center text-muted small mt-4">
-        Precisa alterar sua senha? Acesse <a href="index.php?page=profile">Meu Perfil</a>.
+        Precisa alterar sua senha? Acesse <a href="<?php echo core_url('index.php?m=auth&a=security'); ?>">Senha e Segurança</a>.
     </div>
 </div>
 

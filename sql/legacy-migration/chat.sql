@@ -1,0 +1,312 @@
+-- ================================================================
+-- MIGRAÇÃO DE DADOS — TeamChat legado → módulo chat da plataforma
+--
+-- Pré-requisitos:
+--   1. O banco legado deve estar acessível no MESMO servidor MySQL,
+--      com o nome `legado_chat` (ajuste se necessário).
+--   2. O schema do núcleo (sql/schema.sql) e o do módulo
+--      (sql/modules/chat.sql) já devem ter sido aplicados.
+--   3. As tabelas chat_* de destino devem estar VAZIAS (os IDs das
+--      entidades do módulo são preservados; apenas os IDs de usuário
+--      são remapeados por e-mail).
+--
+-- Estratégia:
+--   * Usuários: INSERT no `users` global casando por e-mail
+--     (password → password_hash, is_active → active,
+--      title → job_title, department → sector). username deriva do
+--     e-mail. Usuários já existentes (mesmo e-mail) não são duplicados.
+--   * Papel legado (users.role: admin|manager|member) →
+--     user_module_access (module_slug='chat').
+--   * Presença (status/status_text/status_emoji/timezone/last_seen_at)
+--     → chat_presence.
+--   * Demais tabelas: INSERT ... SELECT com IDs próprios preservados e
+--     colunas *user* remapeadas via JOIN por e-mail.
+--   * notifications e audit_log legados NÃO são migrados (histórico
+--     transacional; as tabelas globais começam limpas). Descomente os
+--     blocos opcionais no fim se quiser levar o histórico.
+--
+-- TODO O SCRIPT ESTÁ COMENTADO — revise, ajuste e descomente bloco a
+-- bloco antes de executar.
+-- ================================================================
+
+-- SET NAMES utf8mb4;
+-- SET FOREIGN_KEY_CHECKS = 0;
+
+-- ----------------------------------------------------------------
+-- 1) USUÁRIOS → tabela global `users` (match por e-mail)
+-- ----------------------------------------------------------------
+-- INSERT INTO users (name, username, email, password_hash, is_admin, active, auth_source, avatar, phone, job_title, sector, created_at)
+-- SELECT lu.name,
+--        SUBSTRING_INDEX(lu.email, '@', 1)             AS username,
+--        lu.email,
+--        lu.password                                   AS password_hash,
+--        0                                             AS is_admin,   -- admin global só via núcleo
+--        lu.is_active                                  AS active,
+--        'local'                                       AS auth_source,
+--        CASE WHEN lu.avatar IS NULL OR lu.avatar = '' THEN NULL
+--             ELSE CONCAT('uploads/chat/avatars/', SUBSTRING_INDEX(lu.avatar, '/', -1)) END AS avatar,
+--        lu.phone,
+--        lu.title                                      AS job_title,
+--        lu.department                                 AS sector,
+--        lu.created_at
+-- FROM legado_chat.users lu
+-- WHERE NOT EXISTS (SELECT 1 FROM users nu WHERE nu.email = lu.email);
+--
+-- Obs.: se houver colisão de username, ajuste manualmente antes
+-- (users.username é UNIQUE). Ex.: SUFIXO numérico.
+
+-- ----------------------------------------------------------------
+-- 2) PAPEL LEGADO → user_module_access (module_slug = 'chat')
+-- ----------------------------------------------------------------
+-- INSERT INTO user_module_access (user_id, module_slug, role, granted_by)
+-- SELECT nu.id, 'chat', lu.role, NULL
+-- FROM legado_chat.users lu
+-- INNER JOIN users nu ON nu.email = lu.email
+-- ON DUPLICATE KEY UPDATE role = VALUES(role);
+
+-- ----------------------------------------------------------------
+-- 3) PRESENÇA → chat_presence
+-- ----------------------------------------------------------------
+-- INSERT INTO chat_presence (user_id, status, status_text, status_emoji, timezone, last_seen_at)
+-- SELECT nu.id, 'offline', lu.status_text, lu.status_emoji,
+--        COALESCE(lu.timezone, 'America/Sao_Paulo'), lu.last_seen_at
+-- FROM legado_chat.users lu
+-- INNER JOIN users nu ON nu.email = lu.email
+-- ON DUPLICATE KEY UPDATE status_text  = VALUES(status_text),
+--                         status_emoji = VALUES(status_emoji),
+--                         timezone     = VALUES(timezone),
+--                         last_seen_at = VALUES(last_seen_at);
+
+-- ----------------------------------------------------------------
+-- 4) CATEGORIAS DE CANAIS
+-- ----------------------------------------------------------------
+-- INSERT INTO chat_channel_categories (id, name, order_num, is_collapsed, created_by, created_at)
+-- SELECT cc.id, cc.name, cc.order_num, cc.is_collapsed, nu.id, cc.created_at
+-- FROM legado_chat.channel_categories cc
+-- LEFT JOIN legado_chat.users lu ON lu.id = cc.created_by
+-- LEFT JOIN users nu ON nu.email = lu.email;
+
+-- ----------------------------------------------------------------
+-- 5) CANAIS
+-- ----------------------------------------------------------------
+-- INSERT INTO chat_channels (id, name, slug, description, type, topic, created_by,
+--                            is_archived, is_general, is_readonly, retention_days,
+--                            slow_mode_seconds, max_pinned, allow_threads, category_id,
+--                            created_at, updated_at)
+-- SELECT c.id, c.name, c.slug, c.description, c.type, c.topic, nu.id,
+--        c.is_archived, c.is_general, c.is_readonly, c.retention_days,
+--        c.slow_mode_seconds, c.max_pinned, c.allow_threads, c.category_id,
+--        c.created_at, c.updated_at
+-- FROM legado_chat.channels c
+-- LEFT JOIN legado_chat.users lu ON lu.id = c.created_by
+-- LEFT JOIN users nu ON nu.email = lu.email;
+
+-- ----------------------------------------------------------------
+-- 6) MEMBROS DOS CANAIS
+-- ----------------------------------------------------------------
+-- INSERT INTO chat_channel_members (id, channel_id, user_id, role, notifications, last_read_message_id, joined_at)
+-- SELECT cm.id, cm.channel_id, nu.id, cm.role, cm.notifications, cm.last_read_message_id, cm.joined_at
+-- FROM legado_chat.channel_members cm
+-- INNER JOIN legado_chat.users lu ON lu.id = cm.user_id
+-- INNER JOIN users nu ON nu.email = lu.email;
+
+-- ----------------------------------------------------------------
+-- 7) MENSAGENS (anexos: caminho reescrito para uploads/chat/…)
+-- ----------------------------------------------------------------
+-- INSERT INTO chat_messages (id, channel_id, user_id, parent_id, content, type,
+--                            is_edited, edited_at, is_pinned, pinned_by, pinned_at,
+--                            reply_count, reaction_count, metadata,
+--                            created_at, updated_at, deleted_at)
+-- SELECT m.id, m.channel_id, nu.id, m.parent_id, m.content, m.type,
+--        m.is_edited, m.edited_at, m.is_pinned, npu.id, m.pinned_at,
+--        m.reply_count, m.reaction_count, m.metadata,
+--        m.created_at, m.updated_at, m.deleted_at
+-- FROM legado_chat.messages m
+-- LEFT JOIN legado_chat.users lu  ON lu.id  = m.user_id
+-- LEFT JOIN users nu              ON nu.email = lu.email
+-- LEFT JOIN legado_chat.users lpu ON lpu.id = m.pinned_by
+-- LEFT JOIN users npu             ON npu.email = lpu.email;
+
+-- INSERT INTO chat_message_reactions (id, message_id, user_id, emoji, created_at)
+-- SELECT mr.id, mr.message_id, nu.id, mr.emoji, mr.created_at
+-- FROM legado_chat.message_reactions mr
+-- INNER JOIN legado_chat.users lu ON lu.id = mr.user_id
+-- INNER JOIN users nu ON nu.email = lu.email;
+
+-- INSERT INTO chat_message_attachments (id, message_id, user_id, original_name, file_path, file_type, file_size, created_at)
+-- SELECT ma.id, ma.message_id, nu.id, ma.original_name,
+--        CONCAT('uploads/chat/attachments/', SUBSTRING_INDEX(ma.file_path, '/', -1)),
+--        ma.file_type, ma.file_size, ma.created_at
+-- FROM legado_chat.message_attachments ma
+-- LEFT JOIN legado_chat.users lu ON lu.id = ma.user_id
+-- LEFT JOIN users nu ON nu.email = lu.email;
+--
+-- Obs.: copie os arquivos físicos de
+--   <legado>/storage/uploads/attachments/  → uploads/chat/attachments/
+--   <legado>/public/uploads/avatars/       → uploads/chat/avatars/
+
+-- INSERT INTO chat_mentions (id, message_id, user_id, team_id, type, created_at)
+-- SELECT mn.id, mn.message_id, nu.id, mn.team_id, mn.type, mn.created_at
+-- FROM legado_chat.mentions mn
+-- LEFT JOIN legado_chat.users lu ON lu.id = mn.user_id
+-- LEFT JOIN users nu ON nu.email = lu.email;
+
+-- ----------------------------------------------------------------
+-- 8) EQUIPES
+-- ----------------------------------------------------------------
+-- INSERT INTO chat_teams (id, name, slug, description, color, created_by, is_active, created_at, updated_at)
+-- SELECT t.id, t.name, t.slug, t.description, t.color, nu.id, t.is_active, t.created_at, t.updated_at
+-- FROM legado_chat.teams t
+-- LEFT JOIN legado_chat.users lu ON lu.id = t.created_by
+-- LEFT JOIN users nu ON nu.email = lu.email;
+
+-- INSERT INTO chat_team_members (id, team_id, user_id, role, joined_at)
+-- SELECT tm.id, tm.team_id, nu.id, tm.role, tm.joined_at
+-- FROM legado_chat.team_members tm
+-- INNER JOIN legado_chat.users lu ON lu.id = tm.user_id
+-- INNER JOIN users nu ON nu.email = lu.email;
+
+-- ----------------------------------------------------------------
+-- 9) TAREFAS
+-- ----------------------------------------------------------------
+-- INSERT INTO chat_tasks (id, channel_id, title, description, status, priority,
+--                         created_by, due_date, completed_at, created_at, updated_at)
+-- SELECT t.id, t.channel_id, t.title, t.description, t.status, t.priority,
+--        nu.id, t.due_date, t.completed_at, t.created_at, t.updated_at
+-- FROM legado_chat.tasks t
+-- LEFT JOIN legado_chat.users lu ON lu.id = t.created_by
+-- LEFT JOIN users nu ON nu.email = lu.email;
+
+-- INSERT INTO chat_task_assignees (id, task_id, user_id, assigned_at)
+-- SELECT ta.id, ta.task_id, nu.id, ta.assigned_at
+-- FROM legado_chat.task_assignees ta
+-- INNER JOIN legado_chat.users lu ON lu.id = ta.user_id
+-- INNER JOIN users nu ON nu.email = lu.email;
+
+-- INSERT INTO chat_task_comments (id, task_id, user_id, content, created_at)
+-- SELECT tc.id, tc.task_id, nu.id, tc.content, tc.created_at
+-- FROM legado_chat.task_comments tc
+-- LEFT JOIN legado_chat.users lu ON lu.id = tc.user_id
+-- LEFT JOIN users nu ON nu.email = lu.email;
+
+-- ----------------------------------------------------------------
+-- 10) REUNIÕES
+-- ----------------------------------------------------------------
+-- INSERT INTO chat_meetings (id, channel_id, title, description, scheduled_at,
+--                            duration_minutes, location, meeting_link, type, status,
+--                            created_by, created_at, updated_at)
+-- SELECT m.id, m.channel_id, m.title, m.description, m.scheduled_at,
+--        m.duration_minutes, m.location, m.meeting_link, m.type, m.status,
+--        nu.id, m.created_at, m.updated_at
+-- FROM legado_chat.meetings m
+-- LEFT JOIN legado_chat.users lu ON lu.id = m.created_by
+-- LEFT JOIN users nu ON nu.email = lu.email;
+
+-- INSERT INTO chat_meeting_participants (id, meeting_id, user_id, status, responded_at)
+-- SELECT mp.id, mp.meeting_id, nu.id, mp.status, mp.responded_at
+-- FROM legado_chat.meeting_participants mp
+-- INNER JOIN legado_chat.users lu ON lu.id = mp.user_id
+-- INNER JOIN users nu ON nu.email = lu.email;
+
+-- ----------------------------------------------------------------
+-- 11) PROCESSOS
+-- ----------------------------------------------------------------
+-- INSERT INTO chat_processes (id, channel_id, title, description, status, progress,
+--                             created_by, created_at, updated_at)
+-- SELECT p.id, p.channel_id, p.title, p.description, p.status, p.progress,
+--        nu.id, p.created_at, p.updated_at
+-- FROM legado_chat.processes p
+-- LEFT JOIN legado_chat.users lu ON lu.id = p.created_by
+-- LEFT JOIN users nu ON nu.email = lu.email;
+
+-- INSERT INTO chat_process_steps (id, process_id, title, description, order_num,
+--                                 status, assigned_to, due_date, completed_at, completed_by)
+-- SELECT ps.id, ps.process_id, ps.title, ps.description, ps.order_num,
+--        ps.status, nua.id, ps.due_date, ps.completed_at, nuc.id
+-- FROM legado_chat.process_steps ps
+-- LEFT JOIN legado_chat.users lua ON lua.id = ps.assigned_to
+-- LEFT JOIN users nua             ON nua.email = lua.email
+-- LEFT JOIN legado_chat.users luc ON luc.id = ps.completed_by
+-- LEFT JOIN users nuc             ON nuc.email = luc.email;
+
+-- ----------------------------------------------------------------
+-- 12) ENQUETES
+-- ----------------------------------------------------------------
+-- INSERT INTO chat_polls (id, channel_id, message_id, user_id, question,
+--                         is_anonymous, is_multiple, closes_at, is_closed, created_at)
+-- SELECT p.id, p.channel_id, p.message_id, nu.id, p.question,
+--        p.is_anonymous, p.is_multiple, p.closes_at, p.is_closed, p.created_at
+-- FROM legado_chat.polls p
+-- LEFT JOIN legado_chat.users lu ON lu.id = p.user_id
+-- LEFT JOIN users nu ON nu.email = lu.email;
+
+-- INSERT INTO chat_poll_options (id, poll_id, text, order_num)
+-- SELECT po.id, po.poll_id, po.text, po.order_num
+-- FROM legado_chat.poll_options po;
+
+-- INSERT INTO chat_poll_votes (id, poll_id, option_id, user_id, created_at)
+-- SELECT pv.id, po.poll_id, pv.option_id, nu.id, pv.created_at
+-- FROM legado_chat.poll_votes pv
+-- INNER JOIN legado_chat.poll_options po ON po.id = pv.option_id
+-- INNER JOIN legado_chat.users lu ON lu.id = pv.user_id
+-- INNER JOIN users nu ON nu.email = lu.email;
+--
+-- Obs.: no legado, poll_votes.poll_id podia vir 0/NULL em inserções
+-- antigas — por isso o JOIN em poll_options garante o poll_id correto.
+
+-- ----------------------------------------------------------------
+-- 13) FAVORITOS, BOOKMARKS, EMOJIS, SETTINGS, EXPORT LOGS
+-- ----------------------------------------------------------------
+-- INSERT INTO chat_bookmarks (id, user_id, message_id, created_at)
+-- SELECT b.id, nu.id, b.message_id, b.created_at
+-- FROM legado_chat.bookmarks b
+-- INNER JOIN legado_chat.users lu ON lu.id = b.user_id
+-- INNER JOIN users nu ON nu.email = lu.email;
+
+-- INSERT INTO chat_channel_favorites (id, user_id, channel_id, created_at)
+-- SELECT cf.id, nu.id, cf.channel_id, cf.created_at
+-- FROM legado_chat.channel_favorites cf
+-- INNER JOIN legado_chat.users lu ON lu.id = cf.user_id
+-- INNER JOIN users nu ON nu.email = lu.email;
+
+-- INSERT INTO chat_custom_emojis (id, name, image_path, created_by, created_at)
+-- SELECT ce.id, ce.name,
+--        CONCAT('uploads/chat/avatars/', SUBSTRING_INDEX(ce.image_path, '/', -1)),
+--        nu.id, ce.created_at
+-- FROM legado_chat.custom_emojis ce
+-- LEFT JOIN legado_chat.users lu ON lu.id = ce.created_by
+-- LEFT JOIN users nu ON nu.email = lu.email;
+
+-- INSERT INTO chat_settings (`key`, `value`)
+-- SELECT s.`key`, s.`value` FROM legado_chat.settings s
+-- ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);
+
+-- INSERT INTO chat_export_logs (id, user_id, type, params, file_path, status, created_at, completed_at)
+-- SELECT el.id, nu.id, el.type, el.params, el.file_path, el.status, el.created_at, el.completed_at
+-- FROM legado_chat.export_logs el
+-- LEFT JOIN legado_chat.users lu ON lu.id = el.user_id
+-- LEFT JOIN users nu ON nu.email = lu.email;
+
+-- ----------------------------------------------------------------
+-- 14) OPCIONAL — histórico de notificações e auditoria
+--     (tabelas globais; module = 'chat'; links reescritos com m=chat)
+-- ----------------------------------------------------------------
+-- INSERT INTO notifications (user_id, module, type, title, message, link, read_at, created_at)
+-- SELECT nu.id, 'chat', n.type, n.title, n.content,
+--        CASE WHEN n.link IS NULL OR n.link = '' THEN NULL
+--             ELSE REPLACE(n.link, 'index.php?page=', 'index.php?m=chat&page=') END,
+--        CASE WHEN n.is_read = 1 THEN n.created_at ELSE NULL END,
+--        n.created_at
+-- FROM legado_chat.notifications n
+-- INNER JOIN legado_chat.users lu ON lu.id = n.user_id
+-- INNER JOIN users nu ON nu.email = lu.email;
+
+-- INSERT INTO audit_log (user_id, module, action, entity, entity_id, details, ip_address, created_at)
+-- SELECT nu.id, 'chat', a.action, a.entity_type, a.entity_id,
+--        JSON_OBJECT('old', a.old_data, 'new', a.new_data),
+--        a.ip_address, a.created_at
+-- FROM legado_chat.audit_log a
+-- LEFT JOIN legado_chat.users lu ON lu.id = a.user_id
+-- LEFT JOIN users nu ON nu.email = lu.email;
+
+-- SET FOREIGN_KEY_CHECKS = 1;

@@ -25,7 +25,7 @@
                             <th>Hospital</th>
                             <th>CNPJ</th>
                             <th>Telefone</th>
-                            <th>Usuários</th>
+                            <th>Setores</th>
                             <th>Status</th>
                             <th class="text-end">Ações</th>
                         </tr>
@@ -39,7 +39,7 @@
                             </td>
                             <td><?php echo e($h['cnpj'] ?: '—'); ?></td>
                             <td><?php echo e($h['phone'] ?: '—'); ?></td>
-                            <td><span class="badge bg-primary"><?php echo (int) $h['user_count']; ?></span></td>
+                            <td><span class="badge bg-primary"><?php echo (int) $h['sector_count']; ?></span></td>
                             <td>
                                 <span class="badge <?php echo $h['is_active'] ? 'badge-ativo' : 'badge-desligado'; ?>">
                                     <?php echo $h['is_active'] ? 'Ativo' : 'Inativo'; ?>

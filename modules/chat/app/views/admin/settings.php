@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-palette me-2"></i>Configurações</h1>
-    <a href="index.php?page=admin" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=chat&page=admin" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>
@@ -9,7 +9,7 @@
     <div class="col-md-8">
         <div class="card border-0 shadow-sm">
             <div class="card-body">
-                <form method="POST" action="index.php?page=admin&action=updateSettings">
+                <form method="POST" action="index.php?m=chat&page=admin&action=updateSettings">
                     <?= Csrf::field() ?>
 
                     <div class="row g-3">

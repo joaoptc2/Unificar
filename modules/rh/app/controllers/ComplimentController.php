@@ -13,7 +13,7 @@ class ComplimentController
 
     public function index(): void
     {
-        header('Location: index.php?page=employees');
+        header('Location: index.php?m=rh&page=employees');
         exit;
     }
 
@@ -28,12 +28,12 @@ class ComplimentController
 
         if ($employeeId <= 0 || $message === '') {
             Session::flash('error', 'Informe o funcionário e a mensagem do elogio.');
-            header('Location: index.php?page=employees&action=show&id=' . $employeeId);
+            header('Location: index.php?m=rh&page=employees&action=show&id=' . $employeeId);
             exit;
         }
         if (mb_strlen($message) > 2000) {
             Session::flash('error', 'Mensagem muito longa (máx. 2000 caracteres).');
-            header('Location: index.php?page=employees&action=show&id=' . $employeeId);
+            header('Location: index.php?m=rh&page=employees&action=show&id=' . $employeeId);
             exit;
         }
 
@@ -47,7 +47,7 @@ class ComplimentController
         AuditLog::log('create', 'employee_compliments', (int)$this->db->lastInsertId());
 
         Session::flash('success', 'Elogio registrado.');
-        header('Location: index.php?page=employees&action=show&id=' . $employeeId);
+        header('Location: index.php?m=rh&page=employees&action=show&id=' . $employeeId);
         exit;
     }
 
@@ -63,7 +63,7 @@ class ComplimentController
         AuditLog::log('delete', 'employee_compliments', $id);
 
         Session::flash('success', 'Elogio removido.');
-        header('Location: index.php?page=employees&action=show&id=' . $employeeId);
+        header('Location: index.php?m=rh&page=employees&action=show&id=' . $employeeId);
         exit;
     }
 }

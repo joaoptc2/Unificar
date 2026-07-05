@@ -1,7 +1,7 @@
 <?php
 $canEdit   = Auth::can('recruitment', 'edit');
 $canDelete = Auth::can('recruitment', 'delete');
-$publicUrl = rtrim(BASE_URL, '/') . '/index.php?page=public_recruitment&action=apply&job_id=' . (int)$job['id'];
+$publicUrl = rtrim(BASE_URL, '/') . '/index.php?m=rh&page=public_recruitment&action=apply&job_id=' . (int)$job['id'];
 ?>
 <div class="page-header">
     <h1><i class="bi bi-kanban me-2"></i><?= Sanitize::e($job['title']) ?></h1>
@@ -10,12 +10,12 @@ $publicUrl = rtrim(BASE_URL, '/') . '/index.php?page=public_recruitment&action=a
             <?= ucfirst($job['status']) ?>
         </span>
         <?php if ($canEdit): ?>
-            <a href="index.php?page=recruitment&action=edit&id=<?= $job['id'] ?>" class="btn btn-outline-warning btn-sm">
+            <a href="index.php?m=rh&page=recruitment&action=edit&id=<?= $job['id'] ?>" class="btn btn-outline-warning btn-sm">
                 <i class="bi bi-pencil me-1"></i> Editar
             </a>
         <?php endif; ?>
         <?php if ($canDelete): ?>
-            <form method="POST" action="index.php?page=recruitment&action=delete" class="d-inline">
+            <form method="POST" action="index.php?m=rh&page=recruitment&action=delete" class="d-inline">
                 <?= Csrf::field() ?>
                 <input type="hidden" name="id" value="<?= (int)$job['id'] ?>">
                 <button type="submit" class="btn btn-outline-danger btn-sm"
@@ -24,7 +24,7 @@ $publicUrl = rtrim(BASE_URL, '/') . '/index.php?page=public_recruitment&action=a
                 </button>
             </form>
         <?php endif; ?>
-        <a href="index.php?page=recruitment" class="btn btn-outline-secondary btn-sm">
+        <a href="index.php?m=rh&page=recruitment" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i> Voltar
         </a>
     </div>
@@ -131,7 +131,7 @@ function renderCandidateCard(array $c, array $job, bool $canEdit, ?array $step =
         <?php endif; ?>
         <?php if ($canEdit && $step): ?>
             <div class="mt-2 d-flex gap-1">
-                <form method="POST" action="index.php?page=recruitment&action=evaluate_candidate" class="flex-grow-1">
+                <form method="POST" action="index.php?m=rh&page=recruitment&action=evaluate_candidate" class="flex-grow-1">
                     <?= Csrf::field() ?>
                     <input type="hidden" name="candidate_id" value="<?= (int)$c['id'] ?>">
                     <input type="hidden" name="job_id" value="<?= (int)$job['id'] ?>">
@@ -139,7 +139,7 @@ function renderCandidateCard(array $c, array $job, bool $canEdit, ?array $step =
                     <input type="hidden" name="notes" value="Aprovado na etapa <?= Sanitize::e($step['name']) ?>">
                     <button type="submit" class="btn btn-success btn-sm w-100"><i class="bi bi-check"></i> Aprovar</button>
                 </form>
-                <form method="POST" action="index.php?page=recruitment&action=evaluate_candidate">
+                <form method="POST" action="index.php?m=rh&page=recruitment&action=evaluate_candidate">
                     <?= Csrf::field() ?>
                     <input type="hidden" name="candidate_id" value="<?= (int)$c['id'] ?>">
                     <input type="hidden" name="job_id" value="<?= (int)$job['id'] ?>">
@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 fd.append('job_id', jobId);
                 fd.append('notes', 'Movido via Kanban');
 
-                fetch('index.php?page=recruitment&action=move_candidate', {
+                fetch('index.php?m=rh&page=recruitment&action=move_candidate', {
                     method: 'POST',
                     body: fd,
                     credentials: 'same-origin',

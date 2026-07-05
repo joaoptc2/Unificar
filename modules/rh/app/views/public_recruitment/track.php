@@ -6,12 +6,12 @@
     <title>Acompanhar Candidatura - RH Hospital</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="<?= ASSET_URL ?>css/style.css" rel="stylesheet">
+    <link href="<?= ASSET_URL ?>style.css" rel="stylesheet">
 </head>
 <body class="bg-light">
     <nav class="navbar navbar-dark bg-primary">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="index.php?page=public_recruitment">
+            <a class="navbar-brand fw-bold" href="index.php?m=rh&page=public_recruitment">
                 <i class="bi bi-hospital me-1"></i> RH Hospital — Trabalhe Conosco
             </a>
         </div>
@@ -87,7 +87,7 @@
                                     Você pode solicitar a exclusão da sua candidatura e dos dados pessoais
                                     (incluindo currículo) a qualquer momento. Esta ação é irreversível.
                                 </p>
-                                <form method="POST" action="index.php?page=privacy&action=delete_candidate">
+                                <form method="POST" action="index.php?m=rh&page=privacy&action=delete_candidate">
                                     <?= Csrf::field() ?>
                                     <input type="hidden" name="token" value="<?= Sanitize::e($token) ?>">
                                     <button type="submit" class="btn btn-outline-danger btn-sm"
@@ -105,11 +105,11 @@
                 <?php if ($flashError): ?><div class="alert alert-danger mt-3"><?= Sanitize::e($flashError) ?></div><?php endif; ?>
 
                 <div class="text-center mt-3">
-                    <a href="index.php?page=public_recruitment" class="text-decoration-none">
+                    <a href="index.php?m=rh&page=public_recruitment" class="text-decoration-none">
                         <i class="bi bi-arrow-left me-1"></i> Ver vagas disponíveis
                     </a>
                     &middot;
-                    <a href="index.php?page=privacy" class="text-decoration-none">
+                    <a href="index.php?m=rh&page=privacy" class="text-decoration-none">
                         <i class="bi bi-shield-lock me-1"></i> Política de Privacidade
                     </a>
                 </div>
@@ -118,6 +118,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="<?= ASSET_URL ?>js/app.js"></script>
+    <script src="<?= ASSET_URL ?>app.js"></script>
 </body>
 </html>

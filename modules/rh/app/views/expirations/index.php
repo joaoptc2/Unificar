@@ -2,12 +2,12 @@
     <h1><i class="bi bi-clock-history me-2"></i>Vencimentos e Obrigações</h1>
     <div class="d-flex gap-2">
         <?php if (Auth::can('expirations', 'export')): ?>
-            <a href="index.php?page=expirations&action=export" class="btn btn-outline-success btn-sm">
+            <a href="index.php?m=rh&page=expirations&action=export" class="btn btn-outline-success btn-sm">
                 <i class="bi bi-file-earmark-excel me-1"></i> Exportar
             </a>
         <?php endif; ?>
         <?php if (Auth::can('expirations', 'create')): ?>
-            <a href="index.php?page=expirations&action=create" class="btn btn-primary btn-sm">
+            <a href="index.php?m=rh&page=expirations&action=create" class="btn btn-primary btn-sm">
                 <i class="bi bi-plus-lg me-1"></i> Novo Vencimento
             </a>
         <?php endif; ?>
@@ -48,7 +48,7 @@
         </div>
         <div class="col-md-4 d-flex gap-1">
             <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>Filtrar</button>
-            <a href="index.php?page=expirations" class="btn btn-outline-secondary btn-sm">Limpar</a>
+            <a href="index.php?m=rh&page=expirations" class="btn btn-outline-secondary btn-sm">Limpar</a>
         </div>
     </form>
 </div>
@@ -82,7 +82,7 @@
                         ?>
                         <tr>
                             <td>
-                                <a href="index.php?page=employees&action=show&id=<?= $exp['employee_id'] ?>" class="text-decoration-none">
+                                <a href="index.php?m=rh&page=employees&action=show&id=<?= $exp['employee_id'] ?>" class="text-decoration-none">
                                     <?= Sanitize::e($exp['employee_name']) ?>
                                 </a>
                             </td>
@@ -95,10 +95,10 @@
                                     <a href="<?= Sanitize::e(Upload::url($exp['file_path'], 'expiration', (int)$exp['id'])) ?>" target="_blank" class="btn btn-outline-secondary btn-action" title="Arquivo"><i class="bi bi-download"></i></a>
                                 <?php endif; ?>
                                 <?php if (Auth::can('expirations', 'edit')): ?>
-                                    <a href="index.php?page=expirations&action=edit&id=<?= $exp['id'] ?>" class="btn btn-outline-warning btn-action" title="Editar"><i class="bi bi-pencil"></i></a>
+                                    <a href="index.php?m=rh&page=expirations&action=edit&id=<?= $exp['id'] ?>" class="btn btn-outline-warning btn-action" title="Editar"><i class="bi bi-pencil"></i></a>
                                 <?php endif; ?>
                                 <?php if (Auth::can('expirations', 'delete')): ?>
-                                    <form method="POST" action="index.php?page=expirations&action=delete" class="d-inline">
+                                    <form method="POST" action="index.php?m=rh&page=expirations&action=delete" class="d-inline">
                                         <?= Csrf::field() ?>
                                         <input type="hidden" name="id" value="<?= $exp['id'] ?>">
                                         <button type="submit" class="btn btn-outline-danger btn-action" data-confirm="Excluir este vencimento?"><i class="bi bi-trash"></i></button>

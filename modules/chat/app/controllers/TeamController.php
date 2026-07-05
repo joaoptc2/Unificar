@@ -49,7 +49,7 @@ class TeamController
 
         if (!$team) {
             Session::flash('error', 'Equipe não encontrada.');
-            header('Location: index.php?page=teams');
+            header('Location: index.php?m=chat&page=teams');
             exit;
         }
 
@@ -93,7 +93,7 @@ class TeamController
 
         if ($name === '') {
             Session::flash('error', 'O nome da equipe é obrigatório.');
-            header('Location: index.php?page=teams&action=create');
+            header('Location: index.php?m=chat&page=teams&action=create');
             exit;
         }
 
@@ -159,7 +159,7 @@ class TeamController
         ]);
 
         Session::flash('success', 'Equipe criada com sucesso.');
-        header('Location: index.php?page=teams&action=show&id=' . $teamId);
+        header('Location: index.php?m=chat&page=teams&action=show&id=' . $teamId);
         exit;
     }
 
@@ -176,13 +176,13 @@ class TeamController
 
         if (!$team) {
             Session::flash('error', 'Equipe não encontrada.');
-            header('Location: index.php?page=teams');
+            header('Location: index.php?m=chat&page=teams');
             exit;
         }
 
         if (!$this->canManageTeam($team)) {
             Session::flash('error', 'Você não tem permissão para editar esta equipe.');
-            header('Location: index.php?page=teams&action=show&id=' . $teamId);
+            header('Location: index.php?m=chat&page=teams&action=show&id=' . $teamId);
             exit;
         }
 
@@ -209,13 +209,13 @@ class TeamController
 
         if (!$team) {
             Session::flash('error', 'Equipe não encontrada.');
-            header('Location: index.php?page=teams');
+            header('Location: index.php?m=chat&page=teams');
             exit;
         }
 
         if (!$this->canManageTeam($team)) {
             Session::flash('error', 'Você não tem permissão para editar esta equipe.');
-            header('Location: index.php?page=teams&action=show&id=' . $teamId);
+            header('Location: index.php?m=chat&page=teams&action=show&id=' . $teamId);
             exit;
         }
 
@@ -242,7 +242,7 @@ class TeamController
         ]);
 
         Session::flash('success', 'Equipe atualizada com sucesso.');
-        header('Location: index.php?page=teams&action=show&id=' . $teamId);
+        header('Location: index.php?m=chat&page=teams&action=show&id=' . $teamId);
         exit;
     }
 
@@ -327,13 +327,13 @@ class TeamController
 
         if (!$team) {
             Session::flash('error', 'Equipe não encontrada.');
-            header('Location: index.php?page=teams');
+            header('Location: index.php?m=chat&page=teams');
             exit;
         }
 
         if (!$this->canManageTeam($team)) {
             Session::flash('error', 'Você não tem permissão para excluir esta equipe.');
-            header('Location: index.php?page=teams');
+            header('Location: index.php?m=chat&page=teams');
             exit;
         }
 
@@ -342,7 +342,7 @@ class TeamController
         AuditLog::log('delete', 'team', $teamId, ['is_active' => 1], ['is_active' => 0]);
 
         Session::flash('success', 'Equipe desativada com sucesso.');
-        header('Location: index.php?page=teams');
+        header('Location: index.php?m=chat&page=teams');
         exit;
     }
 
@@ -368,7 +368,7 @@ class TeamController
 
         // Check team-level role (leader)
         $stmt = $this->db->prepare(
-            'SELECT role FROM team_members WHERE team_id = ? AND user_id = ? LIMIT 1'
+            'SELECT role FROM chat_team_members WHERE team_id = ? AND user_id = ? LIMIT 1'
         );
         $stmt->execute([(int) $team['id'], $userId]);
         $row = $stmt->fetch();

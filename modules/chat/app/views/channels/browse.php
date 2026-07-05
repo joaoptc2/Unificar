@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-hash me-2"></i>Explorar Canais</h1>
-    <a href="index.php?page=chat" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=chat&page=chat" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar ao Chat
     </a>
 </div>
@@ -10,7 +10,7 @@
         <div class="card-body text-center py-5">
             <i class="bi bi-hash display-4 text-muted"></i>
             <p class="mt-2 text-muted">Nenhum canal público disponível.</p>
-            <a href="index.php?page=channels&action=create" class="btn btn-primary btn-sm">
+            <a href="index.php?m=chat&page=channels&action=create" class="btn btn-primary btn-sm">
                 <i class="bi bi-plus-lg me-1"></i> Criar Canal
             </a>
         </div>
@@ -31,11 +31,11 @@
                     <i class="bi bi-people me-1"></i><?= $ch['member_count'] ?? 0 ?> membros
                 </div>
                 <?php if (!empty($ch['is_member'])): ?>
-                    <a href="index.php?page=chat&channel_id=<?= $ch['id'] ?>" class="btn btn-outline-primary btn-sm w-100">
+                    <a href="index.php?m=chat&page=chat&channel_id=<?= $ch['id'] ?>" class="btn btn-outline-primary btn-sm w-100">
                         <i class="bi bi-chat me-1"></i> Abrir
                     </a>
                 <?php else: ?>
-                    <form method="POST" action="index.php?page=channels&action=join">
+                    <form method="POST" action="index.php?m=chat&page=channels&action=join">
                         <?= Csrf::field() ?>
                         <input type="hidden" name="channel_id" value="<?= $ch['id'] ?>">
                         <button type="submit" class="btn btn-primary btn-sm w-100">

@@ -1,12 +1,13 @@
 <div class="page-header">
     <h1><i class="bi bi-journal-text me-2"></i>Log de Atividades</h1>
-    <a href="index.php?page=admin" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=chat&page=admin" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>
 
 <div class="filter-panel">
     <form class="row g-2 align-items-end">
+        <input type="hidden" name="m" value="chat">
         <input type="hidden" name="page" value="admin">
         <input type="hidden" name="action" value="audit">
         <div class="col-md-3">

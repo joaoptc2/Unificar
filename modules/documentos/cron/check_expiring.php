@@ -1,29 +1,27 @@
 <?php
 /**
- * CRON: Verificar documentos vencendo, gerar notificações e enviar e-mails.
+ * CRON do módulo DOCUMENTOS: documentos vencendo/vencidos →
+ * notificações (tabela global, module='documentos') + e-mails.
  *
- * Agende na Hostinger (hPanel > Avançado > Cron Jobs):
- *   /usr/bin/php -f /home/uXXXXXX/domains/SEUDOMINIO/public_html/cron/check_expiring.php
- *   Frequência: diária (00:00)
+ * Executado pelo cron unificado da plataforma via manifesto:
+ *   php cron.php --module=documentos
+ *   (ou cron.php?token=<cron_secret>&module=documentos)
+ *
+ * O núcleo (core/bootstrap.php) já está carregado — este arquivo apenas
+ * carrega a infraestrutura do próprio módulo (sem bootstrap próprio).
  */
-
-// Evita execução via HTTP
-if (PHP_SAPI !== 'cli' && empty($_SERVER['REMOTE_ADDR']) === false) {
-    // Permite Hostinger Cron (sem REMOTE_ADDR) mas bloqueia acesso externo direto.
-    http_response_code(403); exit;
-}
 
 require_once dirname(__DIR__) . '/includes/config.php';
 require_once dirname(__DIR__) . '/includes/db.php';
 require_once dirname(__DIR__) . '/includes/cache.php';
 require_once dirname(__DIR__) . '/includes/security.php';
+require_once dirname(__DIR__) . '/includes/session.php';
 require_once dirname(__DIR__) . '/includes/helpers.php';
 require_once dirname(__DIR__) . '/includes/mailer.php';
-require_once dirname(__DIR__) . '/includes/rate_limit.php';
 require_once dirname(__DIR__) . '/includes/formula.php';
 require_once dirname(__DIR__) . '/includes/analysis.php';
 
-foreach (glob(MODELS_PATH . '/*.php') as $m) require_once $m;
+foreach (glob(dirname(__DIR__) . '/models/*.php') as $m) require_once $m;
 
 set_time_limit(0);
 
@@ -32,28 +30,37 @@ echo "[" . date('Y-m-d H:i:s') . "] Iniciando verificação...\n";
 $total_notifications = 0;
 $total_emails        = 0;
 
+/**
+ * Link relativo para um documento (as views do núcleo resolvem a partir
+ * da raiz da plataforma; e-mails usam url() absoluta quando BASE_URL existe).
+ */
+$doc_link = function ($doc_id) {
+    return 'index.php?' . http_build_query(['m' => 'documentos', 'url' => 'documents/view', 'id' => (int) $doc_id]);
+};
+
 try {
     // 1. Documentos vencendo nos próximos N dias (campo notify_days_before por doc)
     $documents = db_query(
         "SELECT d.id, d.title, d.category, d.expiration_date, d.notify_days_before, d.hospital_id
-         FROM documents d
+         FROM doc_documents d
          WHERE d.deleted_at IS NULL
            AND d.expiration_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL d.notify_days_before DAY)"
     );
 
     echo "Documentos vencendo: " . count($documents) . "\n";
 
+    $managers = user_managers_of(); // gestores + admins do módulo (globais)
+
     foreach ($documents as $doc) {
         $days = (int) ((strtotime($doc['expiration_date']) - strtotime('today')) / 86400);
-        $managers = user_managers_of($doc['hospital_id']);
 
         foreach ($managers as $user) {
             // Evita spam: um aviso por documento/usuário a cada 24h
             $exists = db_query_one(
                 "SELECT id FROM notifications
-                 WHERE hospital_id = ? AND user_id = ? AND type = 'document_expiring'
+                 WHERE user_id = ? AND module = 'documentos' AND type = 'document_expiring'
                    AND message LIKE ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 DAY)",
-                [$doc['hospital_id'], $user['id'], '%doc_id=' . $doc['id'] . '%']
+                [$user['id'], '%doc_id=' . $doc['id'] . '%']
             );
             if ($exists) continue;
 
@@ -67,11 +74,11 @@ try {
                 $doc['id']
             );
 
-            notification_create($doc['hospital_id'], $user['id'], $title, $msg, 'document_expiring');
+            notification_create($user['id'], $title, $msg, 'document_expiring', $doc_link($doc['id']));
             $total_notifications++;
 
-            // E-mail
-            if (MAIL_ENABLED && !empty($user['email'])) {
+            // E-mail (Core\Mailer decide se mail.enabled está ativo)
+            if (!empty($user['email'])) {
                 $body = '<p>Olá ' . e($user['name']) . ',</p>'
                       . '<p>O documento <strong>' . e($doc['title']) . '</strong> '
                       . ($days === 0
@@ -98,20 +105,18 @@ try {
     if ((int) date('N') === 1) {
         $expired = db_query(
             "SELECT id, title, category, expiration_date, hospital_id
-             FROM documents
+             FROM doc_documents
              WHERE deleted_at IS NULL AND expiration_date < CURDATE()"
         );
         echo "Documentos vencidos: " . count($expired) . "\n";
 
         foreach ($expired as $doc) {
-            $managers = user_managers_of($doc['hospital_id']);
-
             foreach ($managers as $user) {
                 $exists = db_query_one(
                     "SELECT id FROM notifications
-                     WHERE hospital_id = ? AND user_id = ? AND type = 'document_expired'
+                     WHERE user_id = ? AND module = 'documentos' AND type = 'document_expired'
                        AND message LIKE ? AND created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)",
-                    [$doc['hospital_id'], $user['id'], '%doc_id=' . $doc['id'] . '%']
+                    [$user['id'], '%doc_id=' . $doc['id'] . '%']
                 );
                 if ($exists) continue;
 
@@ -124,10 +129,10 @@ try {
                     $doc['id']
                 );
 
-                notification_create($doc['hospital_id'], $user['id'], $title, $msg, 'document_expired');
+                notification_create($user['id'], $title, $msg, 'document_expired', $doc_link($doc['id']));
                 $total_notifications++;
 
-                if (MAIL_ENABLED && !empty($user['email'])) {
+                if (!empty($user['email'])) {
                     $body = '<p>Olá ' . e($user['name']) . ',</p>'
                           . '<p>O documento <strong>' . e($doc['title']) . '</strong> '
                           . 'está vencido há <strong>' . $days_expired . ' dia(s)</strong>.</p>';
@@ -144,14 +149,7 @@ try {
         }
     }
 
-    // 3. Limpeza de tentativas de login antigas
-    login_attempts_cleanup();
-
-    // 4. Retenção de audit_logs: mantém 12 meses
-    db_execute("DELETE FROM audit_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 12 MONTH)");
-
-    // 5. Tokens de reset expirados
-    db_execute("DELETE FROM password_resets WHERE expires_at < DATE_SUB(NOW(), INTERVAL 7 DAY)");
+    // Limpezas de login_attempts / password_resets / auditoria são do núcleo.
 
     echo "Notificações criadas: $total_notifications\n";
     echo "E-mails enviados: $total_emails\n";
@@ -165,5 +163,5 @@ try {
         date('Y-m-d H:i:s') . " | " . $msg . "\n",
         FILE_APPEND | LOCK_EX
     );
-    exit(1);
+    throw $ex; // deixa o cron unificado registrar a falha do módulo
 }

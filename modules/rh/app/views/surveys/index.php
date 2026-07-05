@@ -2,7 +2,7 @@
     <h1><i class="bi bi-clipboard-data me-2"></i>Pesquisas de Clima</h1>
     <div class="d-flex gap-2">
         <?php if (Auth::can('surveys', 'create')): ?>
-            <a href="index.php?page=surveys&action=create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nova pesquisa</a>
+            <a href="index.php?m=rh&page=surveys&action=create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nova pesquisa</a>
         <?php endif; ?>
     </div>
 </div>
@@ -18,8 +18,8 @@
             <?php if ($s['starts_at'] || $s['ends_at']): ?><small class="text-muted"><?= Sanitize::formatDate($s['starts_at']) ?> - <?= Sanitize::formatDate($s['ends_at']) ?></small><?php endif; ?>
         </div>
         <div class="card-footer bg-transparent d-flex gap-1">
-            <a href="index.php?page=surveys&action=show&id=<?= $s['id'] ?>" class="btn btn-outline-primary btn-sm flex-grow-1">Resultados</a>
-            <?php if ($s['status'] === 'ativa'): ?><a href="index.php?page=surveys&action=show&id=<?= $s['id'] ?>#respond" class="btn btn-primary btn-sm">Responder</a><?php endif; ?>
+            <a href="index.php?m=rh&page=surveys&action=show&id=<?= $s['id'] ?>" class="btn btn-outline-primary btn-sm flex-grow-1">Resultados</a>
+            <?php if ($s['status'] === 'ativa'): ?><a href="index.php?m=rh&page=surveys&action=show&id=<?= $s['id'] ?>#respond" class="btn btn-primary btn-sm">Responder</a><?php endif; ?>
         </div>
     </div>
 </div>

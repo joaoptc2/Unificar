@@ -17,9 +17,9 @@ class PositionController
 
         $positions = $this->db->query(
             "SELECT j.*, d.name as department_name,
-                    (SELECT COUNT(*) FROM employees e WHERE e.job_position_id = j.id AND e.status = 'ativo') as employee_count
-             FROM job_positions j
-             LEFT JOIN departments d ON j.department_id = d.id
+                    (SELECT COUNT(*) FROM rh_employees e WHERE e.job_position_id = j.id AND e.status = 'ativo') as employee_count
+             FROM rh_job_positions j
+             LEFT JOIN rh_departments d ON j.department_id = d.id
              ORDER BY j.title"
         )->fetchAll();
 
@@ -34,7 +34,7 @@ class PositionController
     {
         Auth::requirePermission('positions', 'create');
         $position = null;
-        $departments = $this->db->query('SELECT id, name FROM departments WHERE active = 1 ORDER BY name')->fetchAll();
+        $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
 
         $pageTitle = 'Novo Cargo';
         $page = 'positions';
@@ -48,7 +48,7 @@ class PositionController
         Auth::requirePermission('positions', 'create');
         Csrf::check();
 
-        $stmt = $this->db->prepare('INSERT INTO job_positions (title, department_id, description, active) VALUES (?, ?, ?, ?)');
+        $stmt = $this->db->prepare('INSERT INTO rh_job_positions (title, department_id, description, active) VALUES (?, ?, ?, ?)');
         $stmt->execute([
             Sanitize::post('title'),
             Sanitize::int($_POST['department_id'] ?? 0) ?: null,
@@ -58,7 +58,7 @@ class PositionController
         AuditLog::log('create', 'job_positions', (int)$this->db->lastInsertId());
 
         Session::flash('success', 'Cargo criado com sucesso.');
-        header('Location: index.php?page=positions');
+        header('Location: index.php?m=rh&page=positions');
         exit;
     }
 
@@ -67,17 +67,17 @@ class PositionController
         Auth::requirePermission('positions', 'edit');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
-        $stmt = $this->db->prepare('SELECT * FROM job_positions WHERE id = ?');
+        $stmt = $this->db->prepare('SELECT * FROM rh_job_positions WHERE id = ?');
         $stmt->execute([$id]);
         $position = $stmt->fetch();
 
         if (!$position) {
             Session::flash('error', 'Cargo não encontrado.');
-            header('Location: index.php?page=positions');
+            header('Location: index.php?m=rh&page=positions');
             exit;
         }
 
-        $departments = $this->db->query('SELECT id, name FROM departments WHERE active = 1 ORDER BY name')->fetchAll();
+        $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
 
         $pageTitle = 'Editar Cargo';
         $page = 'positions';
@@ -92,7 +92,7 @@ class PositionController
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
-        $stmt = $this->db->prepare('UPDATE job_positions SET title=?, department_id=?, description=?, active=? WHERE id=?');
+        $stmt = $this->db->prepare('UPDATE rh_job_positions SET title=?, department_id=?, description=?, active=? WHERE id=?');
         $stmt->execute([
             Sanitize::post('title'),
             Sanitize::int($_POST['department_id'] ?? 0) ?: null,
@@ -103,7 +103,7 @@ class PositionController
         AuditLog::log('update', 'job_positions', $id);
 
         Session::flash('success', 'Cargo atualizado.');
-        header('Location: index.php?page=positions');
+        header('Location: index.php?m=rh&page=positions');
         exit;
     }
 
@@ -114,19 +114,19 @@ class PositionController
 
         $id = Sanitize::int($_POST['id'] ?? 0);
 
-        $stmt = $this->db->prepare('SELECT COUNT(*) FROM employees WHERE job_position_id = ?');
+        $stmt = $this->db->prepare('SELECT COUNT(*) FROM rh_employees WHERE job_position_id = ?');
         $stmt->execute([$id]);
         if ((int)$stmt->fetchColumn() > 0) {
             Session::flash('error', 'Não é possível excluir: existem funcionários vinculados.');
-            header('Location: index.php?page=positions');
+            header('Location: index.php?m=rh&page=positions');
             exit;
         }
 
-        $this->db->prepare('DELETE FROM job_positions WHERE id = ?')->execute([$id]);
+        $this->db->prepare('DELETE FROM rh_job_positions WHERE id = ?')->execute([$id]);
         AuditLog::log('delete', 'job_positions', $id);
 
         Session::flash('success', 'Cargo excluído.');
-        header('Location: index.php?page=positions');
+        header('Location: index.php?m=rh&page=positions');
         exit;
     }
 }

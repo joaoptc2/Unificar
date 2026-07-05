@@ -239,7 +239,7 @@ function documents_download($param = null) {
         set_flash('error', 'Arquivo não encontrado.');
         redirect('documents');
     }
-    $file_full_path = UPLOADS_PATH . '/hospital_' . $hospital_id . '/' . basename($document['file_path']);
+    $file_full_path = DOC_UPLOADS_PATH . '/hospital_' . $hospital_id . '/' . basename($document['file_path']);
     $mime = !empty($document['mime_type']) ? $document['mime_type'] : 'application/octet-stream';
     audit_log('document_downloaded', "id=$id");
     stream_download($file_full_path, $document['file_name'] ?: $document['file_path'], $mime);
@@ -257,7 +257,7 @@ function documents_download_version($param = null) {
         set_flash('error', 'Versão não encontrada.');
         redirect('documents/view?id=' . $doc_id);
     }
-    $file_full_path = UPLOADS_PATH . '/hospital_' . $hospital_id . '/' . basename($version['file_path']);
+    $file_full_path = DOC_UPLOADS_PATH . '/hospital_' . $hospital_id . '/' . basename($version['file_path']);
     audit_log('document_version_downloaded', "doc=$doc_id, version={$version['version']}");
     stream_download($file_full_path, $version['file_name'] ?: $version['file_path'], $version['mime_type'] ?? 'application/octet-stream');
 }

@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-person-lines-fill me-2"></i><?= Sanitize::e($candidate['full_name']) ?></h1>
-    <a href="index.php?page=talent_pool" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=rh&page=talent_pool" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>

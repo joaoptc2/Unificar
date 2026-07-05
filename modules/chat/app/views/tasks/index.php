@@ -1,10 +1,10 @@
 <div class="page-header">
     <h1><i class="bi bi-kanban me-2"></i>Tarefas</h1>
     <div class="d-flex gap-2">
-        <a href="index.php?page=tasks&action=my" class="btn btn-outline-primary btn-sm">
+        <a href="index.php?m=chat&page=tasks&action=my" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-person me-1"></i> Minhas Tarefas
         </a>
-        <a href="index.php?page=tasks&action=create" class="btn btn-primary btn-sm">
+        <a href="index.php?m=chat&page=tasks&action=create" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i> Nova Tarefa
         </a>
     </div>
@@ -68,7 +68,7 @@
                     </span>
                     <?php endif; ?>
                 </div>
-                <a href="index.php?page=tasks&action=show&id=<?= $task['id'] ?>" class="kanban-card-title">
+                <a href="index.php?m=chat&page=tasks&action=show&id=<?= $task['id'] ?>" class="kanban-card-title">
                     <?= Sanitize::e($task['title']) ?>
                 </a>
                 <?php if (!empty($task['assignee_names'])): ?>

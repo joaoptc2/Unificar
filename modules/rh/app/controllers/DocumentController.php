@@ -14,7 +14,7 @@ class DocumentController
     public function index(): void
     {
         Auth::requirePermission('documents', 'view');
-        header('Location: index.php?page=employees');
+        header('Location: index.php?m=rh&page=employees');
         exit;
     }
 
@@ -23,13 +23,13 @@ class DocumentController
         Auth::requirePermission('documents', 'create');
         $employeeId = Sanitize::int($_GET['employee_id'] ?? 0);
 
-        $stmt = $this->db->prepare('SELECT id, full_name FROM employees WHERE id = ?');
+        $stmt = $this->db->prepare('SELECT id, full_name FROM rh_employees WHERE id = ?');
         $stmt->execute([$employeeId]);
         $employee = $stmt->fetch();
 
         if (!$employee) {
             Session::flash('error', 'Funcionário não encontrado.');
-            header('Location: index.php?page=employees');
+            header('Location: index.php?m=rh&page=employees');
             exit;
         }
 
@@ -52,19 +52,19 @@ class DocumentController
 
         if (!$employeeId || !$docType || !$title) {
             Session::flash('error', 'Preencha todos os campos obrigatórios.');
-            header('Location: index.php?page=documents&action=create&employee_id=' . $employeeId);
+            header('Location: index.php?m=rh&page=documents&action=create&employee_id=' . $employeeId);
             exit;
         }
 
         $upload = Upload::handle('file', 'documents');
         if (!$upload['success']) {
             Session::flash('error', 'Erro no upload: ' . $upload['error']);
-            header('Location: index.php?page=documents&action=create&employee_id=' . $employeeId);
+            header('Location: index.php?m=rh&page=documents&action=create&employee_id=' . $employeeId);
             exit;
         }
 
         $stmt = $this->db->prepare(
-            'INSERT INTO employee_documents (employee_id, doc_type, title, file_path, file_original_name, file_size, notes, uploaded_by)
+            'INSERT INTO rh_employee_documents (employee_id, doc_type, title, file_path, file_original_name, file_size, notes, uploaded_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([$employeeId, $docType, $title, $upload['path'], $upload['original_name'], $upload['size'], $notes, Session::userId()]);
@@ -72,7 +72,7 @@ class DocumentController
         AuditLog::log('create', 'employee_documents', (int)$this->db->lastInsertId());
 
         Session::flash('success', 'Documento enviado com sucesso.');
-        header('Location: index.php?page=employees&action=show&id=' . $employeeId);
+        header('Location: index.php?m=rh&page=employees&action=show&id=' . $employeeId);
         exit;
     }
 
@@ -84,19 +84,19 @@ class DocumentController
         $id = Sanitize::int($_POST['id'] ?? 0);
         $employeeId = Sanitize::int($_POST['employee_id'] ?? 0);
 
-        $stmt = $this->db->prepare('SELECT * FROM employee_documents WHERE id = ?');
+        $stmt = $this->db->prepare('SELECT * FROM rh_employee_documents WHERE id = ?');
         $stmt->execute([$id]);
         $doc = $stmt->fetch();
 
         if ($doc) {
             Upload::delete($doc['file_path']);
-            $stmt = $this->db->prepare('DELETE FROM employee_documents WHERE id = ?');
+            $stmt = $this->db->prepare('DELETE FROM rh_employee_documents WHERE id = ?');
             $stmt->execute([$id]);
             AuditLog::log('delete', 'employee_documents', $id);
             Session::flash('success', 'Documento excluído.');
         }
 
-        header('Location: index.php?page=employees&action=show&id=' . $employeeId);
+        header('Location: index.php?m=rh&page=employees&action=show&id=' . $employeeId);
         exit;
     }
 }

@@ -2,11 +2,11 @@
     <h1><i class="bi bi-diagram-3 me-2"></i><?= Sanitize::e($process['title']) ?></h1>
     <div class="d-flex gap-2">
         <?php if (Auth::can('processes', 'edit')): ?>
-        <a href="index.php?page=processes&action=edit&id=<?= $process['id'] ?>" class="btn btn-outline-warning btn-sm">
+        <a href="index.php?m=chat&page=processes&action=edit&id=<?= $process['id'] ?>" class="btn btn-outline-warning btn-sm">
             <i class="bi bi-pencil me-1"></i> Editar
         </a>
         <?php endif; ?>
-        <a href="index.php?page=processes" class="btn btn-outline-secondary btn-sm">
+        <a href="index.php?m=chat&page=processes" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i> Voltar
         </a>
     </div>
@@ -116,12 +116,12 @@
         <?php if ($process['status'] === 'active' && Auth::can('processes', 'edit')): ?>
         <div class="card border-0 shadow-sm mt-3">
             <div class="card-body d-grid gap-2">
-                <form method="POST" action="index.php?page=processes&action=pause">
+                <form method="POST" action="index.php?m=chat&page=processes&action=pause">
                     <?= Csrf::field() ?>
                     <input type="hidden" name="id" value="<?= $process['id'] ?>">
                     <button class="btn btn-warning btn-sm w-100"><i class="bi bi-pause me-1"></i>Pausar</button>
                 </form>
-                <form method="POST" action="index.php?page=processes&action=complete">
+                <form method="POST" action="index.php?m=chat&page=processes&action=complete">
                     <?= Csrf::field() ?>
                     <input type="hidden" name="id" value="<?= $process['id'] ?>">
                     <button class="btn btn-success btn-sm w-100"><i class="bi bi-check-all me-1"></i>Concluir</button>
@@ -131,7 +131,7 @@
         <?php elseif ($process['status'] === 'paused' && Auth::can('processes', 'edit')): ?>
         <div class="card border-0 shadow-sm mt-3">
             <div class="card-body">
-                <form method="POST" action="index.php?page=processes&action=resume">
+                <form method="POST" action="index.php?m=chat&page=processes&action=resume">
                     <?= Csrf::field() ?>
                     <input type="hidden" name="id" value="<?= $process['id'] ?>">
                     <button class="btn btn-primary btn-sm w-100"><i class="bi bi-play me-1"></i>Retomar</button>

@@ -1,7 +1,7 @@
 <div class="page-header">
     <h1><i class="bi bi-diagram-3 me-2"></i>Processos</h1>
     <?php if (Auth::can('processes', 'create')): ?>
-    <a href="index.php?page=processes&action=create" class="btn btn-primary btn-sm">
+    <a href="index.php?m=chat&page=processes&action=create" class="btn btn-primary btn-sm">
         <i class="bi bi-plus-lg me-1"></i> Novo Processo
     </a>
     <?php endif; ?>
@@ -22,7 +22,7 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start mb-2">
                     <h5 class="mb-0">
-                        <a href="index.php?page=processes&action=show&id=<?= $proc['id'] ?>" class="text-decoration-none">
+                        <a href="index.php?m=chat&page=processes&action=show&id=<?= $proc['id'] ?>" class="text-decoration-none">
                             <?= Sanitize::e($proc['title']) ?>
                         </a>
                     </h5>

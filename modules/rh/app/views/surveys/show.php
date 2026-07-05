@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-clipboard-data me-2"></i><?= Sanitize::e($survey['title']) ?></h1>
-    <a href="index.php?page=surveys" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
+    <a href="index.php?m=rh&page=surveys" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
 </div>
 <div class="row g-3">
     <div class="col-md-4"><div class="card stat-card shadow-sm"><div class="card-body text-center"><div class="stat-value text-primary"><?= $totalResp ?></div><div class="stat-label">Respostas</div></div></div></div>
@@ -23,7 +23,7 @@
 
 <?php if ($survey['status'] === 'ativa'): ?>
 <div class="card border-0 shadow-sm mt-3" id="respond"><div class="card-header bg-white fw-semibold"><i class="bi bi-pencil-square me-1"></i> Responder</div><div class="card-body">
-<form method="POST" action="index.php?page=surveys&action=respond">
+<form method="POST" action="index.php?m=rh&page=surveys&action=respond">
     <?= Csrf::field() ?>
     <input type="hidden" name="survey_id" value="<?= $survey['id'] ?>">
     <?php foreach ($survey['questions'] as $q): ?>

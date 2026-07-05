@@ -1,10 +1,11 @@
 <?php
 /**
- * AdminController — Administration panel for managers and admins.
+ * AdminController — Painel administrativo do módulo (managers e admins).
  *
- * Every public method corresponds to a ?page=admin&action=X route.
- * The constructor enforces authentication and role checks so that
- * individual methods do not need to repeat the guard.
+ * A gestão de USUÁRIOS saiu do módulo: usuários são globais e são
+ * administrados no núcleo (?m=admin&a=users). Aqui ficam apenas as telas
+ * de domínio do chat: dashboard, configurações, emojis, categorias,
+ * exportação e o log de auditoria (global, filtrado por module='chat').
  */
 class AdminController
 {
@@ -24,25 +25,25 @@ class AdminController
     }
 
     /* ------------------------------------------------------------------
-     *  index  — Admin dashboard with key stats
-     *  GET ?page=admin
+     *  index  — Dashboard com estatísticas
+     *  GET ?m=chat&page=admin
      * ----------------------------------------------------------------*/
     public function index(): void
     {
-        // Total users
-        $totalUsers = User::count('is_active = 1');
+        // Usuários ativos (tabela global)
+        $totalUsers = User::count('active = 1');
 
-        // Total channels
+        // Canais ativos
         $totalChannels = Channel::count('is_archived = 0');
 
-        // Messages sent today
+        // Mensagens enviadas hoje
         $stmt = $this->db->prepare(
-            'SELECT COUNT(*) FROM messages WHERE DATE(created_at) = CURDATE() AND deleted_at IS NULL'
+            'SELECT COUNT(*) FROM chat_messages WHERE DATE(created_at) = CURDATE() AND deleted_at IS NULL'
         );
         $stmt->execute();
         $messagesToday = (int) $stmt->fetchColumn();
 
-        // Active tasks (not done / not cancelled)
+        // Tarefas ativas
         $activeTasks = Task::count('status NOT IN ("done","cancelled")');
 
         View::render('admin/index', [
@@ -55,139 +56,11 @@ class AdminController
     }
 
     /* ------------------------------------------------------------------
-     *  users  — List all users with search and pagination
-     *  GET ?page=admin&action=users[&search=X&p=N]
-     * ----------------------------------------------------------------*/
-    public function users(): void
-    {
-        $search  = Sanitize::get('search');
-        $page    = max(1, Sanitize::int($_GET['p'] ?? 1));
-        $perPage = 20;
-
-        $where  = '1=1';
-        $params = [];
-
-        if ($search !== '') {
-            $where   .= ' AND (name LIKE ? OR email LIKE ?)';
-            $like     = '%' . $search . '%';
-            $params[] = $like;
-            $params[] = $like;
-        }
-
-        $total      = User::count($where, $params);
-        $pagination = new Pagination($total, $page, $perPage);
-
-        $users = User::all([
-            'where'  => $where,
-            'params' => $params,
-            'order'  => 'name ASC',
-            'limit'  => $perPage,
-            'offset' => $pagination->offset,
-        ]);
-
-        $extraParams = '&page=admin&action=users'
-            . ($search !== '' ? '&search=' . urlencode($search) : '');
-
-        View::render('admin/users', [
-            'pageTitle'   => 'Gerenciar Usuários',
-            'users'       => $users,
-            'search'      => $search,
-            'pagination'  => $pagination,
-            'extraParams' => $extraParams,
-        ]);
-    }
-
-    /* ------------------------------------------------------------------
-     *  editUser  — Show user edit form
-     *  GET ?page=admin&action=editUser&id=N
-     * ----------------------------------------------------------------*/
-    public function editUser(): void
-    {
-        $id = isset($_GET['id']) ? Sanitize::int($_GET['id']) : 0;
-
-        $user = User::find($id);
-        if (!$user) {
-            Session::flash('error', 'Usuário não encontrado.');
-            header('Location: index.php?page=admin&action=users');
-            exit;
-        }
-
-        View::render('admin/user_form', [
-            'pageTitle' => 'Editar Usuário',
-            'editUser'  => $user,
-            'roles'     => ['admin', 'manager', 'member'],
-        ]);
-    }
-
-    /* ------------------------------------------------------------------
-     *  updateUser  — Persist user changes
-     *  POST ?page=admin&action=updateUser
-     * ----------------------------------------------------------------*/
-    public function updateUser(): void
-    {
-        Csrf::check();
-
-        $id = Sanitize::int($_POST['id'] ?? 0);
-        $user = User::find($id);
-        if (!$user) {
-            Session::flash('error', 'Usuário não encontrado.');
-            header('Location: index.php?page=admin&action=users');
-            exit;
-        }
-
-        $name     = Sanitize::string($_POST['name'] ?? '');
-        $email    = Sanitize::email($_POST['email'] ?? '');
-        $role     = Sanitize::string($_POST['role'] ?? 'member');
-        $isActive = Sanitize::int($_POST['is_active'] ?? 1);
-
-        // Validate
-        if ($name === '' || $email === '') {
-            Session::flash('error', 'Nome e e-mail são obrigatórios.');
-            header('Location: index.php?page=admin&action=editUser&id=' . $id);
-            exit;
-        }
-
-        // Ensure the role is valid
-        if (!in_array($role, ['admin', 'manager', 'member'], true)) {
-            $role = 'member';
-        }
-
-        // Email uniqueness (excluding current user)
-        $existing = User::findByEmail($email);
-        if ($existing && (int) $existing['id'] !== $id) {
-            Session::flash('error', 'Este e-mail já está em uso por outro usuário.');
-            header('Location: index.php?page=admin&action=editUser&id=' . $id);
-            exit;
-        }
-
-        $oldData = $user;
-
-        User::update($id, [
-            'name'      => $name,
-            'email'     => $email,
-            'role'      => $role,
-            'is_active' => $isActive ? 1 : 0,
-        ]);
-
-        AuditLog::log('update_user', 'user', $id, $oldData, [
-            'name'      => $name,
-            'email'     => $email,
-            'role'      => $role,
-            'is_active' => $isActive,
-        ]);
-
-        Session::flash('success', 'Usuário atualizado com sucesso.');
-        header('Location: index.php?page=admin&action=users');
-        exit;
-    }
-
-    /* ------------------------------------------------------------------
-     *  settings  — Show application settings form
-     *  GET ?page=admin&action=settings
+     *  settings  — Configurações do módulo (chat_settings)
      * ----------------------------------------------------------------*/
     public function settings(): void
     {
-        $stmt = $this->db->query('SELECT `key`, `value` FROM settings ORDER BY `key` ASC');
+        $stmt = $this->db->query('SELECT `key`, `value` FROM chat_settings ORDER BY `key` ASC');
         $rows = $stmt->fetchAll();
 
         $settings = [];
@@ -201,10 +74,6 @@ class AdminController
         ]);
     }
 
-    /* ------------------------------------------------------------------
-     *  updateSettings  — Persist application settings
-     *  POST ?page=admin&action=updateSettings
-     * ----------------------------------------------------------------*/
     public function updateSettings(): void
     {
         Csrf::check();
@@ -212,51 +81,56 @@ class AdminController
         $allowedKeys = ['app_name','allow_registration','primary_color','sidebar_bg','sidebar_text'];
 
         $stmtUpsert = $this->db->prepare(
-            'INSERT INTO settings (`key`, `value`) VALUES (?, ?)
+            'INSERT INTO chat_settings (`key`, `value`) VALUES (?, ?)
              ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)'
         );
 
+        $fields = [];
         foreach ($allowedKeys as $key) {
             if (!isset($_POST[$key])) continue;
-            $stmtUpsert->execute([$key, Sanitize::string($_POST[$key])]);
+            $value = Sanitize::string($_POST[$key]);
+            $stmtUpsert->execute([$key, $value]);
+            $fields[$key] = $value;
         }
 
         AuditLog::log('update_settings', 'settings', null, null, $fields);
 
         Session::flash('success', 'Configurações salvas com sucesso.');
-        header('Location: index.php?page=admin&action=settings');
+        header('Location: index.php?m=chat&page=admin&action=settings');
         exit;
     }
 
-    // ---- AUDIT LOG (#8) ----
+    /* ------------------------------------------------------------------
+     *  audit — Log de auditoria (tabela GLOBAL audit_log, module='chat')
+     * ----------------------------------------------------------------*/
     public function audit(): void
     {
         $search = [
-            'user'   => Sanitize::get('user'),
-            'action' => Sanitize::get('action_type'),
-            'entity' => Sanitize::get('entity_type'),
-            'from'   => Sanitize::get('from'),
-            'to'     => Sanitize::get('to'),
+            'user'        => Sanitize::get('user'),
+            'action_type' => Sanitize::get('action_type'),
+            'entity_type' => Sanitize::get('entity_type'),
+            'date_from'   => Sanitize::get('date_from'),
+            'date_to'     => Sanitize::get('date_to'),
         ];
 
-        $where = []; $params = [];
+        $where = ['a.module = ?']; $params = ['chat'];
         if ($search['user']) {
             $where[] = 'u.name LIKE ?'; $params[] = '%'.$search['user'].'%';
         }
-        if ($search['action']) {
-            $where[] = 'a.action = ?'; $params[] = $search['action'];
+        if ($search['action_type']) {
+            $where[] = 'a.action = ?'; $params[] = $search['action_type'];
         }
-        if ($search['entity']) {
-            $where[] = 'a.entity_type LIKE ?'; $params[] = '%'.$search['entity'].'%';
+        if ($search['entity_type']) {
+            $where[] = 'a.entity LIKE ?'; $params[] = '%'.$search['entity_type'].'%';
         }
-        if ($search['from']) {
-            $where[] = 'a.created_at >= ?'; $params[] = $search['from'] . ' 00:00:00';
+        if ($search['date_from']) {
+            $where[] = 'a.created_at >= ?'; $params[] = $search['date_from'] . ' 00:00:00';
         }
-        if ($search['to']) {
-            $where[] = 'a.created_at <= ?'; $params[] = $search['to'] . ' 23:59:59';
+        if ($search['date_to']) {
+            $where[] = 'a.created_at <= ?'; $params[] = $search['date_to'] . ' 23:59:59';
         }
 
-        $wSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+        $wSql = 'WHERE ' . implode(' AND ', $where);
 
         $countStmt = $this->db->prepare("SELECT COUNT(*) FROM audit_log a LEFT JOIN users u ON u.id = a.user_id $wSql");
         $countStmt->execute($params);
@@ -266,7 +140,7 @@ class AdminController
         $pagination = new Pagination($total, $currentPage, 50);
 
         $stmt = $this->db->prepare(
-            "SELECT a.*, u.name AS user_name FROM audit_log a
+            "SELECT a.*, a.entity AS entity_type, u.name AS user_name FROM audit_log a
              LEFT JOIN users u ON u.id = a.user_id $wSql
              ORDER BY a.created_at DESC LIMIT {$pagination->perPage} OFFSET {$pagination->offset}"
         );
@@ -284,7 +158,7 @@ class AdminController
     // ---- CUSTOM EMOJIS (#29) ----
     public function emojis(): void
     {
-        $emojis = $this->db->query('SELECT ce.*, u.name AS creator_name FROM custom_emojis ce LEFT JOIN users u ON u.id = ce.created_by ORDER BY ce.name ASC')->fetchAll();
+        $emojis = $this->db->query('SELECT ce.*, u.name AS creator_name FROM chat_custom_emojis ce LEFT JOIN users u ON u.id = ce.created_by ORDER BY ce.name ASC')->fetchAll();
         View::render('admin/emojis', [
             'pageTitle' => 'Emojis Personalizados',
             'page'      => 'admin',
@@ -298,20 +172,26 @@ class AdminController
         $name = Sanitize::slug(Sanitize::post('name'));
         if (!$name) {
             Session::flash('error', 'Nome do emoji é obrigatório.');
-            header('Location: index.php?page=admin&action=emojis'); exit;
+            header('Location: index.php?m=chat&page=admin&action=emojis'); exit;
         }
 
         $upload = Upload::handle('image', 'avatars');
         if (!$upload['success']) {
             Session::flash('error', $upload['error']);
-            header('Location: index.php?page=admin&action=emojis'); exit;
+            header('Location: index.php?m=chat&page=admin&action=emojis'); exit;
         }
 
-        $this->db->prepare('INSERT INTO custom_emojis (name, image_path, created_by, created_at) VALUES (?, ?, ?, NOW())')
+        $this->db->prepare('INSERT INTO chat_custom_emojis (name, image_path, created_by, created_at) VALUES (?, ?, ?, NOW())')
             ->execute([$name, $upload['path'], Session::userId()]);
 
         Session::flash('success', 'Emoji :' . $name . ': adicionado.');
-        header('Location: index.php?page=admin&action=emojis'); exit;
+        header('Location: index.php?m=chat&page=admin&action=emojis'); exit;
+    }
+
+    /** Alias legado (o formulário postava para storeEmoji). */
+    public function storeEmoji(): void
+    {
+        $this->addEmoji();
     }
 
     public function deleteEmoji(): void
@@ -319,23 +199,23 @@ class AdminController
         Csrf::check();
         $id = Sanitize::int($_POST['id'] ?? 0);
         if ($id > 0) {
-            $emoji = $this->db->prepare('SELECT image_path FROM custom_emojis WHERE id = ?');
+            $emoji = $this->db->prepare('SELECT image_path FROM chat_custom_emojis WHERE id = ?');
             $emoji->execute([$id]);
             $row = $emoji->fetch();
             if ($row) {
                 Upload::delete($row['image_path']);
-                $this->db->prepare('DELETE FROM custom_emojis WHERE id = ?')->execute([$id]);
+                $this->db->prepare('DELETE FROM chat_custom_emojis WHERE id = ?')->execute([$id]);
             }
         }
         Session::flash('success', 'Emoji removido.');
-        header('Location: index.php?page=admin&action=emojis'); exit;
+        header('Location: index.php?m=chat&page=admin&action=emojis'); exit;
     }
 
     // ---- EXPORT (#11) ----
     public function export(): void
     {
-        $channels = $this->db->query('SELECT id, name FROM channels WHERE is_archived = 0 ORDER BY name ASC')->fetchAll();
-        $exports = $this->db->query('SELECT el.*, u.name AS user_name FROM export_logs el LEFT JOIN users u ON u.id = el.user_id ORDER BY el.created_at DESC LIMIT 20')->fetchAll();
+        $channels = $this->db->query('SELECT id, name FROM chat_channels WHERE is_archived = 0 ORDER BY name ASC')->fetchAll();
+        $exports = $this->db->query('SELECT el.*, u.name AS user_name FROM chat_export_logs el LEFT JOIN users u ON u.id = el.user_id ORDER BY el.created_at DESC LIMIT 20')->fetchAll();
 
         View::render('admin/export', [
             'pageTitle' => 'Exportar Dados',
@@ -355,11 +235,10 @@ class AdminController
 
         $validTypes = ['messages','users','channels','tasks','audit_log'];
         if (!in_array($type, $validTypes, true)) {
-            Session::flash('error', 'Tipo inválido.'); header('Location: index.php?page=admin&action=export'); exit;
+            Session::flash('error', 'Tipo inválido.'); header('Location: index.php?m=chat&page=admin&action=export'); exit;
         }
 
         $filename = $type . '_' . date('Ymd_His') . '.csv';
-        $filepath = 'storage/uploads/' . $filename;
 
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
@@ -374,25 +253,36 @@ class AdminController
         if ($type === 'messages') {
             if ($channelId > 0) { $wParts[] = 'channel_id = ?'; $params[] = $channelId; $wSql = ' WHERE ' . implode(' AND ', $wParts); }
             fputcsv($out, ['ID','Canal','Usuário','Conteúdo','Tipo','Criado em']);
-            $stmt = $this->db->prepare("SELECT m.id, c.name AS channel_name, u.name AS user_name, m.content, m.type, m.created_at FROM messages m LEFT JOIN channels c ON c.id = m.channel_id LEFT JOIN users u ON u.id = m.user_id $wSql ORDER BY m.created_at DESC LIMIT 50000");
+            $stmt = $this->db->prepare("SELECT m.id, c.name AS channel_name, u.name AS user_name, m.content, m.type, m.created_at FROM chat_messages m LEFT JOIN chat_channels c ON c.id = m.channel_id LEFT JOIN users u ON u.id = m.user_id $wSql ORDER BY m.created_at DESC LIMIT 50000");
             $stmt->execute($params);
             while ($row = $stmt->fetch()) fputcsv($out, $row);
         } elseif ($type === 'users') {
             fputcsv($out, ['ID','Nome','Email','Perfil','Status','Criado em']);
-            $stmt = $this->db->query("SELECT id, name, email, role, status, created_at FROM users ORDER BY name ASC");
+            $stmt = $this->db->query(
+                "SELECT u.id, u.name, u.email,
+                        COALESCE(uma.role, '') AS role,
+                        COALESCE(p.status, 'offline') AS status,
+                        u.created_at
+                 FROM users u
+                 LEFT JOIN user_module_access uma ON uma.user_id = u.id AND uma.module_slug = 'chat'
+                 LEFT JOIN chat_presence p ON p.user_id = u.id
+                 ORDER BY u.name ASC"
+            );
             while ($row = $stmt->fetch()) fputcsv($out, $row);
         } elseif ($type === 'channels') {
             fputcsv($out, ['ID','Nome','Tipo','Membros','Criado em']);
-            $stmt = $this->db->query("SELECT c.id, c.name, c.type, (SELECT COUNT(*) FROM channel_members cm WHERE cm.channel_id = c.id) AS member_count, c.created_at FROM channels c ORDER BY c.name ASC");
+            $stmt = $this->db->query("SELECT c.id, c.name, c.type, (SELECT COUNT(*) FROM chat_channel_members cm WHERE cm.channel_id = c.id) AS member_count, c.created_at FROM chat_channels c ORDER BY c.name ASC");
             while ($row = $stmt->fetch()) fputcsv($out, $row);
         } elseif ($type === 'tasks') {
             fputcsv($out, ['ID','Título','Status','Prioridade','Criado por','Data limite','Criado em']);
-            $stmt = $this->db->prepare("SELECT t.id, t.title, t.status, t.priority, u.name, t.due_date, t.created_at FROM tasks t LEFT JOIN users u ON u.id = t.created_by $wSql ORDER BY t.created_at DESC");
+            $stmt = $this->db->prepare("SELECT t.id, t.title, t.status, t.priority, u.name, t.due_date, t.created_at FROM chat_tasks t LEFT JOIN users u ON u.id = t.created_by $wSql ORDER BY t.created_at DESC");
             $stmt->execute($params);
             while ($row = $stmt->fetch()) fputcsv($out, $row);
         } elseif ($type === 'audit_log') {
+            $wParts[] = 'a.module = ?'; $params[] = 'chat';
+            $wSql = ' WHERE ' . implode(' AND ', $wParts);
             fputcsv($out, ['ID','Usuário','Ação','Entidade','Entity ID','IP','Data']);
-            $stmt = $this->db->prepare("SELECT a.id, u.name, a.action, a.entity_type, a.entity_id, a.ip_address, a.created_at FROM audit_log a LEFT JOIN users u ON u.id = a.user_id $wSql ORDER BY a.created_at DESC LIMIT 50000");
+            $stmt = $this->db->prepare("SELECT a.id, u.name, a.action, a.entity, a.entity_id, a.ip_address, a.created_at FROM audit_log a LEFT JOIN users u ON u.id = a.user_id $wSql ORDER BY a.created_at DESC LIMIT 50000");
             $stmt->execute($params);
             while ($row = $stmt->fetch()) fputcsv($out, $row);
         }
@@ -401,11 +291,17 @@ class AdminController
         exit;
     }
 
+    /** Alias legado (o formulário postava para generateExport). */
+    public function generateExport(): void
+    {
+        $this->doExport();
+    }
+
     // ---- CHANNEL CATEGORIES (#30) ----
     public function categories(): void
     {
-        $categories = $this->db->query('SELECT * FROM channel_categories ORDER BY order_num ASC')->fetchAll();
-        $channels = $this->db->query('SELECT id, name, category_id FROM channels WHERE is_archived = 0 ORDER BY name ASC')->fetchAll();
+        $categories = $this->db->query('SELECT * FROM chat_channel_categories ORDER BY order_num ASC')->fetchAll();
+        $channels = $this->db->query('SELECT id, name, category_id FROM chat_channels WHERE is_archived = 0 ORDER BY name ASC')->fetchAll();
 
         View::render('admin/categories', [
             'pageTitle'  => 'Categorias de Canais',
@@ -422,26 +318,26 @@ class AdminController
         $order = Sanitize::int($_POST['order_num'] ?? 0);
         $id    = Sanitize::int($_POST['id'] ?? 0);
 
-        if (!$name) { Session::flash('error', 'Nome obrigatório.'); header('Location: index.php?page=admin&action=categories'); exit; }
+        if (!$name) { Session::flash('error', 'Nome obrigatório.'); header('Location: index.php?m=chat&page=admin&action=categories'); exit; }
 
         if ($id > 0) {
-            $this->db->prepare('UPDATE channel_categories SET name = ?, order_num = ? WHERE id = ?')->execute([$name, $order, $id]);
+            $this->db->prepare('UPDATE chat_channel_categories SET name = ?, order_num = ? WHERE id = ?')->execute([$name, $order, $id]);
         } else {
-            $this->db->prepare('INSERT INTO channel_categories (name, order_num, created_by, created_at) VALUES (?, ?, ?, NOW())')->execute([$name, $order, Session::userId()]);
+            $this->db->prepare('INSERT INTO chat_channel_categories (name, order_num, created_by, created_at) VALUES (?, ?, ?, NOW())')->execute([$name, $order, Session::userId()]);
         }
 
         $channelIds = $_POST['channel_ids'] ?? [];
         if ($id > 0 || !$id) {
             $catId = $id > 0 ? $id : (int) $this->db->lastInsertId();
-            $this->db->prepare('UPDATE channels SET category_id = NULL WHERE category_id = ?')->execute([$catId]);
+            $this->db->prepare('UPDATE chat_channels SET category_id = NULL WHERE category_id = ?')->execute([$catId]);
             if (is_array($channelIds)) {
-                $stmt = $this->db->prepare('UPDATE channels SET category_id = ? WHERE id = ?');
+                $stmt = $this->db->prepare('UPDATE chat_channels SET category_id = ? WHERE id = ?');
                 foreach ($channelIds as $cid) $stmt->execute([$catId, (int)$cid]);
             }
         }
 
         Session::flash('success', 'Categoria salva.');
-        header('Location: index.php?page=admin&action=categories'); exit;
+        header('Location: index.php?m=chat&page=admin&action=categories'); exit;
     }
 
     public function deleteCategory(): void
@@ -449,10 +345,10 @@ class AdminController
         Csrf::check();
         $id = Sanitize::int($_POST['id'] ?? 0);
         if ($id > 0) {
-            $this->db->prepare('UPDATE channels SET category_id = NULL WHERE category_id = ?')->execute([$id]);
-            $this->db->prepare('DELETE FROM channel_categories WHERE id = ?')->execute([$id]);
+            $this->db->prepare('UPDATE chat_channels SET category_id = NULL WHERE category_id = ?')->execute([$id]);
+            $this->db->prepare('DELETE FROM chat_channel_categories WHERE id = ?')->execute([$id]);
         }
         Session::flash('success', 'Categoria removida.');
-        header('Location: index.php?page=admin&action=categories'); exit;
+        header('Location: index.php?m=chat&page=admin&action=categories'); exit;
     }
 }

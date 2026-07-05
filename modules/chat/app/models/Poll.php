@@ -1,7 +1,7 @@
 <?php
 class Poll extends Model
 {
-    protected static string $table = 'polls';
+    protected static string $table = 'chat_polls';
     protected static array  $fillable = [
         'channel_id', 'message_id', 'user_id', 'question',
         'is_anonymous', 'is_multiple', 'closes_at', 'is_closed',
@@ -22,8 +22,8 @@ class Poll extends Model
         $stmt = $db->prepare(
             'SELECT po.id, po.text, po.order_num,
                     COUNT(pv.id) AS vote_count
-             FROM poll_options po
-             LEFT JOIN poll_votes pv ON pv.option_id = po.id
+             FROM chat_poll_options po
+             LEFT JOIN chat_poll_votes pv ON pv.option_id = po.id
              WHERE po.poll_id = ?
              GROUP BY po.id, po.text, po.order_num
              ORDER BY po.order_num ASC'
@@ -35,7 +35,7 @@ class Poll extends Model
         if (!(int) $poll['is_anonymous']) {
             $nameStmt = $db->prepare(
                 'SELECT GROUP_CONCAT(u.name SEPARATOR ", ") AS voter_names
-                 FROM poll_votes pv
+                 FROM chat_poll_votes pv
                  INNER JOIN users u ON u.id = pv.user_id
                  WHERE pv.option_id = ?'
             );
@@ -63,7 +63,7 @@ class Poll extends Model
     {
         $db = Database::getInstance();
         $stmt = $db->prepare(
-            'INSERT INTO poll_options (poll_id, text, order_num) VALUES (?, ?, ?)'
+            'INSERT INTO chat_poll_options (poll_id, text, order_num) VALUES (?, ?, ?)'
         );
         $stmt->execute([$pollId, $text, $order]);
         return (int) $db->lastInsertId();
@@ -83,14 +83,14 @@ class Poll extends Model
         // Single-choice: remove any previous vote by this user on this poll
         if (!(int) $poll['is_multiple']) {
             $db->prepare(
-                'DELETE pv FROM poll_votes pv
-                 INNER JOIN poll_options po ON po.id = pv.option_id
+                'DELETE pv FROM chat_poll_votes pv
+                 INNER JOIN chat_poll_options po ON po.id = pv.option_id
                  WHERE po.poll_id = ? AND pv.user_id = ?'
             )->execute([$pollId, $userId]);
         }
 
         $stmt = $db->prepare(
-            'INSERT IGNORE INTO poll_votes (option_id, user_id, created_at) VALUES (?, ?, NOW())'
+            'INSERT IGNORE INTO chat_poll_votes (option_id, user_id, created_at) VALUES (?, ?, NOW())'
         );
         return $stmt->execute([$optionId, $userId]);
     }
@@ -102,8 +102,8 @@ class Poll extends Model
     {
         $db = Database::getInstance();
         $db->prepare(
-            'DELETE pv FROM poll_votes pv
-             INNER JOIN poll_options po ON po.id = pv.option_id
+            'DELETE pv FROM chat_poll_votes pv
+             INNER JOIN chat_poll_options po ON po.id = pv.option_id
              WHERE po.poll_id = ? AND pv.option_id = ? AND pv.user_id = ?'
         )->execute([$pollId, $optionId, $userId]);
     }
@@ -115,8 +115,8 @@ class Poll extends Model
     {
         $db = Database::getInstance();
         $stmt = $db->prepare(
-            'SELECT 1 FROM poll_votes pv
-             INNER JOIN poll_options po ON po.id = pv.option_id
+            'SELECT 1 FROM chat_poll_votes pv
+             INNER JOIN chat_poll_options po ON po.id = pv.option_id
              WHERE po.poll_id = ? AND pv.user_id = ?
              LIMIT 1'
         );
@@ -136,8 +136,8 @@ class Poll extends Model
             'SELECT po.id, po.text,
                     COUNT(pv.id) AS vote_count,
                     GROUP_CONCAT(u.name SEPARATOR ", ") AS voter_names
-             FROM poll_options po
-             LEFT JOIN poll_votes pv ON pv.option_id = po.id
+             FROM chat_poll_options po
+             LEFT JOIN chat_poll_votes pv ON pv.option_id = po.id
              LEFT JOIN users u ON u.id = pv.user_id
              WHERE po.poll_id = ?
              GROUP BY po.id, po.text, po.order_num
@@ -177,7 +177,7 @@ class Poll extends Model
     public static function closePoll(int $id): void
     {
         $db = Database::getInstance();
-        $db->prepare('UPDATE polls SET is_closed = 1 WHERE id = ?')->execute([$id]);
+        $db->prepare('UPDATE chat_polls SET is_closed = 1 WHERE id = ?')->execute([$id]);
     }
 
     /**
@@ -188,10 +188,10 @@ class Poll extends Model
         $db = Database::getInstance();
         $stmt = $db->prepare(
             'SELECT p.*, u.name AS creator_name,
-                    (SELECT COUNT(*) FROM poll_votes pv
-                     INNER JOIN poll_options po ON po.id = pv.option_id
+                    (SELECT COUNT(*) FROM chat_poll_votes pv
+                     INNER JOIN chat_poll_options po ON po.id = pv.option_id
                      WHERE po.poll_id = p.id) AS total_votes
-             FROM polls p
+             FROM chat_polls p
              LEFT JOIN users u ON u.id = p.user_id
              WHERE p.channel_id = ?
              ORDER BY p.created_at DESC

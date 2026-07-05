@@ -1,7 +1,7 @@
 <?php $isEdit = !empty($channel['id']); ?>
 <div class="page-header">
     <h1><i class="bi bi-hash me-2"></i><?= $isEdit ? 'Editar Canal' : 'Novo Canal' ?></h1>
-    <a href="index.php?page=chat" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=chat&page=chat" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>
@@ -10,7 +10,7 @@
     <div class="col-md-8">
         <div class="card border-0 shadow-sm">
             <div class="card-body">
-                <form method="POST" action="index.php?page=channels&action=<?= $isEdit ? 'update' : 'store' ?>">
+                <form method="POST" action="index.php?m=chat&page=channels&action=<?= $isEdit ? 'update' : 'store' ?>">
                     <?= Csrf::field() ?>
                     <?php if ($isEdit): ?>
                         <input type="hidden" name="id" value="<?= $channel['id'] ?>">
@@ -63,7 +63,7 @@
                         <?php endif; ?>
 
                         <div class="col-12 text-end">
-                            <a href="index.php?page=chat" class="btn btn-outline-secondary me-2">Cancelar</a>
+                            <a href="index.php?m=chat&page=chat" class="btn btn-outline-secondary me-2">Cancelar</a>
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-check-lg me-1"></i> <?= $isEdit ? 'Atualizar' : 'Criar Canal' ?>
                             </button>

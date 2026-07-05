@@ -1,10 +1,10 @@
 <div class="page-header">
     <h1><i class="bi bi-list-check me-2"></i>Novo Template</h1>
-    <a href="index.php?page=onboarding" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
+    <a href="index.php?m=rh&page=onboarding" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
 </div>
 <div class="row justify-content-center"><div class="col-md-10">
 <div class="card border-0 shadow-sm"><div class="card-body">
-<form method="POST" action="index.php?page=onboarding&action=store_template">
+<form method="POST" action="index.php?m=rh&page=onboarding&action=store_template">
     <?= Csrf::field() ?>
     <div class="row g-3 mb-4">
         <div class="col-md-5"><label class="form-label required">Nome do template</label><input type="text" name="name" class="form-control" required placeholder="Ex: Admissao Enfermagem"></div>

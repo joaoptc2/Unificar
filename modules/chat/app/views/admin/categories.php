@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-collection me-2"></i>Categorias de Canais</h1>
-    <a href="index.php?page=admin" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=chat&page=admin" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>
@@ -10,7 +10,7 @@
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white fw-semibold">Nova Categoria</div>
             <div class="card-body">
-                <form method="POST" action="index.php?page=admin&action=saveCategory">
+                <form method="POST" action="index.php?m=chat&page=admin&action=saveCategory">
                     <?= Csrf::field() ?>
                     <div class="row g-3">
                         <div class="col-8">
@@ -67,7 +67,7 @@
                         </div>
                         <?php endif; ?>
                     </div>
-                    <form method="POST" action="index.php?page=admin&action=deleteCategory" class="d-inline">
+                    <form method="POST" action="index.php?m=chat&page=admin&action=deleteCategory" class="d-inline">
                         <?= Csrf::field() ?>
                         <input type="hidden" name="id" value="<?= $cat['id'] ?>">
                         <button type="submit" class="btn btn-outline-danger btn-sm" data-confirm="Remover esta categoria?">

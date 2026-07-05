@@ -1,10 +1,16 @@
 <?php
 /**
- * Upload seguro de arquivos
+ * Upload seguro de arquivos do módulo RH.
  * - Renomeia com hash
  * - Valida MIME type
  * - Limita tamanho
  * - Bloqueia execução
+ *
+ * Todos os arquivos vivem em /uploads/rh/<subdir>/ (RH_UPLOADS_PATH).
+ * O caminho ARMAZENADO no banco mantém o formato legado:
+ *   - `uploads/<sub>/<arquivo>`          → público (fotos exibidas em <img>)
+ *   - `storage/uploads/<sub>/<arquivo>`  → privado (servido pelo DownloadController)
+ * Isso preserva os dados migrados do sistema antigo sem reescrita.
  */
 class Upload
 {
@@ -26,17 +32,29 @@ class Upload
 
     /**
      * Subdiretórios considerados "públicos" (acessíveis diretamente por URL —
-     * ex.: fotos de perfil exibidas em <img src>). Demais subdiretórios são
-     * armazenados em `storage/uploads/`, fora do webroot, e só acessíveis via
-     * DownloadController com autenticação.
+     * ex.: fotos de perfil exibidas em <img src>). Os demais são bloqueados
+     * pelo .htaccess de /uploads/rh/ e só acessíveis via DownloadController
+     * com autenticação/permissão.
      */
     private static array $publicSubdirs = ['employees', 'photos'];
+
+    /** Diretório físico base dos uploads do módulo. */
+    public static function baseDir(): string
+    {
+        if (defined('RH_UPLOADS_PATH')) {
+            return rtrim(RH_UPLOADS_PATH, '/');
+        }
+        if (defined('UPLOADS_PATH')) {
+            return UPLOADS_PATH . '/rh';
+        }
+        return dirname(__DIR__, 4) . '/uploads/rh';
+    }
 
     /**
      * Processa upload de arquivo
      *
      * @param string $fieldName Nome do campo do formulário
-     * @param string $subDir Subdiretório (employees, documents, resumes, certificates)
+     * @param string $subDir Subdiretório (employees, photos, documents, resumes, certificates)
      * @return array ['success' => bool, 'path' => string, 'original_name' => string, 'size' => int, 'error' => string]
      *               `path` é armazenado no banco. Se começar com `uploads/` é público;
      *               se começar com `storage/` é privado (servir via DownloadController).
@@ -82,29 +100,36 @@ class Upload
         // Gerar nome seguro com hash
         $safeName = bin2hex(random_bytes(16)) . '_' . time() . '.' . $ext;
 
-        $isPublic  = in_array($subDir, self::$publicSubdirs, true);
-        $baseDir   = $isPublic ? __DIR__ . '/../../public/uploads/' : __DIR__ . '/../../storage/uploads/';
-        $destDir   = $baseDir . $subDir . '/';
+        // Sanitiza o subdiretório (sem path traversal).
+        $subDir = preg_replace('/[^a-z0-9_-]/i', '', $subDir) ?: 'documents';
+
+        $isPublic   = in_array($subDir, self::$publicSubdirs, true);
+        $destDir    = self::baseDir() . '/' . $subDir . '/';
         $pathPrefix = $isPublic ? 'uploads/' : 'storage/uploads/';
 
         if (!is_dir($destDir)) {
             @mkdir($destDir, 0755, true);
         }
 
-        // Criar .htaccess para bloquear execução (segurança extra — aplicável
-        // ao diretório público; para storage/ o webserver já não serve nada
-        // pois está fora do webroot e bloqueado pelo .htaccess raiz).
+        // .htaccess por subdiretório: públicos permitem leitura mas nunca
+        // execução; privados são negados (defesa em profundidade — o
+        // .htaccess raiz de /uploads/rh/ já nega tudo).
         $htaccess = $destDir . '.htaccess';
         if (!file_exists($htaccess)) {
-            @file_put_contents(
-                $htaccess,
-                "Options -ExecCGI\n" .
-                "RemoveHandler .php .phtml .php3 .php4 .php5 .phps\n" .
-                "AddType text/plain .php .phtml .php3 .php4 .php5 .phps\n" .
-                "<FilesMatch \"\\.(php|phtml|php3|php4|php5|phps)$\">\n" .
-                "    Require all denied\n" .
-                "</FilesMatch>\n"
-            );
+            if ($isPublic) {
+                @file_put_contents(
+                    $htaccess,
+                    "Require all granted\n" .
+                    "Options -ExecCGI\n" .
+                    "RemoveHandler .php .phtml .php3 .php4 .php5 .phps\n" .
+                    "AddType text/plain .php .phtml .php3 .php4 .php5 .phps\n" .
+                    "<FilesMatch \"\\.(php|phtml|php3|php4|php5|phps)$\">\n" .
+                    "    Require all denied\n" .
+                    "</FilesMatch>\n"
+                );
+            } else {
+                @file_put_contents($htaccess, "Require all denied\n");
+            }
         }
 
         $destPath = $destDir . $safeName;
@@ -124,7 +149,7 @@ class Upload
 
     /**
      * Remove arquivo do disco. Aceita tanto paths `uploads/...` quanto
-     * `storage/uploads/...` (além de retrocompatibilidade com paths antigos).
+     * `storage/uploads/...` (formatos legados armazenados no banco).
      */
     public static function delete(?string $relativePath): bool
     {
@@ -138,31 +163,30 @@ class Upload
 
     /**
      * Resolve o caminho absoluto a partir do path armazenado no banco.
-     * Retorna null se o arquivo estiver fora dos diretórios permitidos
-     * (proteção contra path traversal).
+     * Retorna null se o arquivo estiver fora do diretório de uploads do
+     * módulo (proteção contra path traversal).
      */
     public static function resolvePath(string $relativePath): ?string
     {
         // Rejeita qualquer tentativa de path traversal.
         if (strpos($relativePath, '..') !== false) return null;
 
-        $projectRoot = realpath(__DIR__ . '/../../');
-        if (!$projectRoot) return null;
+        $base = realpath(self::baseDir());
+        if (!$base) return null;
 
-        if (str_starts_with($relativePath, 'storage/')) {
-            $base = $projectRoot . '/';
-        } elseif (str_starts_with($relativePath, 'uploads/')) {
-            $base = $projectRoot . '/public/';
-        } else {
-            // Retrocompatibilidade: paths antigos sem prefixo (ficam em public/).
-            $base = $projectRoot . '/public/';
+        // Remove os prefixos legados — fisicamente tudo vive em /uploads/rh/.
+        $inner = $relativePath;
+        if (str_starts_with($inner, 'storage/uploads/')) {
+            $inner = substr($inner, strlen('storage/uploads/'));
+        } elseif (str_starts_with($inner, 'uploads/')) {
+            $inner = substr($inner, strlen('uploads/'));
         }
 
-        $full = realpath($base . $relativePath);
+        $full = realpath($base . '/' . ltrim($inner, '/'));
         if (!$full) return null;
 
-        // Garante que o resultado está dentro do projeto.
-        if (!str_starts_with($full, $projectRoot)) return null;
+        // Garante que o resultado está dentro de /uploads/rh/.
+        if (!str_starts_with($full, $base)) return null;
         return $full;
     }
 
@@ -175,9 +199,19 @@ class Upload
     }
 
     /**
+     * URL pública direta de um arquivo `uploads/<sub>/<nome>` (fotos etc.).
+     */
+    public static function publicUrl(?string $path): string
+    {
+        if (!$path) return '';
+        $inner = str_starts_with($path, 'uploads/') ? substr($path, strlen('uploads/')) : $path;
+        return core_url('uploads/rh/' . ltrim($inner, '/'));
+    }
+
+    /**
      * Gera a URL para acessar um arquivo. Arquivos privados (storage/) são
      * servidos pelo DownloadController. Arquivos públicos (uploads/) são
-     * servidos diretamente pelo servidor web.
+     * servidos diretamente pelo servidor web em /uploads/rh/.
      *
      * @param string $path    Caminho armazenado no banco.
      * @param string $type    Tipo do recurso para o DownloadController
@@ -190,10 +224,10 @@ class Upload
         if (self::isPrivatePath($path) || (!str_starts_with($path, 'uploads/') && $type && $id)) {
             // Para paths antigos sem prefixo uploads/, também usa controller se
             // tipo/id forem fornecidos (retrocompatibilidade segura).
-            return 'index.php?page=files&action=get&type=' . urlencode($type) . '&id=' . (int)$id;
+            return 'index.php?m=rh&page=files&action=get&type=' . urlencode($type) . '&id=' . (int)$id;
         }
         // Arquivo público — servido diretamente.
-        return (defined('ASSET_URL') ? ASSET_URL : '') . $path;
+        return self::publicUrl($path);
     }
 
     /**

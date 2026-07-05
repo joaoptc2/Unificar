@@ -32,16 +32,16 @@ class BirthdayController
 
         $sql = "SELECT e.*, d.name as department_name, j.title as position_title,
                        DAY(e.birth_date) as birth_day
-                FROM employees e
-                LEFT JOIN departments d ON e.department_id = d.id
-                LEFT JOIN job_positions j ON e.job_position_id = j.id
+                FROM rh_employees e
+                LEFT JOIN rh_departments d ON e.department_id = d.id
+                LEFT JOIN rh_job_positions j ON e.job_position_id = j.id
                 {$whereClause}
                 ORDER BY DAY(e.birth_date) ASC";
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         $birthdays = $stmt->fetchAll();
 
-        $departments = $this->db->query('SELECT id, name FROM departments WHERE active = 1 ORDER BY name')->fetchAll();
+        $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
 
         $monthNames = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 

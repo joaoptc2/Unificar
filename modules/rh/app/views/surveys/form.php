@@ -1,10 +1,10 @@
 <div class="page-header">
     <h1><i class="bi bi-clipboard-data me-2"></i>Nova Pesquisa</h1>
-    <a href="index.php?page=surveys" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
+    <a href="index.php?m=rh&page=surveys" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
 </div>
 <div class="row justify-content-center"><div class="col-md-10">
 <div class="card border-0 shadow-sm"><div class="card-body">
-<form method="POST" action="index.php?page=surveys&action=store">
+<form method="POST" action="index.php?m=rh&page=surveys&action=store">
     <?= Csrf::field() ?>
     <div class="row g-3 mb-4">
         <div class="col-md-5"><label class="form-label required">Titulo</label><input type="text" name="title" class="form-control" required></div>

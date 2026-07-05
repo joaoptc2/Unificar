@@ -1,7 +1,7 @@
 <div class="page-header">
     <h1><i class="bi bi-people me-2"></i>Equipes</h1>
     <?php if (Auth::can('teams', 'create')): ?>
-    <a href="index.php?page=teams&action=create" class="btn btn-primary btn-sm">
+    <a href="index.php?m=chat&page=teams&action=create" class="btn btn-primary btn-sm">
         <i class="bi bi-plus-lg me-1"></i> Nova Equipe
     </a>
     <?php endif; ?>
@@ -26,7 +26,7 @@
                     </div>
                     <div class="ms-3">
                         <h5 class="mb-0">
-                            <a href="index.php?page=teams&action=show&id=<?= $team['id'] ?>" class="text-decoration-none">
+                            <a href="index.php?m=chat&page=teams&action=show&id=<?= $team['id'] ?>" class="text-decoration-none">
                                 <?= Sanitize::e($team['name']) ?>
                             </a>
                         </h5>
@@ -38,7 +38,7 @@
                 <?php endif; ?>
             </div>
             <div class="card-footer bg-transparent border-0 pt-0">
-                <a href="index.php?page=teams&action=show&id=<?= $team['id'] ?>" class="btn btn-outline-primary btn-sm w-100">
+                <a href="index.php?m=chat&page=teams&action=show&id=<?= $team['id'] ?>" class="btn btn-outline-primary btn-sm w-100">
                     Ver Equipe
                 </a>
             </div>

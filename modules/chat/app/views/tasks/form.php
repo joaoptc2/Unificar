@@ -1,7 +1,7 @@
 <?php $isEdit = !empty($task['id']); ?>
 <div class="page-header">
     <h1><i class="bi bi-kanban me-2"></i><?= $isEdit ? 'Editar Tarefa' : 'Nova Tarefa' ?></h1>
-    <a href="index.php?page=tasks" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=chat&page=tasks" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>
@@ -10,7 +10,7 @@
     <div class="col-md-8">
         <div class="card border-0 shadow-sm">
             <div class="card-body">
-                <form method="POST" action="index.php?page=tasks&action=<?= $isEdit ? 'update' : 'store' ?>">
+                <form method="POST" action="index.php?m=chat&page=tasks&action=<?= $isEdit ? 'update' : 'store' ?>">
                     <?= Csrf::field() ?>
                     <?php if ($isEdit): ?>
                         <input type="hidden" name="id" value="<?= $task['id'] ?>">
@@ -84,7 +84,7 @@
                         <?php endif; ?>
 
                         <div class="col-12 text-end">
-                            <a href="index.php?page=tasks" class="btn btn-outline-secondary me-2">Cancelar</a>
+                            <a href="index.php?m=chat&page=tasks" class="btn btn-outline-secondary me-2">Cancelar</a>
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-check-lg me-1"></i> <?= $isEdit ? 'Atualizar' : 'Criar Tarefa' ?>
                             </button>

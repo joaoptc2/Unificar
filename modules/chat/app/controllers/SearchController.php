@@ -50,7 +50,7 @@ class SearchController
             $like = '%' . $query . '%';
             $stmt = $this->db->prepare(
                 'SELECT t.*, u.name AS creator_name
-                 FROM tasks t
+                 FROM chat_tasks t
                  LEFT JOIN users u ON u.id = t.created_by
                  WHERE (t.title LIKE ? OR t.description LIKE ?) AND t.status != "cancelled"
                  ORDER BY t.created_at DESC
@@ -95,7 +95,7 @@ class SearchController
                 'id'      => (int) $m['id'],
                 'title'   => mb_strimwidth(strip_tags($m['content']), 0, 80, '...'),
                 'context' => ($m['channel_name'] ?? '') . ' - ' . ($m['user_name'] ?? ''),
-                'link'    => 'index.php?page=chat&channel_id=' . $m['channel_id'],
+                'link'    => 'index.php?m=chat&page=chat&channel_id=' . $m['channel_id'],
             ];
         }
 
@@ -107,7 +107,7 @@ class SearchController
                 'id'      => (int) $u['id'],
                 'title'   => $u['name'],
                 'context' => $u['email'] . ($u['title'] ? ' - ' . $u['title'] : ''),
-                'link'    => 'index.php?page=profile&id=' . $u['id'],
+                'link'    => 'index.php?m=chat&page=channels&action=direct&user_id=' . $u['id'],
             ];
         }
 
@@ -122,7 +122,7 @@ class SearchController
                     'id'      => (int) $ch['id'],
                     'title'   => '#' . $ch['name'],
                     'context' => $ch['description'] ?? '',
-                    'link'    => 'index.php?page=chat&channel_id=' . $ch['id'],
+                    'link'    => 'index.php?m=chat&page=chat&channel_id=' . $ch['id'],
                 ];
             }
         }
@@ -131,7 +131,7 @@ class SearchController
         $like = '%' . $query . '%';
         $stmt = $this->db->prepare(
             'SELECT t.id, t.title, t.status, t.priority
-             FROM tasks t
+             FROM chat_tasks t
              WHERE (t.title LIKE ? OR t.description LIKE ?) AND t.status != "cancelled"
              ORDER BY t.created_at DESC
              LIMIT 10'
@@ -143,7 +143,7 @@ class SearchController
                 'id'      => (int) $t['id'],
                 'title'   => $t['title'],
                 'context' => ucfirst(str_replace('_', ' ', $t['status'])) . ' - ' . ucfirst($t['priority']),
-                'link'    => 'index.php?page=tasks&action=show&id=' . $t['id'],
+                'link'    => 'index.php?m=chat&page=tasks&action=show&id=' . $t['id'],
             ];
         }
 

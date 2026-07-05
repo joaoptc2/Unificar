@@ -1,30 +1,92 @@
 <?php
 /**
- * Funções Auxiliares Globais
+ * Funções Auxiliares do módulo DOCUMENTOS.
+ *
+ * url()/asset()/redirect() agora produzem URLs da plataforma
+ * (index.php?m=documentos&url=...) e view() renderiza o conteúdo dentro
+ * do layout unificado do núcleo (Core\Layout::render).
  */
 
 // ── Navegação ───────────────────────────────────────────────────────────────
 
+/**
+ * URL interna do módulo. Aceita o formato legado 'pagina/acao?extra=1'
+ * e devolve BASE_URL/index.php?m=documentos&url=pagina/acao&extra=1
+ * (querystring extra preservada).
+ */
+function url($path = '') {
+    $path  = ltrim((string) $path, '/');
+    $extra = [];
+    if (($pos = strpos($path, '?')) !== false) {
+        parse_str(substr($path, $pos + 1), $extra);
+        $path = substr($path, 0, $pos);
+    }
+    return core_module_url('documentos', array_merge(['url' => $path], $extra));
+}
+
 function redirect($path = '') {
-    $base = APP_URL ?: '';
-    header('Location: ' . $base . '/' . ltrim($path, '/'));
+    header('Location: ' . url($path));
     exit;
 }
 
-function url($path = '') {
-    $base = APP_URL ?: '';
-    return $base . '/' . ltrim($path, '/');
-}
-
 /**
- * URL para asset com versão (invalida cache quando APP_VERSION muda).
+ * URL para asset do módulo, servido de /assets/documentos/.
+ * Aceita os caminhos legados 'css/style.css' e 'js/app.js'.
  */
 function asset($path) {
-    return url($path) . '?v=' . ASSETS_VERSION;
+    $path = ltrim((string) $path, '/');
+    foreach (['css/', 'js/'] as $prefix) {
+        if (strpos($path, $prefix) === 0) {
+            $path = substr($path, strlen($prefix));
+            break;
+        }
+    }
+    return core_asset('documentos/' . $path) . '?v=' . ASSETS_VERSION;
 }
 
 // ── Views ───────────────────────────────────────────────────────────────────
 
+/**
+ * Chave do item ativo do menu lateral, derivada do título da página —
+ * mesmo critério do $is_active do layout legado (match exato do título).
+ * Controllers podem sobrescrever passando 'menu_key' em $data.
+ */
+function _doc_active_key($page_title) {
+    $map = [
+        'Dashboard'                 => 'dashboard',
+        'Documentos'                => 'documents',
+        'Indicadores de Enfermagem' => 'indicators',
+        'Painel de Indicadores'     => 'indicators-dashboard',
+        'Planos de Ação'            => 'indicators-actions',
+        'Relatório de Conformidade' => 'reports',
+        'Gerenciar Setores'         => 'admin-sectors',
+        'Usuários & Setores'        => 'admin-users',
+        'Categorias de Documentos'  => 'admin-categories',
+    ];
+    return $map[$page_title] ?? '';
+}
+
+/**
+ * HTML das flash messages do módulo (renderizadas dentro do conteúdo,
+ * já que o layout agora é do núcleo).
+ */
+function _doc_flash_html() {
+    $html = '';
+    foreach (['success' => 'success', 'error' => 'danger', 'info' => 'info', 'warning' => 'warning'] as $type => $css) {
+        if (!has_flash($type)) continue;
+        $icon = ['success' => 'check-circle', 'danger' => 'exclamation-circle',
+                 'info' => 'info-circle', 'warning' => 'exclamation-triangle'][$css];
+        $html .= '<div class="alert alert-' . $css . ' alert-dismissible fade show" role="alert">'
+               . '<i class="bi bi-' . $icon . ' me-2"></i>' . get_flash($type)
+               . '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>'
+               . '</div>';
+    }
+    return $html;
+}
+
+/**
+ * Renderiza uma view do módulo dentro do layout unificado do núcleo.
+ */
 function view($view_name, $data = []) {
     extract($data);
 
@@ -40,9 +102,20 @@ function view($view_name, $data = []) {
     require $view_file;
     $content = ob_get_clean();
 
-    require VIEWS_PATH . '/layouts/main.php';
+    Core\Layout::render([
+        'title'   => $page_title,
+        'content' => _doc_flash_html() . $content,
+        'active'  => $data['menu_key'] ?? _doc_active_key($page_title),
+        // Chart.js sempre incluído: dashboard/indicadores usam gráficos
+        'head'    => '<link rel="stylesheet" href="' . asset('style.css') . '">' . "\n"
+                   . '    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>',
+        'scripts' => '<script src="' . asset('app.js') . '"></script>',
+    ]);
 }
 
+/**
+ * Renderiza uma view sem layout (mantida para telas standalone futuras).
+ */
 function view_standalone($view_name, $data = []) {
     extract($data);
     $view_file = VIEWS_PATH . '/' . $view_name . '.php';
@@ -151,7 +224,7 @@ function paginate($total, $per_page = null) {
 
 /**
  * Renderiza os controles de paginação (Bootstrap 5).
- * Preserva todos os parâmetros GET atuais, exceto `page`.
+ * Preserva todos os parâmetros GET atuais (inclusive m e url), exceto `page`.
  */
 function pagination_html($pagination, $base_url = null) {
     if ($pagination['pages'] <= 1) return '';

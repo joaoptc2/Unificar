@@ -1,6 +1,6 @@
 <?php
 /**
- * Controller de API (endpoints AJAX)
+ * Controller de API (endpoints AJAX) — módulo DOCUMENTOS.
  */
 
 function api_hospitals($param = null) {
@@ -13,11 +13,15 @@ function api_hospitals($param = null) {
     json_response($hospitals);
 }
 
+/**
+ * Contagem de não lidas DESTE módulo (tabela global notifications,
+ * filtrada por module='documentos').
+ */
 function api_notifications_count($param = null) {
     if (!is_logged_in()) json_response(['count' => 0]);
     $count = 0;
     try {
-        $count = notification_unread_count(get_hospital_id(), get_user_id());
+        $count = notification_unread_count(get_user_id());
     } catch (Exception $ex) {
         log_error('api_notifications_count', $ex);
     }

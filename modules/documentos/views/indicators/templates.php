@@ -16,7 +16,9 @@
 </p>
 
 <div class="filter-panel mb-3">
-    <form method="GET" action="<?php echo url('indicators/templates'); ?>" class="row g-2 align-items-end">
+    <form method="GET" action="<?php echo core_url('index.php'); ?>" class="row g-2 align-items-end">
+        <input type="hidden" name="m" value="documentos">
+        <input type="hidden" name="url" value="indicators/templates">
         <div class="col-md-3">
             <label class="form-label">Categoria</label>
             <select name="category" class="form-select form-select-sm">

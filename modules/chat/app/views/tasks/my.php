@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-person-check me-2"></i>Minhas Tarefas</h1>
-    <a href="index.php?page=tasks" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=chat&page=tasks" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-kanban me-1"></i> Ver Quadro
     </a>
 </div>
@@ -30,7 +30,7 @@
                 <?php foreach ($tasks as $task): ?>
                     <tr>
                         <td>
-                            <a href="index.php?page=tasks&action=show&id=<?= $task['id'] ?>" class="fw-semibold text-decoration-none">
+                            <a href="index.php?m=chat&page=tasks&action=show&id=<?= $task['id'] ?>" class="fw-semibold text-decoration-none">
                                 <?= Sanitize::e($task['title']) ?>
                             </a>
                         </td>
@@ -62,7 +62,7 @@
                             <?php endif; ?>
                         </td>
                         <td class="text-end">
-                            <a href="index.php?page=tasks&action=edit&id=<?= $task['id'] ?>" class="btn btn-outline-warning btn-action">
+                            <a href="index.php?m=chat&page=tasks&action=edit&id=<?= $task['id'] ?>" class="btn btn-outline-warning btn-action">
                                 <i class="bi bi-pencil"></i>
                             </a>
                         </td>

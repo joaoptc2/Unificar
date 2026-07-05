@@ -6,12 +6,12 @@
     <title>Candidatar-se — <?= Sanitize::e($job['title']) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="<?= ASSET_URL ?>css/style.css" rel="stylesheet">
+    <link href="<?= ASSET_URL ?>style.css" rel="stylesheet">
 </head>
 <body class="bg-light">
     <nav class="navbar navbar-dark bg-primary">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="index.php?page=public_recruitment">
+            <a class="navbar-brand fw-bold" href="index.php?m=rh&page=public_recruitment">
                 <i class="bi bi-hospital me-1"></i> RH Hospital — Trabalhe Conosco
             </a>
         </div>
@@ -42,7 +42,7 @@
                         <i class="bi bi-person-plus me-1"></i> Formulário de Inscrição
                     </div>
                     <div class="card-body">
-                        <form method="POST" action="index.php?page=public_recruitment&action=submit" enctype="multipart/form-data">
+                        <form method="POST" action="index.php?m=rh&page=public_recruitment&action=submit" enctype="multipart/form-data">
                             <?= Csrf::field() ?>
                             <input type="hidden" name="job_id" value="<?= $job['id'] ?>">
                             <input type="hidden" name="form_ts" value="<?= time() ?>">
@@ -89,7 +89,7 @@
                                         <input class="form-check-input" type="checkbox" name="lgpd_consent" id="lgpd_consent" value="1" required>
                                         <label class="form-check-label small" for="lgpd_consent">
                                             Li e concordo com a
-                                            <a href="index.php?page=privacy" target="_blank">Política de Privacidade</a>
+                                            <a href="index.php?m=rh&page=privacy" target="_blank">Política de Privacidade</a>
                                             e autorizo o tratamento dos meus dados pessoais para fins de processo seletivo,
                                             nos termos da Lei Geral de Proteção de Dados (LGPD).
                                         </label>
@@ -106,7 +106,7 @@
                 </div>
 
                 <div class="text-center mt-3">
-                    <a href="index.php?page=public_recruitment" class="text-decoration-none">
+                    <a href="index.php?m=rh&page=public_recruitment" class="text-decoration-none">
                         <i class="bi bi-arrow-left me-1"></i> Ver outras vagas
                     </a>
                 </div>
@@ -115,6 +115,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="<?= ASSET_URL ?>js/app.js"></script>
+    <script src="<?= ASSET_URL ?>app.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 <div class="page-header">
     <h1><i class="bi bi-person-workspace me-2"></i>Cargos</h1>
     <?php if (Auth::can('positions', 'create')): ?>
-        <a href="index.php?page=positions&action=create" class="btn btn-primary btn-sm">
+        <a href="index.php?m=rh&page=positions&action=create" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i> Novo Cargo
         </a>
     <?php endif; ?>
@@ -25,10 +25,10 @@
                             <td><span class="badge <?= $p['active'] ? 'bg-success' : 'bg-secondary' ?>"><?= $p['active'] ? 'Ativo' : 'Inativo' ?></span></td>
                             <td class="text-end">
                                 <?php if (Auth::can('positions', 'edit')): ?>
-                                    <a href="index.php?page=positions&action=edit&id=<?= $p['id'] ?>" class="btn btn-outline-warning btn-action"><i class="bi bi-pencil"></i></a>
+                                    <a href="index.php?m=rh&page=positions&action=edit&id=<?= $p['id'] ?>" class="btn btn-outline-warning btn-action"><i class="bi bi-pencil"></i></a>
                                 <?php endif; ?>
                                 <?php if (Auth::can('positions', 'delete')): ?>
-                                    <form method="POST" action="index.php?page=positions&action=delete" class="d-inline">
+                                    <form method="POST" action="index.php?m=rh&page=positions&action=delete" class="d-inline">
                                         <?= Csrf::field() ?>
                                         <input type="hidden" name="id" value="<?= $p['id'] ?>">
                                         <button type="submit" class="btn btn-outline-danger btn-action" data-confirm="Excluir cargo?"><i class="bi bi-trash"></i></button>

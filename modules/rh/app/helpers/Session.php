@@ -1,44 +1,17 @@
 <?php
 /**
- * Gerenciamento seguro de sessões
+ * Session — adaptador da sessão única do núcleo.
+ *
+ * A sessão é iniciada pelo core/bootstrap.php (Core\Session::start()).
+ * As chaves user_id/user_name/user_email são mantidas pelo núcleo.
+ * O papel do usuário NESTE módulo vem de $GLOBALS['MODULE_ROLE']
+ * (definido por request pelo front controller da plataforma).
  */
 class Session
 {
-    private static bool $started = false;
-
+    /** A sessão única já foi iniciada pelo núcleo — no-op. */
     public static function start(): void
     {
-        if (self::$started) return;
-
-        $config = require __DIR__ . '/../../config/app.php';
-
-        ini_set('session.use_strict_mode', '1');
-        ini_set('session.use_only_cookies', '1');
-        ini_set('session.cookie_httponly', '1');
-        ini_set('session.cookie_samesite', 'Lax');
-
-        if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
-            ini_set('session.cookie_secure', '1');
-        }
-
-        session_name($config['session_name']);
-        session_set_cookie_params([
-            'lifetime' => $config['session_lifetime'],
-            'path'     => '/',
-            'httponly'  => true,
-            'samesite'  => 'Lax',
-        ]);
-
-        session_start();
-        self::$started = true;
-
-        // Regenerar ID periodicamente para prevenir fixação de sessão
-        if (!isset($_SESSION['_created'])) {
-            $_SESSION['_created'] = time();
-        } elseif (time() - $_SESSION['_created'] > 1800) {
-            session_regenerate_id(true);
-            $_SESSION['_created'] = time();
-        }
     }
 
     public static function set(string $key, $value): void
@@ -61,18 +34,10 @@ class Session
         unset($_SESSION[$key]);
     }
 
+    /** Encerrar sessão é responsabilidade do núcleo (?m=auth&a=logout). */
     public static function destroy(): void
     {
-        $_SESSION = [];
-        if (ini_get('session.use_cookies')) {
-            $params = session_get_cookie_params();
-            setcookie(session_name(), '', time() - 42000,
-                $params['path'], $params['domain'],
-                $params['secure'], $params['httponly']
-            );
-        }
-        session_destroy();
-        self::$started = false;
+        Core\Session::destroy();
     }
 
     public static function flash(string $key, $value = null)
@@ -88,17 +53,18 @@ class Session
 
     public static function isLoggedIn(): bool
     {
-        return isset($_SESSION['user_id']);
+        return Core\Auth::check();
     }
 
     public static function userId(): ?int
     {
-        return $_SESSION['user_id'] ?? null;
+        return Core\Auth::id();
     }
 
+    /** Papel do usuário no módulo RH (vocabulário legado do módulo). */
     public static function userRole(): ?string
     {
-        return $_SESSION['user_role'] ?? null;
+        return $GLOBALS['MODULE_ROLE'] ?? ($_SESSION['user_role'] ?? null);
     }
 
     public static function userName(): ?string

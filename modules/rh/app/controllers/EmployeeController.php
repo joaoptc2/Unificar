@@ -50,7 +50,7 @@ class EmployeeController
         $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
         // Contar total
-        $countStmt = $this->db->prepare("SELECT COUNT(*) FROM employees e {$whereClause}");
+        $countStmt = $this->db->prepare("SELECT COUNT(*) FROM rh_employees e {$whereClause}");
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
 
@@ -58,9 +58,9 @@ class EmployeeController
 
         // Buscar dados
         $sql = "SELECT e.*, d.name as department_name, j.title as position_title
-                FROM employees e
-                LEFT JOIN departments d ON e.department_id = d.id
-                LEFT JOIN job_positions j ON e.job_position_id = j.id
+                FROM rh_employees e
+                LEFT JOIN rh_departments d ON e.department_id = d.id
+                LEFT JOIN rh_job_positions j ON e.job_position_id = j.id
                 {$whereClause}
                 ORDER BY e.full_name ASC
                 LIMIT {$pagination->perPage} OFFSET {$pagination->offset}";
@@ -69,7 +69,7 @@ class EmployeeController
         $employees = $stmt->fetchAll();
 
         // Departamentos para filtro
-        $departments = $this->db->query('SELECT id, name FROM departments WHERE active = 1 ORDER BY name')->fetchAll();
+        $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
 
         $pageTitle = 'Funcionários';
         $page = 'employees';
@@ -85,8 +85,8 @@ class EmployeeController
     {
         Auth::requirePermission('employees', 'create');
 
-        $departments = $this->db->query('SELECT id, name FROM departments WHERE active = 1 ORDER BY name')->fetchAll();
-        $positions = $this->db->query('SELECT id, title FROM job_positions WHERE active = 1 ORDER BY title')->fetchAll();
+        $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
+        $positions = $this->db->query('SELECT id, title FROM rh_job_positions WHERE active = 1 ORDER BY title')->fetchAll();
         $employee = null;
 
         $pageTitle = 'Novo Funcionário';
@@ -109,7 +109,7 @@ class EmployeeController
 
         if (!empty($errors)) {
             Session::flash('error', implode('<br>', $errors));
-            header('Location: index.php?page=employees&action=create');
+            header('Location: index.php?m=rh&page=employees&action=create');
             exit;
         }
 
@@ -125,7 +125,7 @@ class EmployeeController
         $this->db->beginTransaction();
         try {
             $stmt = $this->db->prepare(
-                'INSERT INTO employees (full_name, cpf, birth_date, gender, phone, email,
+                'INSERT INTO rh_employees (full_name, cpf, birth_date, gender, phone, email,
                     address_street, address_number, address_complement, address_neighborhood,
                     address_city, address_state, address_zip, job_position_id, department_id,
                     admission_date, contract_type, status, termination_date, leave_date, return_date,
@@ -162,7 +162,7 @@ class EmployeeController
         } catch (\Throwable $e) {
             $this->db->rollBack();
             Session::flash('error', 'Falha ao cadastrar funcionário: ' . Sanitize::e($e->getMessage()));
-            header('Location: index.php?page=employees&action=create');
+            header('Location: index.php?m=rh&page=employees&action=create');
             exit;
         }
 
@@ -177,7 +177,7 @@ class EmployeeController
             $msg .= ' ' . $portalInfo['reason'];
         }
         Session::flash('success', $msg);
-        header('Location: index.php?page=employees&action=show&id=' . $employeeId);
+        header('Location: index.php?m=rh&page=employees&action=show&id=' . $employeeId);
         exit;
     }
 
@@ -188,7 +188,7 @@ class EmployeeController
     private function autoCreateExpirations(int $employeeId, array $data): void
     {
         $stmt = $this->db->prepare(
-            'INSERT INTO expirations (employee_id, type, title, description, issue_date, expiry_date, alert_days, created_by)
+            'INSERT INTO rh_expirations (employee_id, type, title, description, issue_date, expiry_date, alert_days, created_by)
              VALUES (?,?,?,?,?,?,?,?)'
         );
         $description = 'Gerado automaticamente a partir do cadastro.';
@@ -249,21 +249,33 @@ class EmployeeController
             return ['created' => false, 'reason' => 'Acesso ao portal não criado: CPF inválido.', 'email' => ''];
         }
 
-        $stmt = $this->db->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
-        $stmt->execute([$email]);
+        $stmt = $this->db->prepare('SELECT id FROM users WHERE email = ? OR username = ? LIMIT 1');
+        $stmt->execute([$email, $email]);
         if ($stmt->fetch()) {
             return ['created' => false, 'reason' => 'Acesso ao portal não criado: o e-mail já está em uso por outro usuário.', 'email' => $email];
         }
 
+        // Usuário GLOBAL da plataforma (senha inicial = CPF, troca obrigatória).
         $hash = password_hash($cpf, PASSWORD_BCRYPT, ['cost' => 12]);
         $stmt = $this->db->prepare(
-            'INSERT INTO users (name, email, password, role, department_id, employee_id, active)
-             VALUES (?,?,?,?,?,?,1)'
+            'INSERT INTO users (name, username, email, password_hash, is_admin, active, force_password_change)
+             VALUES (?,?,?,?,0,1,1)'
         );
-        $stmt->execute([
-            $data['full_name'], $email, $hash, 'funcionario',
-            $data['department_id'] ?: null, $employeeId,
-        ]);
+        $stmt->execute([$data['full_name'], $email, $email, $hash]);
+        $userId = (int)$this->db->lastInsertId();
+
+        // Perfil do módulo: vínculo usuário ↔ funcionário/departamento.
+        $stmt = $this->db->prepare(
+            'INSERT INTO rh_user_profile (user_id, employee_id, department_id)
+             VALUES (?,?,?)
+             ON DUPLICATE KEY UPDATE employee_id = VALUES(employee_id),
+                                     department_id = VALUES(department_id)'
+        );
+        $stmt->execute([$userId, $employeeId, $data['department_id'] ?: null]);
+
+        // Acesso ao módulo RH com papel "funcionario" (RBAC central).
+        Core\Access::set($userId, 'rh', 'funcionario', Core\Auth::id());
+
         return ['created' => true, 'reason' => '', 'email' => $email];
     }
 
@@ -279,12 +291,12 @@ class EmployeeController
 
         if (!$employee) {
             Session::flash('error', 'Funcionário não encontrado.');
-            header('Location: index.php?page=employees');
+            header('Location: index.php?m=rh&page=employees');
             exit;
         }
 
         // Documentos — separados por categoria para as abas da ficha.
-        $stmt = $this->db->prepare('SELECT * FROM employee_documents WHERE employee_id = ? ORDER BY created_at DESC');
+        $stmt = $this->db->prepare('SELECT * FROM rh_employee_documents WHERE employee_id = ? ORDER BY created_at DESC');
         $stmt->execute([$id]);
         $allDocs = $stmt->fetchAll();
         $documents = $trainings = $epis = [];
@@ -296,7 +308,7 @@ class EmployeeController
 
         // Histórico
         $stmt = $this->db->prepare(
-            'SELECT r.*, u.name as user_name FROM employee_records r
+            'SELECT r.*, u.name as user_name FROM rh_employee_records r
              LEFT JOIN users u ON r.created_by = u.id
              WHERE r.employee_id = ? ORDER BY r.record_date DESC, r.created_at DESC'
         );
@@ -304,12 +316,12 @@ class EmployeeController
         $records = $stmt->fetchAll();
 
         // Vencimentos
-        $stmt = $this->db->prepare('SELECT * FROM expirations WHERE employee_id = ? ORDER BY expiry_date ASC');
+        $stmt = $this->db->prepare('SELECT * FROM rh_expirations WHERE employee_id = ? ORDER BY expiry_date ASC');
         $stmt->execute([$id]);
         $expirations = $stmt->fetchAll();
 
         // Atestados
-        $stmt = $this->db->prepare('SELECT * FROM medical_certificates WHERE employee_id = ? ORDER BY issue_date DESC');
+        $stmt = $this->db->prepare('SELECT * FROM rh_medical_certificates WHERE employee_id = ? ORDER BY issue_date DESC');
         $stmt->execute([$id]);
         $certificates = $stmt->fetchAll();
 
@@ -318,8 +330,13 @@ class EmployeeController
         $scoresTotal     = EmployeeScore::totalFor($id);
         $compliments     = EmployeeCompliment::listFor($id);
 
-        // Usuário vinculado (portal do funcionário).
-        $stmt = $this->db->prepare('SELECT id, email, active, last_login FROM users WHERE employee_id = ?');
+        // Usuário vinculado (portal do funcionário) — via rh_user_profile.
+        $stmt = $this->db->prepare(
+            'SELECT u.id, u.email, u.active, u.last_login_at AS last_login
+             FROM rh_user_profile p
+             JOIN users u ON u.id = p.user_id
+             WHERE p.employee_id = ?'
+        );
         $stmt->execute([$id]);
         $portalUser = $stmt->fetch() ?: null;
 
@@ -342,12 +359,12 @@ class EmployeeController
 
         if (!$employee) {
             Session::flash('error', 'Funcionário não encontrado.');
-            header('Location: index.php?page=employees');
+            header('Location: index.php?m=rh&page=employees');
             exit;
         }
 
-        $departments = $this->db->query('SELECT id, name FROM departments WHERE active = 1 ORDER BY name')->fetchAll();
-        $positions = $this->db->query('SELECT id, title FROM job_positions WHERE active = 1 ORDER BY title')->fetchAll();
+        $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
+        $positions = $this->db->query('SELECT id, title FROM rh_job_positions WHERE active = 1 ORDER BY title')->fetchAll();
 
         $pageTitle = 'Editar Funcionário';
         $page = 'employees';
@@ -369,7 +386,7 @@ class EmployeeController
 
         if (!$old) {
             Session::flash('error', 'Funcionário não encontrado.');
-            header('Location: index.php?page=employees');
+            header('Location: index.php?m=rh&page=employees');
             exit;
         }
 
@@ -378,7 +395,7 @@ class EmployeeController
 
         if (!empty($errors)) {
             Session::flash('error', implode('<br>', $errors));
-            header('Location: index.php?page=employees&action=edit&id=' . $id);
+            header('Location: index.php?m=rh&page=employees&action=edit&id=' . $id);
             exit;
         }
 
@@ -394,7 +411,7 @@ class EmployeeController
         }
 
         $stmt = $this->db->prepare(
-            'UPDATE employees SET full_name=?, cpf=?, birth_date=?, gender=?, phone=?, email=?,
+            'UPDATE rh_employees SET full_name=?, cpf=?, birth_date=?, gender=?, phone=?, email=?,
                 address_street=?, address_number=?, address_complement=?, address_neighborhood=?,
                 address_city=?, address_state=?, address_zip=?, job_position_id=?, department_id=?,
                 admission_date=?, contract_type=?, status=?, termination_date=?, leave_date=?, return_date=?,
@@ -440,7 +457,7 @@ class EmployeeController
         FileCache::forget('dashboard.global.' . date('Y-m-d'));
 
         Session::flash('success', 'Funcionário atualizado com sucesso.');
-        header('Location: index.php?page=employees&action=show&id=' . $id);
+        header('Location: index.php?m=rh&page=employees&action=show&id=' . $id);
         exit;
     }
 
@@ -458,17 +475,17 @@ class EmployeeController
         $employee = $this->getEmployee($id);
         if (!$employee) {
             Session::flash('error', 'Funcionário não encontrado.');
-            header('Location: index.php?page=employees');
+            header('Location: index.php?m=rh&page=employees');
             exit;
         }
         if ($employee['status'] !== 'desligado') {
             Session::flash('error', 'Apenas funcionários desligados podem ser anonimizados.');
-            header('Location: index.php?page=employees&action=show&id=' . $id);
+            header('Location: index.php?m=rh&page=employees&action=show&id=' . $id);
             exit;
         }
         if (!empty($employee['anonymized_at'])) {
             Session::flash('error', 'Funcionário já foi anonimizado.');
-            header('Location: index.php?page=employees&action=show&id=' . $id);
+            header('Location: index.php?m=rh&page=employees&action=show&id=' . $id);
             exit;
         }
 
@@ -478,7 +495,7 @@ class EmployeeController
         } else {
             Session::flash('error', 'Falha ao anonimizar funcionário.');
         }
-        header('Location: index.php?page=employees&action=show&id=' . $id);
+        header('Location: index.php?m=rh&page=employees&action=show&id=' . $id);
         exit;
     }
 
@@ -495,14 +512,14 @@ class EmployeeController
 
         if ($employee) {
             if ($employee['photo']) Upload::delete($employee['photo']);
-            $stmt = $this->db->prepare('DELETE FROM employees WHERE id = ?');
+            $stmt = $this->db->prepare('DELETE FROM rh_employees WHERE id = ?');
             $stmt->execute([$id]);
             AuditLog::log('delete', 'employees', $id, $employee);
             FileCache::forget('dashboard.global.' . date('Y-m-d'));
             Session::flash('success', 'Funcionário excluído com sucesso.');
         }
 
-        header('Location: index.php?page=employees');
+        header('Location: index.php?m=rh&page=employees');
         exit;
     }
 
@@ -518,33 +535,32 @@ class EmployeeController
         $employee = $this->getEmployee($id);
         if (!$employee) {
             Session::flash('error', 'Funcionário não encontrado.');
-            header('Location: index.php?page=employees');
+            header('Location: index.php?m=rh&page=employees');
             exit;
         }
 
-        $stmt = $this->db->prepare('SELECT * FROM employee_documents WHERE employee_id = ? ORDER BY created_at DESC');
+        $stmt = $this->db->prepare('SELECT * FROM rh_employee_documents WHERE employee_id = ? ORDER BY created_at DESC');
         $stmt->execute([$id]);
         $documents = $stmt->fetchAll();
 
         $stmt = $this->db->prepare(
-            'SELECT r.*, u.name as user_name FROM employee_records r
+            'SELECT r.*, u.name as user_name FROM rh_employee_records r
              LEFT JOIN users u ON r.created_by = u.id
              WHERE r.employee_id = ? ORDER BY r.record_date DESC, r.created_at DESC'
         );
         $stmt->execute([$id]);
         $records = $stmt->fetchAll();
 
-        $stmt = $this->db->prepare('SELECT * FROM expirations WHERE employee_id = ? ORDER BY expiry_date ASC');
+        $stmt = $this->db->prepare('SELECT * FROM rh_expirations WHERE employee_id = ? ORDER BY expiry_date ASC');
         $stmt->execute([$id]);
         $expirations = $stmt->fetchAll();
 
-        $stmt = $this->db->prepare('SELECT * FROM medical_certificates WHERE employee_id = ? ORDER BY issue_date DESC');
+        $stmt = $this->db->prepare('SELECT * FROM rh_medical_certificates WHERE employee_id = ? ORDER BY issue_date DESC');
         $stmt->execute([$id]);
         $certificates = $stmt->fetchAll();
 
-        // Configuração do sistema (nome do hospital).
-        $appConfig   = require __DIR__ . '/../../config/app.php';
-        $hospitalName = $appConfig['app_name'] ?? 'Hospital';
+        // Nome do hospital agora vem das configurações do núcleo.
+        $hospitalName = Core\Settings::get('org_name', 'Hospital');
 
         AuditLog::log('print', 'employees', $id);
 
@@ -572,9 +588,9 @@ class EmployeeController
         $params = $status ? [$status] : [];
 
         $sql = "SELECT e.*, d.name as department_name, j.title as position_title
-                FROM employees e
-                LEFT JOIN departments d ON e.department_id = d.id
-                LEFT JOIN job_positions j ON e.job_position_id = j.id
+                FROM rh_employees e
+                LEFT JOIN rh_departments d ON e.department_id = d.id
+                LEFT JOIN rh_job_positions j ON e.job_position_id = j.id
                 {$where}
                 ORDER BY e.full_name";
         $stmt = $this->db->prepare($sql);
@@ -610,9 +626,9 @@ class EmployeeController
     {
         $stmt = $this->db->prepare(
             'SELECT e.*, d.name as department_name, j.title as position_title
-             FROM employees e
-             LEFT JOIN departments d ON e.department_id = d.id
-             LEFT JOIN job_positions j ON e.job_position_id = j.id
+             FROM rh_employees e
+             LEFT JOIN rh_departments d ON e.department_id = d.id
+             LEFT JOIN rh_job_positions j ON e.job_position_id = j.id
              WHERE e.id = ?'
         );
         $stmt->execute([$id]);
@@ -684,7 +700,7 @@ class EmployeeController
 
         // Verificar CPF duplicado
         if (!empty($data['cpf'])) {
-            $sql = 'SELECT id FROM employees WHERE cpf = ?';
+            $sql = 'SELECT id FROM rh_employees WHERE cpf = ?';
             $params = [$data['cpf']];
             if ($excludeId) {
                 $sql .= ' AND id != ?';
@@ -703,7 +719,7 @@ class EmployeeController
     private function addRecord(int $employeeId, string $type, string $description, string $date): void
     {
         $stmt = $this->db->prepare(
-            'INSERT INTO employee_records (employee_id, record_type, description, record_date, created_by)
+            'INSERT INTO rh_employee_records (employee_id, record_type, description, record_date, created_by)
              VALUES (?, ?, ?, ?, ?)'
         );
         $stmt->execute([$employeeId, $type, $description, $date, Session::userId()]);

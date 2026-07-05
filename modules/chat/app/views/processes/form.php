@@ -1,7 +1,7 @@
 <?php $isEdit = !empty($process['id']); ?>
 <div class="page-header">
     <h1><i class="bi bi-diagram-3 me-2"></i><?= $isEdit ? 'Editar Processo' : 'Novo Processo' ?></h1>
-    <a href="index.php?page=processes" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=chat&page=processes" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>
@@ -10,7 +10,7 @@
     <div class="col-md-10">
         <div class="card border-0 shadow-sm">
             <div class="card-body">
-                <form method="POST" action="index.php?page=processes&action=<?= $isEdit ? 'update' : 'store' ?>">
+                <form method="POST" action="index.php?m=chat&page=processes&action=<?= $isEdit ? 'update' : 'store' ?>">
                     <?= Csrf::field() ?>
                     <?php if ($isEdit): ?>
                         <input type="hidden" name="id" value="<?= $process['id'] ?>">
@@ -82,7 +82,7 @@
                         </div>
 
                         <div class="col-12 text-end mt-4">
-                            <a href="index.php?page=processes" class="btn btn-outline-secondary me-2">Cancelar</a>
+                            <a href="index.php?m=chat&page=processes" class="btn btn-outline-secondary me-2">Cancelar</a>
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-check-lg me-1"></i> <?= $isEdit ? 'Atualizar' : 'Criar Processo' ?>
                             </button>

@@ -7,11 +7,11 @@
     </h1>
     <div class="d-flex gap-2">
         <?php if (Auth::can('teams', 'edit')): ?>
-        <a href="index.php?page=teams&action=edit&id=<?= $team['id'] ?>" class="btn btn-outline-warning btn-sm">
+        <a href="index.php?m=chat&page=teams&action=edit&id=<?= $team['id'] ?>" class="btn btn-outline-warning btn-sm">
             <i class="bi bi-pencil me-1"></i> Editar
         </a>
         <?php endif; ?>
-        <a href="index.php?page=teams" class="btn btn-outline-secondary btn-sm">
+        <a href="index.php?m=chat&page=teams" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i> Voltar
         </a>
     </div>
@@ -52,7 +52,7 @@
                                     </span>
                                 </td>
                                 <td class="text-end">
-                                    <a href="index.php?page=channels&action=direct&user_id=<?= $member['id'] ?>" class="btn btn-outline-primary btn-action" title="Mensagem direta">
+                                    <a href="index.php?m=chat&page=channels&action=direct&user_id=<?= $member['id'] ?>" class="btn btn-outline-primary btn-action" title="Mensagem direta">
                                         <i class="bi bi-chat"></i>
                                     </a>
                                 </td>

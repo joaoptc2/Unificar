@@ -1,5 +1,15 @@
 # TeamChat — Sistema de Chat Interno Empresarial
 
+> **PORTADO PARA A PLATAFORMA UNIFICADA** — este módulo agora roda em
+> `/index.php?m=chat&page=...` sob o núcleo (`docs/PORTING.md`):
+> autenticação/sessão/CSRF/layout/notificações/auditoria são do núcleo;
+> tabelas com prefixo `chat_` (schema em `sql/modules/chat.sql`, migração
+> do banco antigo em `sql/legacy-migration/chat.sql`); assets em
+> `/assets/chat/`; uploads em `/uploads/chat/`; presença em `chat_presence`.
+> As seções abaixo descrevem o sistema legado original e permanecem apenas
+> como referência histórica — caminhos, login próprio, instalador e a
+> configuração de banco própria do módulo NÃO existem mais.
+
 Sistema de comunicação interna inspirado no Slack, desenvolvido como módulo
 independente de um ERP corporativo. PHP 8.0+ puro (sem Composer), MySQL 5.7+,
 Bootstrap 5.3, atualização em tempo real via AJAX polling.
@@ -132,7 +142,7 @@ Bootstrap 5.3, atualização em tempo real via AJAX polling.
 
 ## Roteamento
 
-Todas as rotas usam query string: `index.php?page=X&action=Y`
+Todas as rotas usam query string: `index.php?m=chat&page=X&action=Y`
 
 | page       | Controller            | Ações principais                                        |
 |------------|-----------------------|---------------------------------------------------------|
@@ -361,7 +371,7 @@ Em `app/views/layout/header.php`, adicionar nav-item com `Auth::can()`.
 ### JavaScript
 - Vanilla ES6+ (sem jQuery)
 - API calls via `fetch()` com CSRF token no header `X-CSRF-TOKEN`
-- URLs relativas: `index.php?page=api&action=xxx`
+- URLs relativas: `index.php?m=chat&page=api&action=xxx`
 - Confirmação: atributo `data-confirm="Mensagem?"` em qualquer elemento
 
 ---

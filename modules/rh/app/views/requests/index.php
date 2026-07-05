@@ -20,7 +20,7 @@
     <td><?= Sanitize::formatDateTime($r['created_at']) ?></td>
     <td>
         <?php if (Auth::can('requests', 'edit') && $r['status'] === 'pendente'): ?>
-        <form method="POST" action="index.php?page=requests&action=respond" class="d-inline">
+        <form method="POST" action="index.php?m=rh&page=requests&action=respond" class="d-inline">
             <?= Csrf::field() ?><input type="hidden" name="id" value="<?= $r['id'] ?>">
             <input type="hidden" name="response" value="">
             <button name="status" value="aprovada" class="btn btn-outline-success btn-action" title="Aprovar"><i class="bi bi-check-lg"></i></button>

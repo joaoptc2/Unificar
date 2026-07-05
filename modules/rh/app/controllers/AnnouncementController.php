@@ -10,14 +10,14 @@ class AnnouncementController
     public function create(): void
     {
         Auth::requirePermission('announcements', 'create');
-        $depts = Database::getInstance()->query('SELECT id, name FROM departments WHERE active = 1 ORDER BY name')->fetchAll();
+        $depts = Database::getInstance()->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
         View::render('announcements/form', ['pageTitle' => 'Novo Comunicado', 'page' => 'announcements', 'departments' => $depts, 'item' => null]);
     }
     public function store(): void
     {
         Auth::requirePermission('announcements', 'create'); Csrf::check();
         $title = Sanitize::post('title'); $body = Sanitize::post('body');
-        if (!$title || !$body) { Session::flash('error', 'Titulo e corpo obrigatorios.'); header('Location: index.php?page=announcements&action=create'); exit; }
+        if (!$title || !$body) { Session::flash('error', 'Titulo e corpo obrigatorios.'); header('Location: index.php?m=rh&page=announcements&action=create'); exit; }
         $publish = !empty($_POST['publish_now']);
         $id = Announcement::insert([
             'title' => $title, 'body' => $body, 'type' => Sanitize::post('type') ?: 'informativo',
@@ -28,7 +28,7 @@ class AnnouncementController
         ]);
         AuditLog::log('create', 'announcements', $id);
         Session::flash('success', 'Comunicado ' . ($publish ? 'publicado' : 'salvo como rascunho') . '.');
-        header('Location: index.php?page=announcements'); exit;
+        header('Location: index.php?m=rh&page=announcements'); exit;
     }
     public function read(): void
     {
@@ -36,13 +36,13 @@ class AnnouncementController
         $id = Sanitize::int($_GET['id'] ?? 0);
         Announcement::markRead($id, (int)Session::userId());
         $item = Announcement::find($id);
-        if (!$item) { header('Location: index.php?page=announcements'); exit; }
+        if (!$item) { header('Location: index.php?m=rh&page=announcements'); exit; }
         View::render('announcements/show', ['pageTitle' => $item['title'], 'page' => 'announcements', 'item' => $item]);
     }
     public function delete(): void
     {
         Auth::requirePermission('announcements', 'delete'); Csrf::check();
         Announcement::delete(Sanitize::int($_POST['id'] ?? 0));
-        Session::flash('success', 'Comunicado excluido.'); header('Location: index.php?page=announcements'); exit;
+        Session::flash('success', 'Comunicado excluido.'); header('Location: index.php?m=rh&page=announcements'); exit;
     }
 }

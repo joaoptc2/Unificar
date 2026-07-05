@@ -6,7 +6,7 @@ class TrainingController
     public function index(): void
     {
         Auth::requirePermission('trainings', 'view');
-        $catalog = $this->db->query('SELECT tc.*, d.name AS department_name FROM training_catalog tc LEFT JOIN departments d ON tc.department_id = d.id WHERE tc.active = 1 ORDER BY tc.title')->fetchAll();
+        $catalog = $this->db->query('SELECT tc.*, d.name AS department_name FROM rh_training_catalog tc LEFT JOIN rh_departments d ON tc.department_id = d.id WHERE tc.active = 1 ORDER BY tc.title')->fetchAll();
         $expiring = TrainingRecord::expiringInDays(30);
         View::render('trainings/index', ['pageTitle' => 'Treinamentos', 'page' => 'trainings', 'catalog' => $catalog, 'expiring' => $expiring]);
     }
@@ -14,15 +14,15 @@ class TrainingController
     {
         Auth::requirePermission('trainings', 'create'); Csrf::check();
         $title = Sanitize::post('title');
-        if (!$title) { Session::flash('error', 'Titulo obrigatorio.'); header('Location: index.php?page=trainings'); exit; }
-        $this->db->prepare('INSERT INTO training_catalog (title, description, category, hours, mandatory, validity_months, department_id) VALUES (?,?,?,?,?,?,?)')
+        if (!$title) { Session::flash('error', 'Titulo obrigatorio.'); header('Location: index.php?m=rh&page=trainings'); exit; }
+        $this->db->prepare('INSERT INTO rh_training_catalog (title, description, category, hours, mandatory, validity_months, department_id) VALUES (?,?,?,?,?,?,?)')
                  ->execute([$title, Sanitize::post('description'), Sanitize::post('category'),
                      $_POST['hours'] ? (float)$_POST['hours'] : null, !empty($_POST['mandatory']) ? 1 : 0,
                      Sanitize::int($_POST['validity_months'] ?? 0) ?: null,
                      Sanitize::int($_POST['department_id'] ?? 0) ?: null]);
         AuditLog::log('create', 'training_catalog', (int)$this->db->lastInsertId());
         Session::flash('success', 'Treinamento adicionado ao catalogo.');
-        header('Location: index.php?page=trainings'); exit;
+        header('Location: index.php?m=rh&page=trainings'); exit;
     }
     public function record(): void
     {
@@ -30,10 +30,10 @@ class TrainingController
         $empId = Sanitize::int($_POST['employee_id'] ?? 0);
         $catId = Sanitize::int($_POST['catalog_id'] ?? 0);
         $title = Sanitize::post('title'); $date = Sanitize::date($_POST['completed_at'] ?? '');
-        if (!$empId || !$title || !$date) { Session::flash('error', 'Preencha os campos obrigatorios.'); header('Location: index.php?page=employees&action=show&id=' . $empId); exit; }
+        if (!$empId || !$title || !$date) { Session::flash('error', 'Preencha os campos obrigatorios.'); header('Location: index.php?m=rh&page=employees&action=show&id=' . $empId); exit; }
         $expiresAt = null;
         if ($catId) {
-            $stmt = $this->db->prepare('SELECT validity_months FROM training_catalog WHERE id = ?'); $stmt->execute([$catId]);
+            $stmt = $this->db->prepare('SELECT validity_months FROM rh_training_catalog WHERE id = ?'); $stmt->execute([$catId]);
             $months = (int)$stmt->fetchColumn();
             if ($months > 0) $expiresAt = date('Y-m-d', strtotime($date . " +{$months} months"));
         }
@@ -49,7 +49,7 @@ class TrainingController
             ExpirationController::syncToSchedule($this->db, 0, $empId, 'Treinamento: ' . $title, $expiresAt, 'Vencimento de treinamento');
         }
         AuditLog::log('create', 'training_records', $id);
-        Session::flash('success', 'Treinamento registrado.'); header('Location: index.php?page=employees&action=show&id=' . $empId); exit;
+        Session::flash('success', 'Treinamento registrado.'); header('Location: index.php?m=rh&page=employees&action=show&id=' . $empId); exit;
     }
     public function delete_record(): void
     {
@@ -57,6 +57,6 @@ class TrainingController
         $id = Sanitize::int($_POST['id'] ?? 0); $empId = Sanitize::int($_POST['employee_id'] ?? 0);
         $r = TrainingRecord::find($id); if ($r && $r['certificate_path']) Upload::delete($r['certificate_path']);
         TrainingRecord::delete($id); AuditLog::log('delete', 'training_records', $id);
-        Session::flash('success', 'Registro removido.'); header('Location: index.php?page=employees&action=show&id=' . $empId); exit;
+        Session::flash('success', 'Registro removido.'); header('Location: index.php?m=rh&page=employees&action=show&id=' . $empId); exit;
     }
 }

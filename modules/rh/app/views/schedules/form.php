@@ -1,11 +1,11 @@
 <?php
 $isEdit = $isEdit ?? !empty($schedule['id']);
-$formAction = $isEdit ? 'index.php?page=schedules&action=update' : 'index.php?page=schedules&action=store';
+$formAction = $isEdit ? 'index.php?m=rh&page=schedules&action=update' : 'index.php?m=rh&page=schedules&action=store';
 ?>
 
 <div class="page-header">
     <h1><i class="bi bi-calendar-plus me-2"></i><?= $isEdit ? 'Editar Compromisso' : 'Novo Compromisso' ?></h1>
-    <a href="index.php?page=schedules" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=rh&page=schedules" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>

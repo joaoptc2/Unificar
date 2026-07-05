@@ -35,8 +35,8 @@ function indicator_hydrate($row) {
 }
 
 function indicator_count($hospital_id, $type = '', $search = '', $category = '') {
-    $has_category = db_has_column('indicators', 'category');
-    $sql = "SELECT COUNT(*) AS total FROM indicators
+    $has_category = db_has_column('doc_indicators', 'category');
+    $sql = "SELECT COUNT(*) AS total FROM doc_indicators
             WHERE hospital_id = ? AND deleted_at IS NULL";
     $params = [$hospital_id];
     if ($type !== '')     { $sql .= " AND type = ?";     $params[] = $type; }
@@ -52,8 +52,8 @@ function indicator_count($hospital_id, $type = '', $search = '', $category = '')
 }
 
 function indicator_list($hospital_id, $type = '', $search = '', $category = '', $limit = 20, $offset = 0) {
-    $has_category = db_has_column('indicators', 'category');
-    $sql = "SELECT * FROM indicators
+    $has_category = db_has_column('doc_indicators', 'category');
+    $sql = "SELECT * FROM doc_indicators
             WHERE hospital_id = ? AND deleted_at IS NULL";
     $params = [$hospital_id];
     if ($type !== '')     { $sql .= " AND type = ?";     $params[] = $type; }
@@ -74,7 +74,7 @@ function indicator_list($hospital_id, $type = '', $search = '', $category = '', 
 function indicator_find($id, $hospital_id) {
     $row = db_query_one(
         "SELECT i.*, u.name AS created_by_name
-         FROM indicators i
+         FROM doc_indicators i
          LEFT JOIN users u ON u.id = i.created_by
          WHERE i.id = ? AND i.hospital_id = ? AND i.deleted_at IS NULL",
         [(int) $id, (int) $hospital_id]
@@ -83,10 +83,10 @@ function indicator_find($id, $hospital_id) {
 }
 
 function indicator_distinct_categories($hospital_id) {
-    if (!db_has_column('indicators', 'category')) return [];
+    if (!db_has_column('doc_indicators', 'category')) return [];
     try {
         return db_query(
-            "SELECT DISTINCT category FROM indicators
+            "SELECT DISTINCT category FROM doc_indicators
              WHERE hospital_id = ? AND deleted_at IS NULL AND category IS NOT NULL AND category <> ''
              ORDER BY category",
             [(int) $hospital_id]
@@ -109,7 +109,7 @@ function _indicator_available_columns() {
             'accreditation', 'template_slug'];
     $cache = [];
     foreach ($all as $c) {
-        if (db_has_column('indicators', $c)) $cache[] = $c;
+        if (db_has_column('doc_indicators', $c)) $cache[] = $c;
     }
     return $cache;
 }
@@ -135,13 +135,13 @@ function indicator_create($hospital_id, array $data, array $variables, $created_
         $col_list     = '`' . implode('`, `', $cols) . '`';
 
         db_execute(
-            "INSERT INTO indicators ($col_list, created_at, updated_at)
+            "INSERT INTO doc_indicators ($col_list, created_at, updated_at)
              VALUES ($placeholders, NOW(), NOW())",
             $vals
         );
         $indicator_id = (int) db_last_id();
 
-        if (db_has_table('indicator_variables')) {
+        if (db_has_table('doc_indicator_variables')) {
             _indicator_sync_variables($indicator_id, $variables);
         }
         return $indicator_id;
@@ -165,12 +165,12 @@ function indicator_update($id, $hospital_id, array $data, array $variables) {
         $params[] = $hospital_id;
 
         db_execute(
-            "UPDATE indicators SET " . implode(', ', $sets) . "
+            "UPDATE doc_indicators SET " . implode(', ', $sets) . "
              WHERE id = ? AND hospital_id = ?",
             $params
         );
 
-        if (db_has_table('indicator_variables')) {
+        if (db_has_table('doc_indicator_variables')) {
             _indicator_sync_variables($id, $variables);
         }
     });
@@ -184,7 +184,7 @@ function indicator_update($id, $hospital_id, array $data, array $variables) {
  */
 function _indicator_sync_variables($indicator_id, array $variables) {
     $existing = db_query(
-        "SELECT id, code FROM indicator_variables WHERE indicator_id = ?",
+        "SELECT id, code FROM doc_indicator_variables WHERE indicator_id = ?",
         [$indicator_id]
     );
     $by_code = [];
@@ -200,12 +200,12 @@ function _indicator_sync_variables($indicator_id, array $variables) {
 
         if (isset($by_code[$code])) {
             db_execute(
-                "UPDATE indicator_variables SET label = ?, unit = ?, display_order = ? WHERE id = ?",
+                "UPDATE doc_indicator_variables SET label = ?, unit = ?, display_order = ? WHERE id = ?",
                 [$label, $unit, $order, $by_code[$code]]
             );
         } else {
             db_execute(
-                "INSERT INTO indicator_variables (indicator_id, code, label, unit, display_order)
+                "INSERT INTO doc_indicator_variables (indicator_id, code, label, unit, display_order)
                  VALUES (?, ?, ?, ?, ?)",
                 [$indicator_id, $code, $label, $unit, $order]
             );
@@ -215,14 +215,14 @@ function _indicator_sync_variables($indicator_id, array $variables) {
     // Remove as que não existem mais
     foreach ($by_code as $code => $var_id) {
         if (!isset($kept_codes[$code])) {
-            db_execute("DELETE FROM indicator_variables WHERE id = ?", [$var_id]);
+            db_execute("DELETE FROM doc_indicator_variables WHERE id = ?", [$var_id]);
         }
     }
 }
 
 function indicator_soft_delete($id, $hospital_id) {
     return db_execute(
-        "UPDATE indicators SET deleted_at = NOW() WHERE id = ? AND hospital_id = ? AND deleted_at IS NULL",
+        "UPDATE doc_indicators SET deleted_at = NOW() WHERE id = ? AND hospital_id = ? AND deleted_at IS NULL",
         [$id, $hospital_id]
     );
 }
@@ -230,10 +230,10 @@ function indicator_soft_delete($id, $hospital_id) {
 // ─── Variáveis ──────────────────────────────────────────────────────────────
 
 function indicator_variables_list($indicator_id) {
-    if (!db_has_table('indicator_variables')) return [];
+    if (!db_has_table('doc_indicator_variables')) return [];
     try {
         return db_query(
-            "SELECT * FROM indicator_variables WHERE indicator_id = ?
+            "SELECT * FROM doc_indicator_variables WHERE indicator_id = ?
              ORDER BY display_order, id",
             [(int) $indicator_id]
         );
@@ -246,7 +246,7 @@ function indicator_variables_list($indicator_id) {
 
 function indicator_data_find($data_id, $indicator_id) {
     return db_query_one(
-        "SELECT * FROM indicator_data
+        "SELECT * FROM doc_indicator_data
          WHERE id = ? AND indicator_id = ? AND deleted_at IS NULL",
         [(int) $data_id, (int) $indicator_id]
     );
@@ -258,7 +258,7 @@ function indicator_data_find($data_id, $indicator_id) {
 function indicator_data_list($indicator_id, $limit = 100) {
     $rows = db_query(
         "SELECT id.*, u.name AS recorded_by_name
-         FROM indicator_data id
+         FROM doc_indicator_data id
          LEFT JOIN users u ON u.id = id.recorded_by
          WHERE id.indicator_id = ? AND id.deleted_at IS NULL
          ORDER BY id.reference_date DESC
@@ -268,14 +268,14 @@ function indicator_data_list($indicator_id, $limit = 100) {
     if (empty($rows)) return $rows;
 
     // Anexa valores das variáveis somente se a tabela existir
-    if (db_has_table('indicator_data_values') && db_has_table('indicator_variables')) {
+    if (db_has_table('doc_indicator_data_values') && db_has_table('doc_indicator_variables')) {
         try {
             $ids = array_map(fn($r) => $r['id'], $rows);
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
             $vvalues = db_query(
                 "SELECT dv.data_id, dv.variable_id, dv.value, v.code, v.label
-                 FROM indicator_data_values dv
-                 JOIN indicator_variables v ON v.id = dv.variable_id
+                 FROM doc_indicator_data_values dv
+                 JOIN doc_indicator_variables v ON v.id = dv.variable_id
                  WHERE dv.data_id IN ($placeholders)",
                 $ids
             );
@@ -301,7 +301,7 @@ function indicator_data_list($indicator_id, $limit = 100) {
 function indicator_data_series($indicator_id) {
     return db_query(
         "SELECT id, reference_date, value, observations
-         FROM indicator_data
+         FROM doc_indicator_data
          WHERE indicator_id = ? AND deleted_at IS NULL
          ORDER BY reference_date ASC",
         [(int) $indicator_id]
@@ -313,13 +313,13 @@ function indicator_data_series($indicator_id) {
  * Retorna: ['a' => [['date' => ..., 'value' => ...]], 'b' => [...]]
  */
 function indicator_variable_series($indicator_id) {
-    if (!db_has_table('indicator_data_values') || !db_has_table('indicator_variables')) return [];
+    if (!db_has_table('doc_indicator_data_values') || !db_has_table('doc_indicator_variables')) return [];
     try {
         $rows = db_query(
             "SELECT d.reference_date, v.code, dv.value
-             FROM indicator_data d
-             JOIN indicator_data_values dv ON dv.data_id = d.id
-             JOIN indicator_variables v    ON v.id = dv.variable_id
+             FROM doc_indicator_data d
+             JOIN doc_indicator_data_values dv ON dv.data_id = d.id
+             JOIN doc_indicator_variables v    ON v.id = dv.variable_id
              WHERE d.indicator_id = ? AND d.deleted_at IS NULL
              ORDER BY d.reference_date ASC, v.display_order ASC",
             [(int) $indicator_id]
@@ -344,21 +344,21 @@ function indicator_data_upsert($indicator_id, $reference_date, $calc_value,
     return db_transaction(function() use ($indicator_id, $reference_date, $calc_value,
                                           $observations, $recorded_by, $var_values) {
         $existing = db_query_one(
-            "SELECT id FROM indicator_data
+            "SELECT id FROM doc_indicator_data
              WHERE indicator_id = ? AND reference_date = ? AND deleted_at IS NULL",
             [$indicator_id, $reference_date]
         );
         if ($existing) {
             $data_id = (int) $existing['id'];
             db_execute(
-                "UPDATE indicator_data SET value = ?, observations = ?, recorded_by = ?
+                "UPDATE doc_indicator_data SET value = ?, observations = ?, recorded_by = ?
                  WHERE id = ?",
                 [$calc_value, $observations, $recorded_by, $data_id]
             );
-            db_execute("DELETE FROM indicator_data_values WHERE data_id = ?", [$data_id]);
+            db_execute("DELETE FROM doc_indicator_data_values WHERE data_id = ?", [$data_id]);
         } else {
             db_execute(
-                "INSERT INTO indicator_data
+                "INSERT INTO doc_indicator_data
                     (indicator_id, reference_date, value, observations, recorded_by, created_at)
                  VALUES (?, ?, ?, ?, ?, NOW())",
                 [$indicator_id, $reference_date, $calc_value, $observations, $recorded_by]
@@ -369,7 +369,7 @@ function indicator_data_upsert($indicator_id, $reference_date, $calc_value,
         if (!empty($var_values)) {
             // Busca mapa code → id das variáveis
             $vars = db_query(
-                "SELECT id, code FROM indicator_variables WHERE indicator_id = ?",
+                "SELECT id, code FROM doc_indicator_variables WHERE indicator_id = ?",
                 [$indicator_id]
             );
             $code_to_id = [];
@@ -378,7 +378,7 @@ function indicator_data_upsert($indicator_id, $reference_date, $calc_value,
             foreach ($var_values as $code => $value) {
                 if (!isset($code_to_id[$code])) continue;
                 db_execute(
-                    "INSERT INTO indicator_data_values (data_id, variable_id, value)
+                    "INSERT INTO doc_indicator_data_values (data_id, variable_id, value)
                      VALUES (?, ?, ?)",
                     [$data_id, $code_to_id[$code], (float) $value]
                 );
@@ -391,7 +391,7 @@ function indicator_data_upsert($indicator_id, $reference_date, $calc_value,
 
 function indicator_data_soft_delete($data_id, $indicator_id) {
     return db_execute(
-        "UPDATE indicator_data SET deleted_at = NOW()
+        "UPDATE doc_indicator_data SET deleted_at = NOW()
          WHERE id = ? AND indicator_id = ?",
         [$data_id, $indicator_id]
     );
@@ -402,12 +402,12 @@ function indicator_data_soft_delete($data_id, $indicator_id) {
  * Retorna array code => value.
  */
 function indicator_data_variables($data_id) {
-    if (!db_has_table('indicator_data_values') || !db_has_table('indicator_variables')) return [];
+    if (!db_has_table('doc_indicator_data_values') || !db_has_table('doc_indicator_variables')) return [];
     try {
         $rows = db_query(
             "SELECT v.code, dv.value
-             FROM indicator_data_values dv
-             JOIN indicator_variables v ON v.id = dv.variable_id
+             FROM doc_indicator_data_values dv
+             JOIN doc_indicator_variables v ON v.id = dv.variable_id
              WHERE dv.data_id = ?",
             [(int) $data_id]
         );

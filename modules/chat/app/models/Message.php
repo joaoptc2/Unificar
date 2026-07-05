@@ -1,7 +1,7 @@
 <?php
 class Message extends Model
 {
-    protected static string $table = 'messages';
+    protected static string $table = 'chat_messages';
     protected static array  $fillable = [
         'channel_id', 'user_id', 'parent_id', 'content',
         'type', 'is_edited', 'edited_at', 'is_pinned',
@@ -11,9 +11,11 @@ class Message extends Model
     public static function channelMessages(int $channelId, int $limit = 50, ?int $before = null): array
     {
         $db = Database::getInstance();
-        $sql = 'SELECT m.*, u.name AS user_name, u.avatar AS user_avatar, u.status AS user_status
-                FROM messages m
+        $sql = 'SELECT m.*, u.name AS user_name, u.avatar AS user_avatar,
+                       COALESCE(p.status, "offline") AS user_status
+                FROM chat_messages m
                 LEFT JOIN users u ON u.id = m.user_id
+                LEFT JOIN chat_presence p ON p.user_id = u.id
                 WHERE m.channel_id = ? AND m.parent_id IS NULL AND m.deleted_at IS NULL';
         $params = [$channelId];
 
@@ -37,7 +39,7 @@ class Message extends Model
         $db = Database::getInstance();
         $stmt = $db->prepare(
             'SELECT m.*, u.name AS user_name, u.avatar AS user_avatar
-             FROM messages m
+             FROM chat_messages m
              LEFT JOIN users u ON u.id = m.user_id
              WHERE m.parent_id = ? AND m.deleted_at IS NULL
              ORDER BY m.created_at ASC'
@@ -50,9 +52,11 @@ class Message extends Model
     {
         $db = Database::getInstance();
         $stmt = $db->prepare(
-            'SELECT m.*, u.name AS user_name, u.avatar AS user_avatar, u.status AS user_status
-             FROM messages m
+            'SELECT m.*, u.name AS user_name, u.avatar AS user_avatar,
+                    COALESCE(p.status, "offline") AS user_status
+             FROM chat_messages m
              LEFT JOIN users u ON u.id = m.user_id
+             LEFT JOIN chat_presence p ON p.user_id = u.id
              WHERE m.channel_id = ? AND m.id > ? AND m.parent_id IS NULL AND m.deleted_at IS NULL
              ORDER BY m.created_at ASC'
         );
@@ -66,7 +70,7 @@ class Message extends Model
         $stmt = $db->prepare(
             'SELECT mr.emoji, GROUP_CONCAT(u.name SEPARATOR ", ") AS users,
                     COUNT(*) AS count, GROUP_CONCAT(mr.user_id) AS user_ids
-             FROM message_reactions mr
+             FROM chat_message_reactions mr
              INNER JOIN users u ON u.id = mr.user_id
              WHERE mr.message_id = ?
              GROUP BY mr.emoji'
@@ -79,23 +83,23 @@ class Message extends Model
     {
         $db = Database::getInstance();
         $stmt = $db->prepare(
-            'SELECT id FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
+            'SELECT id FROM chat_message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
         );
         $stmt->execute([$messageId, $userId, $emoji]);
 
         if ($row = $stmt->fetch()) {
-            $db->prepare('DELETE FROM message_reactions WHERE id = ?')->execute([$row['id']]);
+            $db->prepare('DELETE FROM chat_message_reactions WHERE id = ?')->execute([$row['id']]);
             $action = 'removed';
         } else {
             $db->prepare(
-                'INSERT INTO message_reactions (message_id, user_id, emoji, created_at) VALUES (?, ?, ?, NOW())'
+                'INSERT INTO chat_message_reactions (message_id, user_id, emoji, created_at) VALUES (?, ?, ?, NOW())'
             )->execute([$messageId, $userId, $emoji]);
             $action = 'added';
         }
 
-        $count = $db->prepare('SELECT COUNT(*) FROM message_reactions WHERE message_id = ?');
+        $count = $db->prepare('SELECT COUNT(*) FROM chat_message_reactions WHERE message_id = ?');
         $count->execute([$messageId]);
-        $db->prepare('UPDATE messages SET reaction_count = ? WHERE id = ?')
+        $db->prepare('UPDATE chat_messages SET reaction_count = ? WHERE id = ?')
            ->execute([$count->fetchColumn(), $messageId]);
 
         return $action;
@@ -104,7 +108,7 @@ class Message extends Model
     public static function attachments(int $messageId): array
     {
         $db = Database::getInstance();
-        $stmt = $db->prepare('SELECT * FROM message_attachments WHERE message_id = ?');
+        $stmt = $db->prepare('SELECT * FROM chat_message_attachments WHERE message_id = ?');
         $stmt->execute([$messageId]);
         return $stmt->fetchAll();
     }
@@ -113,7 +117,7 @@ class Message extends Model
     {
         $db = Database::getInstance();
         $stmt = $db->prepare(
-            'INSERT INTO message_attachments (message_id, user_id, original_name, file_path, file_type, file_size, created_at)
+            'INSERT INTO chat_message_attachments (message_id, user_id, original_name, file_path, file_type, file_size, created_at)
              VALUES (?, ?, ?, ?, ?, ?, NOW())'
         );
         $stmt->execute([
@@ -130,7 +134,7 @@ class Message extends Model
         $stmt = $db->prepare(
             'SELECT m.*, u.name AS user_name, u.avatar AS user_avatar,
                     pu.name AS pinned_by_name
-             FROM messages m
+             FROM chat_messages m
              LEFT JOIN users u ON u.id = m.user_id
              LEFT JOIN users pu ON pu.id = m.pinned_by
              WHERE m.channel_id = ? AND m.is_pinned = 1 AND m.deleted_at IS NULL
@@ -145,10 +149,10 @@ class Message extends Model
         $db = Database::getInstance();
         $stmt = $db->prepare(
             'SELECT m.*, u.name AS user_name, u.avatar AS user_avatar, c.name AS channel_name, c.slug AS channel_slug
-             FROM messages m
+             FROM chat_messages m
              LEFT JOIN users u ON u.id = m.user_id
-             INNER JOIN channels c ON c.id = m.channel_id
-             INNER JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ?
+             INNER JOIN chat_channels c ON c.id = m.channel_id
+             INNER JOIN chat_channel_members cm ON cm.channel_id = c.id AND cm.user_id = ?
              WHERE m.content LIKE ? AND m.deleted_at IS NULL
              ORDER BY m.created_at DESC
              LIMIT ?'
@@ -160,13 +164,13 @@ class Message extends Model
     public static function softDelete(int $id): void
     {
         $db = Database::getInstance();
-        $db->prepare('UPDATE messages SET deleted_at = NOW() WHERE id = ?')->execute([$id]);
+        $db->prepare('UPDATE chat_messages SET deleted_at = NOW() WHERE id = ?')->execute([$id]);
     }
 
     public static function incrementReplyCount(int $parentId): void
     {
         $db = Database::getInstance();
-        $db->prepare('UPDATE messages SET reply_count = reply_count + 1 WHERE id = ?')
+        $db->prepare('UPDATE chat_messages SET reply_count = reply_count + 1 WHERE id = ?')
            ->execute([$parentId]);
     }
 }

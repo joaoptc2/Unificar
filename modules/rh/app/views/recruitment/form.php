@@ -1,11 +1,11 @@
 <?php
 $isEdit = !empty($job);
-$formAction = $isEdit ? 'index.php?page=recruitment&action=update' : 'index.php?page=recruitment&action=store';
+$formAction = $isEdit ? 'index.php?m=rh&page=recruitment&action=update' : 'index.php?m=rh&page=recruitment&action=store';
 ?>
 
 <div class="page-header">
     <h1><i class="bi bi-briefcase me-2"></i><?= $isEdit ? 'Editar Vaga' : 'Nova Vaga' ?></h1>
-    <a href="index.php?page=recruitment" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=rh&page=recruitment" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>

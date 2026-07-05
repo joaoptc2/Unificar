@@ -1,57 +1,92 @@
 <div class="page-header">
-    <h1><i class="bi bi-people-fill me-2"></i>Usuários do Sistema</h1>
-    <div class="d-flex gap-2">
-        <a href="index.php?page=users&action=audit_log" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-journal-text me-1"></i> Log de Auditoria
+    <h1><i class="bi bi-person-badge me-2"></i>Vínculos de usuários</h1>
+    <div>
+        <a href="<?= core_url('index.php?m=admin&a=users') ?>" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-shield-lock me-1"></i> Usuários (administração central)
         </a>
-        <?php if (Auth::can('users', 'create')): ?>
-            <a href="index.php?page=users&action=create" class="btn btn-primary btn-sm">
-                <i class="bi bi-plus-lg me-1"></i> Novo Usuário
-            </a>
-        <?php endif; ?>
     </div>
+</div>
+
+<div class="alert alert-info small">
+    <i class="bi bi-info-circle me-1"></i>
+    Criação, edição, senha e nível de acesso dos usuários são gerenciados na
+    <a href="<?= core_url('index.php?m=admin&a=users') ?>" class="alert-link">administração central</a>.
+    Aqui você define apenas o vínculo funcional do módulo RH: qual funcionário
+    e departamento cada usuário representa.
 </div>
 
 <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover mb-0">
-                <thead class="table-light">
-                    <tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Última Ação</th><th class="text-end">Ações</th></tr>
+                <thead>
+                    <tr>
+                        <th>Usuário</th>
+                        <th>E-mail</th>
+                        <th>Papel no RH</th>
+                        <th style="min-width:220px">Funcionário vinculado</th>
+                        <th style="min-width:180px">Departamento</th>
+                        <th class="text-end">Ações</th>
+                    </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($users as $u): ?>
-                        <tr>
-                            <td class="fw-semibold"><?= Sanitize::e($u['name']) ?></td>
-                            <td><?= Sanitize::e($u['email']) ?></td>
+                <?php if (empty($users)): ?>
+                    <tr><td colspan="6" class="text-center text-muted py-4">Nenhum usuário com acesso ao módulo RH.</td></tr>
+                <?php else: foreach ($users as $u): ?>
+                    <tr>
+                        <td>
+                            <strong><?= Sanitize::e($u['name']) ?></strong>
+                            <?php if (!empty($u['is_admin'])): ?>
+                                <span class="badge text-bg-primary ms-1">Admin global</span>
+                            <?php endif; ?>
+                            <?php if (!(int)$u['active']): ?>
+                                <span class="badge text-bg-secondary ms-1">Inativo</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="text-muted small"><?= Sanitize::e($u['email']) ?></td>
+                        <td>
+                            <?php $role = $u['rh_role'] ?: (!empty($u['is_admin']) ? 'admin' : '—'); ?>
+                            <span class="badge text-bg-light border"><?= Sanitize::e(ucfirst((string)$role)) ?></span>
+                        </td>
+                        <form method="POST" action="index.php?m=rh&page=users&action=link">
+                            <?= Csrf::field() ?>
+                            <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
                             <td>
-                                <span class="badge <?= match($u['role']) {
-                                    'admin' => 'bg-danger',
-                                    'rh' => 'bg-primary',
-                                    'gestor' => 'bg-warning text-dark',
-                                    default => 'bg-secondary'
-                                } ?>">
-                                    <?= ucfirst($u['role']) ?>
-                                </span>
+                                <select name="employee_id" class="form-select form-select-sm">
+                                    <option value="">— sem vínculo —</option>
+                                    <?php foreach ($employees as $emp): ?>
+                                        <option value="<?= (int)$emp['id'] ?>" <?= (int)($u['employee_id'] ?? 0) === (int)$emp['id'] ? 'selected' : '' ?>>
+                                            <?= Sanitize::e($emp['full_name']) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </td>
-                            <td><span class="badge <?= $u['active'] ? 'bg-success' : 'bg-secondary' ?>"><?= $u['active'] ? 'Ativo' : 'Inativo' ?></span></td>
-                            <td><small class="text-muted"><?= $u['last_action'] ? date('d/m/Y H:i', strtotime($u['last_action'])) : '-' ?></small></td>
+                            <td>
+                                <select name="department_id" class="form-select form-select-sm">
+                                    <option value="">—</option>
+                                    <?php foreach ($departments as $dep): ?>
+                                        <option value="<?= (int)$dep['id'] ?>" <?= (int)($u['department_id'] ?? 0) === (int)$dep['id'] ? 'selected' : '' ?>>
+                                            <?= Sanitize::e($dep['name']) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </td>
                             <td class="text-end">
-                                <?php if (Auth::can('users', 'edit')): ?>
-                                    <a href="index.php?page=users&action=edit&id=<?= $u['id'] ?>" class="btn btn-outline-warning btn-action"><i class="bi bi-pencil"></i></a>
-                                <?php endif; ?>
-                                <?php if (Auth::can('users', 'delete') && $u['id'] !== Session::userId()): ?>
-                                    <form method="POST" action="index.php?page=users&action=delete" class="d-inline">
-                                        <?= Csrf::field() ?>
-                                        <input type="hidden" name="id" value="<?= $u['id'] ?>">
-                                        <button type="submit" class="btn btn-outline-danger btn-action" data-confirm="Excluir usuário?"><i class="bi bi-trash"></i></button>
-                                    </form>
-                                <?php endif; ?>
+                                <button type="submit" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-check-lg"></i> Salvar
+                                </button>
                             </td>
-                        </tr>
-                    <?php endforeach; ?>
+                        </form>
+                    </tr>
+                <?php endforeach; endif; ?>
                 </tbody>
             </table>
         </div>
     </div>
+</div>
+
+<div class="text-muted small mt-3">
+    <i class="bi bi-journal-text me-1"></i>
+    O log de auditoria do módulo está disponível em
+    <a href="<?= core_url('index.php?m=admin&a=audit&module=rh') ?>">Administração &rsaquo; Auditoria</a>.
 </div>

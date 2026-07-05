@@ -6,15 +6,15 @@
     <title>Vagas Disponíveis - RH Hospital</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="<?= ASSET_URL ?>css/style.css" rel="stylesheet">
+    <link href="<?= ASSET_URL ?>style.css" rel="stylesheet">
 </head>
 <body class="bg-light">
     <nav class="navbar navbar-dark bg-primary">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="index.php?page=public_recruitment">
+            <a class="navbar-brand fw-bold" href="index.php?m=rh&page=public_recruitment">
                 <i class="bi bi-hospital me-1"></i> RH Hospital — Trabalhe Conosco
             </a>
-            <a href="index.php?page=public_recruitment&action=track" class="btn btn-outline-light btn-sm">
+            <a href="index.php?m=rh&page=public_recruitment&action=track" class="btn btn-outline-light btn-sm">
                 <i class="bi bi-search me-1"></i> Acompanhar Candidatura
             </a>
         </div>
@@ -52,7 +52,7 @@
                                 <?php endif; ?>
                             </div>
                             <div class="card-footer bg-transparent">
-                                <a href="index.php?page=public_recruitment&action=apply&job_id=<?= $job['id'] ?>"
+                                <a href="index.php?m=rh&page=public_recruitment&action=apply&job_id=<?= $job['id'] ?>"
                                    class="btn btn-primary w-100">
                                     <i class="bi bi-send me-1"></i> Candidatar-se
                                 </a>

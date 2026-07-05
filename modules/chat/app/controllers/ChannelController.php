@@ -48,7 +48,7 @@ class ChannelController
 
         if ($name === '') {
             Session::flash('error', 'O nome do canal é obrigatório.');
-            header('Location: index.php?page=channels&action=create');
+            header('Location: index.php?m=chat&page=channels&action=create');
             exit;
         }
 
@@ -85,7 +85,7 @@ class ChannelController
         ]);
 
         Session::flash('success', 'Canal criado com sucesso.');
-        header('Location: index.php?page=chat&channel_id=' . $channelId);
+        header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
         exit;
     }
 
@@ -102,7 +102,7 @@ class ChannelController
 
         if (!$channel) {
             Session::flash('error', 'Canal não encontrado.');
-            header('Location: index.php?page=chat');
+            header('Location: index.php?m=chat&page=chat');
             exit;
         }
 
@@ -110,7 +110,7 @@ class ChannelController
         $userId = Session::userId();
         if (!$this->canManageChannel($channel, $userId)) {
             Session::flash('error', 'Você não tem permissão para editar este canal.');
-            header('Location: index.php?page=chat&channel_id=' . $channelId);
+            header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
             exit;
         }
 
@@ -138,14 +138,14 @@ class ChannelController
 
         if (!$channel) {
             Session::flash('error', 'Canal não encontrado.');
-            header('Location: index.php?page=chat');
+            header('Location: index.php?m=chat&page=chat');
             exit;
         }
 
         $userId = Session::userId();
         if (!$this->canManageChannel($channel, $userId)) {
             Session::flash('error', 'Você não tem permissão para editar este canal.');
-            header('Location: index.php?page=chat&channel_id=' . $channelId);
+            header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
             exit;
         }
 
@@ -168,7 +168,7 @@ class ChannelController
         ]);
 
         Session::flash('success', 'Canal atualizado com sucesso.');
-        header('Location: index.php?page=chat&channel_id=' . $channelId);
+        header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
         exit;
     }
 
@@ -186,14 +186,14 @@ class ChannelController
 
         if (!$channel) {
             Session::flash('error', 'Canal não encontrado.');
-            header('Location: index.php?page=chat');
+            header('Location: index.php?m=chat&page=chat');
             exit;
         }
 
         $userId = Session::userId();
         if (!$this->canManageChannel($channel, $userId)) {
             Session::flash('error', 'Você não tem permissão para arquivar este canal.');
-            header('Location: index.php?page=chat&channel_id=' . $channelId);
+            header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
             exit;
         }
 
@@ -210,7 +210,7 @@ class ChannelController
         AuditLog::log('archive', 'channel', $channelId);
 
         Session::flash('success', 'Canal arquivado com sucesso.');
-        header('Location: index.php?page=chat');
+        header('Location: index.php?m=chat&page=chat');
         exit;
     }
 
@@ -324,14 +324,14 @@ class ChannelController
 
         if (!$channel || $channel['type'] !== 'public') {
             Session::flash('error', 'Canal não encontrado ou não é público.');
-            header('Location: index.php?page=channels&action=browse');
+            header('Location: index.php?m=chat&page=channels&action=browse');
             exit;
         }
 
         $userId = Session::userId();
 
         if (Channel::isMember($channelId, $userId)) {
-            header('Location: index.php?page=chat&channel_id=' . $channelId);
+            header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
             exit;
         }
 
@@ -346,7 +346,7 @@ class ChannelController
         ]);
 
         Session::flash('success', 'Você entrou no canal #' . Sanitize::e($channel['name']) . '.');
-        header('Location: index.php?page=chat&channel_id=' . $channelId);
+        header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
         exit;
     }
 
@@ -364,7 +364,7 @@ class ChannelController
 
         if (!$channel) {
             Session::flash('error', 'Canal não encontrado.');
-            header('Location: index.php?page=chat');
+            header('Location: index.php?m=chat&page=chat');
             exit;
         }
 
@@ -380,7 +380,7 @@ class ChannelController
         ]);
 
         Session::flash('success', 'Você saiu do canal #' . Sanitize::e($channel['name']) . '.');
-        header('Location: index.php?page=chat');
+        header('Location: index.php?m=chat&page=chat');
         exit;
     }
 
@@ -424,14 +424,14 @@ class ChannelController
 
         if ($targetId <= 0 || $targetId === $userId) {
             Session::flash('error', 'Usuário inválido.');
-            header('Location: index.php?page=chat');
+            header('Location: index.php?m=chat&page=chat');
             exit;
         }
 
         $target = User::find($targetId);
         if (!$target) {
             Session::flash('error', 'Usuário não encontrado.');
-            header('Location: index.php?page=chat');
+            header('Location: index.php?m=chat&page=chat');
             exit;
         }
 
@@ -455,7 +455,7 @@ class ChannelController
             $channelId = (int) $channel['id'];
         }
 
-        header('Location: index.php?page=chat&channel_id=' . $channelId);
+        header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
         exit;
     }
 
@@ -466,7 +466,7 @@ class ChannelController
         $channel = Channel::find($channelId);
         if (!$channel || !$this->canManageChannel($channel, Session::userId())) {
             Session::flash('error', 'Sem permissão.');
-            header('Location: index.php?page=chat');
+            header('Location: index.php?m=chat&page=chat');
             exit;
         }
         View::render('channels/settings', [
@@ -484,7 +484,7 @@ class ChannelController
         $channel = Channel::find($channelId);
         if (!$channel || !$this->canManageChannel($channel, Session::userId())) {
             Session::flash('error', 'Sem permissão.');
-            header('Location: index.php?page=chat');
+            header('Location: index.php?m=chat&page=chat');
             exit;
         }
         Channel::update($channelId, [
@@ -496,7 +496,7 @@ class ChannelController
         ]);
         AuditLog::log('update_channel_settings', 'channel', $channelId);
         Session::flash('success', 'Configurações do canal atualizadas.');
-        header('Location: index.php?page=channels&action=settings&id=' . $channelId);
+        header('Location: index.php?m=chat&page=channels&action=settings&id=' . $channelId);
         exit;
     }
 
@@ -520,7 +520,7 @@ class ChannelController
 
         // Check channel-level role
         $stmt = $this->db->prepare(
-            'SELECT role FROM channel_members WHERE channel_id = ? AND user_id = ? LIMIT 1'
+            'SELECT role FROM chat_channel_members WHERE channel_id = ? AND user_id = ? LIMIT 1'
         );
         $stmt->execute([(int) $channel['id'], $userId]);
         $row = $stmt->fetch();

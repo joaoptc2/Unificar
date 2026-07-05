@@ -1,7 +1,7 @@
 <?php $isEdit = !empty($team['id']); ?>
 <div class="page-header">
     <h1><i class="bi bi-people me-2"></i><?= $isEdit ? 'Editar Equipe' : 'Nova Equipe' ?></h1>
-    <a href="index.php?page=teams" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=chat&page=teams" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>
@@ -10,7 +10,7 @@
     <div class="col-md-8">
         <div class="card border-0 shadow-sm">
             <div class="card-body">
-                <form method="POST" action="index.php?page=teams&action=<?= $isEdit ? 'update' : 'store' ?>">
+                <form method="POST" action="index.php?m=chat&page=teams&action=<?= $isEdit ? 'update' : 'store' ?>">
                     <?= Csrf::field() ?>
                     <?php if ($isEdit): ?>
                         <input type="hidden" name="id" value="<?= $team['id'] ?>">
@@ -45,7 +45,7 @@
                         </div>
 
                         <div class="col-12 text-end">
-                            <a href="index.php?page=teams" class="btn btn-outline-secondary me-2">Cancelar</a>
+                            <a href="index.php?m=chat&page=teams" class="btn btn-outline-secondary me-2">Cancelar</a>
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-check-lg me-1"></i> <?= $isEdit ? 'Atualizar' : 'Criar Equipe' ?>
                             </button>

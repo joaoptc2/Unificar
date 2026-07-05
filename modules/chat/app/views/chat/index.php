@@ -17,7 +17,7 @@
         <div class="sidebar-user">
             <div class="user-avatar-sm <?= Sanitize::e($user['status'] ?? 'offline') ?>">
                 <?php if (!empty($user['avatar'])): ?>
-                    <img src="<?= BASE_URL ?>/public/<?= Sanitize::e($user['avatar']) ?>" alt="">
+                    <img src="<?= BASE_URL ?>/<?= Sanitize::e($user['avatar']) ?>" alt="">
                 <?php else: ?>
                     <span class="avatar-initials"><?= Sanitize::e(User::initials($user['name'])) ?></span>
                 <?php endif; ?>
@@ -45,16 +45,16 @@
         <!-- Navigation -->
         <nav class="sidebar-nav">
             <div class="nav-section">
-                <a href="index.php?page=tasks" class="nav-link-item">
+                <a href="index.php?m=chat&page=tasks" class="nav-link-item">
                     <i class="bi bi-kanban"></i> <span>Tarefas</span>
                     <?php if (!empty($taskCount)): ?>
                         <span class="badge bg-primary rounded-pill ms-auto"><?= $taskCount ?></span>
                     <?php endif; ?>
                 </a>
-                <a href="index.php?page=meetings" class="nav-link-item">
+                <a href="index.php?m=chat&page=meetings" class="nav-link-item">
                     <i class="bi bi-calendar-event"></i> <span>Reuniões</span>
                 </a>
-                <a href="index.php?page=processes" class="nav-link-item">
+                <a href="index.php?m=chat&page=processes" class="nav-link-item">
                     <i class="bi bi-diagram-3"></i> <span>Processos</span>
                 </a>
             </div>
@@ -65,7 +65,7 @@
                     <button class="btn btn-sm section-toggle" data-bs-toggle="collapse" data-bs-target="#channelsList">
                         <i class="bi bi-chevron-down"></i> Canais
                     </button>
-                    <a href="index.php?page=channels&action=create" class="btn btn-sm btn-icon" title="Criar canal">
+                    <a href="index.php?m=chat&page=channels&action=create" class="btn btn-sm btn-icon" title="Criar canal">
                         <i class="bi bi-plus-lg"></i>
                     </a>
                 </div>
@@ -76,7 +76,7 @@
                         $isActive = ($currentChannel['id'] ?? 0) == $ch['id'];
                         $unread = (int)($ch['unread_count'] ?? 0);
                     ?>
-                    <a href="index.php?page=chat&channel_id=<?= $ch['id'] ?>"
+                    <a href="index.php?m=chat&page=chat&channel_id=<?= $ch['id'] ?>"
                        class="channel-item <?= $isActive ? 'active' : '' ?>"
                        data-channel-id="<?= $ch['id'] ?>">
                         <i class="bi bi-<?= $ch['type'] === 'private' ? 'lock' : 'hash' ?>"></i>
@@ -86,7 +86,7 @@
                         <?php endif; ?>
                     </a>
                     <?php endforeach; ?>
-                    <a href="index.php?page=channels&action=browse" class="channel-item channel-browse">
+                    <a href="index.php?m=chat&page=channels&action=browse" class="channel-item channel-browse">
                         <i class="bi bi-plus-circle"></i> <span>Explorar canais</span>
                     </a>
                 </div>
@@ -110,7 +110,7 @@
                         $unread = (int)($ch['unread_count'] ?? 0);
                         $partner = Channel::dmPartner($ch['id'], $user['id']);
                     ?>
-                    <a href="index.php?page=chat&channel_id=<?= $ch['id'] ?>"
+                    <a href="index.php?m=chat&page=chat&channel_id=<?= $ch['id'] ?>"
                        class="channel-item dm-item <?= $isActive ? 'active' : '' ?>"
                        data-channel-id="<?= $ch['id'] ?>">
                         <span class="dm-status <?= Sanitize::e($partner['status'] ?? 'offline') ?>"></span>
@@ -133,7 +133,7 @@
                 </div>
                 <div class="collapse show" id="teamsList">
                     <?php foreach ($teams as $team): ?>
-                    <a href="index.php?page=teams&action=show&id=<?= $team['id'] ?>" class="channel-item">
+                    <a href="index.php?m=chat&page=teams&action=show&id=<?= $team['id'] ?>" class="channel-item">
                         <span class="team-dot" style="background:<?= Sanitize::e($team['color']) ?>"></span>
                         <span class="channel-name"><?= Sanitize::e($team['name']) ?></span>
                         <span class="text-muted small"><?= $team['member_count'] ?? 0 ?></span>
@@ -193,18 +193,18 @@
                         <i class="bi bi-three-dots-vertical"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="index.php?page=channels&action=edit&id=<?= $currentChannel['id'] ?>"><i class="bi bi-pencil me-2"></i>Editar canal</a></li>
+                        <li><a class="dropdown-item" href="index.php?m=chat&page=channels&action=edit&id=<?= $currentChannel['id'] ?>"><i class="bi bi-pencil me-2"></i>Editar canal</a></li>
                         <?php if (Auth::isAdmin()): ?>
-                        <li><a class="dropdown-item" href="index.php?page=channels&action=settings&id=<?= $currentChannel['id'] ?>"><i class="bi bi-gear me-2"></i>Configurações do canal</a></li>
+                        <li><a class="dropdown-item" href="index.php?m=chat&page=channels&action=settings&id=<?= $currentChannel['id'] ?>"><i class="bi bi-gear me-2"></i>Configurações do canal</a></li>
                         <?php endif; ?>
                         <li><a class="dropdown-item" href="#" data-action="invite-member"><i class="bi bi-person-plus me-2"></i>Convidar pessoas</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="index.php?page=tasks&action=create&channel_id=<?= $currentChannel['id'] ?>"><i class="bi bi-kanban me-2"></i>Nova tarefa</a></li>
-                        <li><a class="dropdown-item" href="index.php?page=meetings&action=create&channel_id=<?= $currentChannel['id'] ?>"><i class="bi bi-calendar-plus me-2"></i>Agendar reunião</a></li>
-                        <li><a class="dropdown-item" href="index.php?page=processes&action=create&channel_id=<?= $currentChannel['id'] ?>"><i class="bi bi-diagram-3 me-2"></i>Novo processo</a></li>
+                        <li><a class="dropdown-item" href="index.php?m=chat&page=tasks&action=create&channel_id=<?= $currentChannel['id'] ?>"><i class="bi bi-kanban me-2"></i>Nova tarefa</a></li>
+                        <li><a class="dropdown-item" href="index.php?m=chat&page=meetings&action=create&channel_id=<?= $currentChannel['id'] ?>"><i class="bi bi-calendar-plus me-2"></i>Agendar reunião</a></li>
+                        <li><a class="dropdown-item" href="index.php?m=chat&page=processes&action=create&channel_id=<?= $currentChannel['id'] ?>"><i class="bi bi-diagram-3 me-2"></i>Novo processo</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
-                            <form method="POST" action="index.php?page=channels&action=leave" class="px-3">
+                            <form method="POST" action="index.php?m=chat&page=channels&action=leave" class="px-3">
                                 <?= Csrf::field() ?>
                                 <input type="hidden" name="channel_id" value="<?= $currentChannel['id'] ?>">
                                 <button type="submit" class="dropdown-item text-danger" data-confirm="Sair deste canal?">
@@ -275,7 +275,7 @@
                                 <?php if (!$isCompact): ?>
                                 <div class="message-avatar">
                                     <?php if (!empty($msg['user_avatar'])): ?>
-                                        <img src="<?= BASE_URL ?>/public/<?= Sanitize::e($msg['user_avatar']) ?>" alt="" class="avatar-img">
+                                        <img src="<?= BASE_URL ?>/<?= Sanitize::e($msg['user_avatar']) ?>" alt="" class="avatar-img">
                                     <?php else: ?>
                                         <span class="avatar-initials"><?= Sanitize::e(User::initials($msg['user_name'] ?? '?')) ?></span>
                                     <?php endif; ?>
@@ -428,10 +428,10 @@
                 <h3 class="mt-3">Bem-vindo ao TeamChat</h3>
                 <p class="text-muted">Selecione um canal ou inicie uma conversa</p>
                 <div class="d-flex gap-2 mt-3">
-                    <a href="index.php?page=channels&action=browse" class="btn btn-primary">
+                    <a href="index.php?m=chat&page=channels&action=browse" class="btn btn-primary">
                         <i class="bi bi-hash me-1"></i> Explorar canais
                     </a>
-                    <a href="index.php?page=channels&action=create" class="btn btn-outline-primary">
+                    <a href="index.php?m=chat&page=channels&action=create" class="btn btn-outline-primary">
                         <i class="bi bi-plus-lg me-1"></i> Criar canal
                     </a>
                 </div>

@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-download me-2"></i>Exportar Dados</h1>
-    <a href="index.php?page=admin" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=chat&page=admin" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>
@@ -10,7 +10,7 @@
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-body">
                 <h6 class="card-title mb-3">Configurar Exportação</h6>
-                <form method="POST" action="index.php?page=admin&action=generateExport">
+                <form method="POST" action="index.php?m=chat&page=admin&action=generateExport">
                     <?= Csrf::field() ?>
                     <div class="row g-3">
                         <div class="col-md-6">

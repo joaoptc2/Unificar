@@ -35,15 +35,15 @@ class TalentPoolController
 
         $whereClause = 'WHERE ' . implode(' AND ', $where);
 
-        $countStmt = $this->db->prepare("SELECT COUNT(*) FROM candidates c {$whereClause}");
+        $countStmt = $this->db->prepare("SELECT COUNT(*) FROM rh_candidates c {$whereClause}");
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
 
         $pagination = new Pagination($total, $currentPage);
 
         $sql = "SELECT c.*, rj.title as job_title
-                FROM candidates c
-                LEFT JOIN recruitment_jobs rj ON c.job_id = rj.id
+                FROM rh_candidates c
+                LEFT JOIN rh_recruitment_jobs rj ON c.job_id = rj.id
                 {$whereClause}
                 ORDER BY c.created_at DESC
                 LIMIT {$pagination->perPage} OFFSET {$pagination->offset}";
@@ -52,7 +52,7 @@ class TalentPoolController
         $candidates = $stmt->fetchAll();
 
         // Áreas distintas para filtro
-        $areas = $this->db->query("SELECT DISTINCT area FROM candidates WHERE in_talent_pool = 1 AND area IS NOT NULL AND area != '' ORDER BY area")->fetchAll(PDO::FETCH_COLUMN);
+        $areas = $this->db->query("SELECT DISTINCT area FROM rh_candidates WHERE in_talent_pool = 1 AND area IS NOT NULL AND area != '' ORDER BY area")->fetchAll(PDO::FETCH_COLUMN);
 
         $pageTitle = 'Banco de Talentos';
         $page = 'talent_pool';
@@ -68,8 +68,8 @@ class TalentPoolController
         $id = Sanitize::int($_GET['id'] ?? 0);
         $stmt = $this->db->prepare(
             'SELECT c.*, rj.title as job_title
-             FROM candidates c
-             LEFT JOIN recruitment_jobs rj ON c.job_id = rj.id
+             FROM rh_candidates c
+             LEFT JOIN rh_recruitment_jobs rj ON c.job_id = rj.id
              WHERE c.id = ? AND c.in_talent_pool = 1'
         );
         $stmt->execute([$id]);
@@ -77,7 +77,7 @@ class TalentPoolController
 
         if (!$candidate) {
             Session::flash('error', 'Candidato não encontrado no banco de talentos.');
-            header('Location: index.php?page=talent_pool');
+            header('Location: index.php?m=rh&page=talent_pool');
             exit;
         }
 
@@ -94,11 +94,11 @@ class TalentPoolController
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
-        $this->db->prepare('UPDATE candidates SET in_talent_pool = 0 WHERE id = ?')->execute([$id]);
+        $this->db->prepare('UPDATE rh_candidates SET in_talent_pool = 0 WHERE id = ?')->execute([$id]);
         AuditLog::log('update', 'candidates', $id);
 
         Session::flash('success', 'Candidato removido do banco de talentos.');
-        header('Location: index.php?page=talent_pool');
+        header('Location: index.php?m=rh&page=talent_pool');
         exit;
     }
 
@@ -108,8 +108,8 @@ class TalentPoolController
 
         $candidates = $this->db->query(
             "SELECT c.*, rj.title as job_title
-             FROM candidates c
-             LEFT JOIN recruitment_jobs rj ON c.job_id = rj.id
+             FROM rh_candidates c
+             LEFT JOIN rh_recruitment_jobs rj ON c.job_id = rj.id
              WHERE c.in_talent_pool = 1
              ORDER BY c.full_name"
         )->fetchAll();

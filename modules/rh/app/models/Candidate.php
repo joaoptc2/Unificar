@@ -4,7 +4,7 @@
  */
 class Candidate extends Model
 {
-    protected static string $table = 'candidates';
+    protected static string $table = 'rh_candidates';
 
     protected static array $fillable = [
         'job_id', 'full_name', 'email', 'phone', 'cpf', 'area',
@@ -16,7 +16,7 @@ class Candidate extends Model
     {
         return self::db()->query(
             "SELECT status, COUNT(*) AS total
-             FROM candidates GROUP BY status ORDER BY total DESC"
+             FROM rh_candidates GROUP BY status ORDER BY total DESC"
         )->fetchAll();
     }
 }

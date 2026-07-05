@@ -1,11 +1,11 @@
 <?php
 $isEdit = !empty($employee);
-$formAction = $isEdit ? 'index.php?page=employees&action=update' : 'index.php?page=employees&action=store';
+$formAction = $isEdit ? 'index.php?m=rh&page=employees&action=update' : 'index.php?m=rh&page=employees&action=store';
 ?>
 
 <div class="page-header">
     <h1><i class="bi bi-person-plus me-2"></i><?= $isEdit ? 'Editar Funcionário' : 'Novo Funcionário' ?></h1>
-    <a href="index.php?page=employees" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=rh&page=employees" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>
@@ -64,7 +64,7 @@ $formAction = $isEdit ? 'index.php?page=employees&action=update' : 'index.php?pa
                             <input type="file" name="photo" class="form-control" accept="image/jpeg,image/png"
                                    data-preview="#photoPreview">
                             <?php if ($isEdit && $employee['photo']): ?>
-                                <img src="<?= ASSET_URL . Sanitize::e($employee['photo']) ?>" id="photoPreview"
+                                <img src="<?= Sanitize::e(Upload::publicUrl($employee['photo'])) ?>" id="photoPreview"
                                      class="mt-2" style="max-height:80px; border-radius:8px;">
                             <?php else: ?>
                                 <img id="photoPreview" class="mt-2" style="max-height:80px; border-radius:8px; display:none;">
@@ -284,7 +284,7 @@ $formAction = $isEdit ? 'index.php?page=employees&action=update' : 'index.php?pa
 
         <!-- Botões -->
         <div class="col-12 text-end">
-            <a href="index.php?page=employees" class="btn btn-outline-secondary me-2">Cancelar</a>
+            <a href="index.php?m=rh&page=employees" class="btn btn-outline-secondary me-2">Cancelar</a>
             <button type="submit" class="btn btn-primary">
                 <i class="bi bi-check-lg me-1"></i> <?= $isEdit ? 'Atualizar' : 'Cadastrar' ?>
             </button>

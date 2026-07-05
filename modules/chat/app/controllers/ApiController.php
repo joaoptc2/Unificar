@@ -98,7 +98,7 @@ class ApiController
 
         // --- Build response with user info -----------------------------
         $message = Message::find($messageId);
-        $user    = User::find($userId);
+        $user    = User::findWithPresence($userId);
 
         $message['user_name']   = $user['name']   ?? '';
         $message['user_avatar'] = $user['avatar']  ?? '';
@@ -115,7 +115,7 @@ class ApiController
                         (int)$m['id'], 'dm',
                         ($user['name'] ?? 'Alguém') . ' enviou uma mensagem',
                         mb_substr($content, 0, 100),
-                        'index.php?page=chat&channel_id=' . $channelId
+                        'index.php?m=chat&page=chat&channel_id=' . $channelId
                     );
                 }
             }
@@ -157,7 +157,7 @@ class ApiController
         if ($afterId > 0) {
             $db = Database::getInstance();
             $stmt = $db->prepare(
-                'SELECT id FROM messages WHERE channel_id = ? AND id > ? AND deleted_at IS NOT NULL AND parent_id IS NULL'
+                'SELECT id FROM chat_messages WHERE channel_id = ? AND id > ? AND deleted_at IS NOT NULL AND parent_id IS NULL'
             );
             $stmt->execute([$channelId, $afterId]);
             $deleted = array_column($stmt->fetchAll(), 'id');
@@ -168,7 +168,7 @@ class ApiController
         if ($afterId > 0) {
             $db = Database::getInstance();
             $stmt = $db->prepare(
-                'SELECT m.id, m.content, m.is_edited FROM messages m
+                'SELECT m.id, m.content, m.is_edited FROM chat_messages m
                  WHERE m.channel_id = ? AND m.id <= ? AND m.is_edited = 1
                  AND m.edited_at >= DATE_SUB(NOW(), INTERVAL 10 SECOND) AND m.deleted_at IS NULL'
             );
@@ -178,7 +178,7 @@ class ApiController
 
         // Typing indicators
         $typing = [];
-        $cacheDir = BASE_PATH . '/storage/cache/';
+        $cacheDir = STORAGE_PATH . '/cache/';
         foreach (glob($cacheDir . '*.typing') as $file) {
             $data = @json_decode(@file_get_contents($file), true);
             if ($data && ($data['expires'] ?? 0) > time()) {
@@ -193,8 +193,8 @@ class ApiController
         if ($afterId > 0) {
             $db = Database::getInstance();
             $stmt = $db->prepare(
-                'SELECT DISTINCT mr.message_id FROM message_reactions mr
-                 INNER JOIN messages m ON m.id = mr.message_id
+                'SELECT DISTINCT mr.message_id FROM chat_message_reactions mr
+                 INNER JOIN chat_messages m ON m.id = mr.message_id
                  WHERE m.channel_id = ? AND mr.created_at >= DATE_SUB(NOW(), INTERVAL 10 SECOND)'
             );
             $stmt->execute([$channelId]);
@@ -498,7 +498,7 @@ class ApiController
         $attachmentId = Message::addAttachment($messageId, $userId, $upload);
 
         $message = Message::find($messageId);
-        $user    = User::find($userId);
+        $user    = User::findWithPresence($userId);
 
         $message['user_name']   = $user['name']   ?? '';
         $message['user_avatar'] = $user['avatar']  ?? '';
@@ -677,7 +677,7 @@ class ApiController
 
         // Find latest message id in the channel
         $stmt = $this->db->prepare(
-            'SELECT MAX(id) FROM messages WHERE channel_id = ? AND deleted_at IS NULL'
+            'SELECT MAX(id) FROM chat_messages WHERE channel_id = ? AND deleted_at IS NULL'
         );
         $stmt->execute([$channelId]);
         $latestId = (int) $stmt->fetchColumn();
@@ -703,7 +703,7 @@ class ApiController
         if ($channelId <= 0) { $this->json(['success' => true]); return; }
 
         $key = "typing_{$channelId}_{$userId}";
-        $cacheFile = BASE_PATH . '/storage/cache/' . md5($key) . '.typing';
+        $cacheFile = STORAGE_PATH . '/cache/' . md5($key) . '.typing';
 
         if ($typing) {
             file_put_contents($cacheFile, json_encode([
@@ -733,7 +733,7 @@ class ApiController
         }
 
         $cacheKey = md5($url);
-        $cacheFile = BASE_PATH . '/storage/cache/link_' . $cacheKey . '.json';
+        $cacheFile = STORAGE_PATH . '/cache/link_' . $cacheKey . '.json';
 
         if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 3600) {
             $this->json(json_decode(file_get_contents($cacheFile), true));
@@ -790,7 +790,7 @@ class ApiController
     public function getCustomEmojis(): void
     {
         $this->requireAuth();
-        $stmt = $this->db->query('SELECT name, image_path FROM custom_emojis ORDER BY name ASC');
+        $stmt = $this->db->query('SELECT name, image_path FROM chat_custom_emojis ORDER BY name ASC');
         $emojis = $stmt->fetchAll();
         $this->json(['emojis' => $emojis]);
     }
@@ -850,7 +850,7 @@ class ApiController
         foreach (array_unique($matches[1]) as $username) {
             // Resolve username by name match (case-insensitive)
             $stmt = $this->db->prepare(
-                'SELECT id FROM users WHERE LOWER(REPLACE(name, " ", "")) = LOWER(?) AND is_active = 1 LIMIT 1'
+                'SELECT id FROM users WHERE LOWER(REPLACE(name, " ", "")) = LOWER(?) AND active = 1 LIMIT 1'
             );
             $stmt->execute([str_replace('.', '', $username)]);
             $row = $stmt->fetch();
@@ -869,7 +869,7 @@ class ApiController
 
             // Persist the mention record
             $this->db->prepare(
-                'INSERT INTO mentions (message_id, user_id, type, created_at) VALUES (?, ?, "user", NOW())'
+                'INSERT INTO chat_mentions (message_id, user_id, type, created_at) VALUES (?, ?, "user", NOW())'
             )->execute([$messageId, $mentionedUserId]);
 
             // Notify the mentioned user
@@ -878,7 +878,7 @@ class ApiController
                 'mention',
                 "{$senderName} mencionou você em #{$channelName}",
                 mb_substr($content, 0, 120),
-                "index.php?page=chat&channel_id={$channelId}#msg-{$messageId}"
+                "index.php?m=chat&page=chat&channel_id={$channelId}#msg-{$messageId}"
             );
         }
     }

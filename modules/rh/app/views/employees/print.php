@@ -87,7 +87,7 @@
 </head>
 <body>
     <div class="toolbar">
-        <a class="btn-secondary" href="index.php?page=employees&action=show&id=<?= (int)$employee['id'] ?>">&larr; Voltar</a>
+        <a class="btn-secondary" href="index.php?m=rh&page=employees&action=show&id=<?= (int)$employee['id'] ?>">&larr; Voltar</a>
         <button onclick="window.print()" type="button">Imprimir / Salvar como PDF</button>
     </div>
 

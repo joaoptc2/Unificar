@@ -46,7 +46,7 @@ class TaskController
 
         if (!$task) {
             Session::flash('error', 'Tarefa não encontrada.');
-            header('Location: index.php?page=tasks');
+            header('Location: index.php?m=chat&page=tasks');
             exit;
         }
 
@@ -100,7 +100,7 @@ class TaskController
 
         if ($title === '') {
             Session::flash('error', 'O título da tarefa é obrigatório.');
-            header('Location: index.php?page=tasks&action=create');
+            header('Location: index.php?m=chat&page=tasks&action=create');
             exit;
         }
 
@@ -119,7 +119,7 @@ class TaskController
         if (!empty($assigneeIds)) {
             Task::setAssignees($taskId, $assigneeIds);
 
-            $taskLink = 'index.php?page=tasks&action=show&id=' . $taskId;
+            $taskLink = 'index.php?m=chat&page=tasks&action=show&id=' . $taskId;
             $notifyIds = array_diff($assigneeIds, [$userId]);
             Notification::createForMany(
                 $notifyIds,
@@ -159,7 +159,7 @@ class TaskController
         ]);
 
         Session::flash('success', 'Tarefa criada com sucesso.');
-        header('Location: index.php?page=tasks&action=show&id=' . $taskId);
+        header('Location: index.php?m=chat&page=tasks&action=show&id=' . $taskId);
         exit;
     }
 
@@ -176,7 +176,7 @@ class TaskController
 
         if (!$task) {
             Session::flash('error', 'Tarefa não encontrada.');
-            header('Location: index.php?page=tasks');
+            header('Location: index.php?m=chat&page=tasks');
             exit;
         }
 
@@ -205,7 +205,7 @@ class TaskController
 
         if (!$task) {
             Session::flash('error', 'Tarefa não encontrada.');
-            header('Location: index.php?page=tasks');
+            header('Location: index.php?m=chat&page=tasks');
             exit;
         }
 
@@ -253,7 +253,7 @@ class TaskController
         ]);
 
         Session::flash('success', 'Tarefa atualizada com sucesso.');
-        header('Location: index.php?page=tasks&action=show&id=' . $taskId);
+        header('Location: index.php?m=chat&page=tasks&action=show&id=' . $taskId);
         exit;
     }
 
@@ -314,20 +314,20 @@ class TaskController
         $task = Task::find($taskId);
         if (!$task) {
             Session::flash('error', 'Tarefa não encontrada.');
-            header('Location: index.php?page=tasks');
+            header('Location: index.php?m=chat&page=tasks');
             exit;
         }
 
         if ($content === '') {
             Session::flash('error', 'O comentário não pode estar vazio.');
-            header('Location: index.php?page=tasks&action=show&id=' . $taskId);
+            header('Location: index.php?m=chat&page=tasks&action=show&id=' . $taskId);
             exit;
         }
 
         Task::addComment($taskId, Session::userId(), $content);
 
         Session::flash('success', 'Comentário adicionado.');
-        header('Location: index.php?page=tasks&action=show&id=' . $taskId);
+        header('Location: index.php?m=chat&page=tasks&action=show&id=' . $taskId);
         exit;
     }
 
@@ -345,7 +345,7 @@ class TaskController
 
         if (!$task) {
             Session::flash('error', 'Tarefa não encontrada.');
-            header('Location: index.php?page=tasks');
+            header('Location: index.php?m=chat&page=tasks');
             exit;
         }
 
@@ -354,7 +354,7 @@ class TaskController
         AuditLog::log('delete', 'task', $taskId, ['status' => $task['status']], ['status' => 'cancelled']);
 
         Session::flash('success', 'Tarefa cancelada com sucesso.');
-        header('Location: index.php?page=tasks');
+        header('Location: index.php?m=chat&page=tasks');
         exit;
     }
 

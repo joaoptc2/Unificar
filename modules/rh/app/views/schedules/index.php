@@ -2,7 +2,7 @@
     <h1><i class="bi bi-calendar3 me-2"></i>Agenda</h1>
     <div class="d-flex gap-2">
         <?php if (Auth::can('schedules', 'create')): ?>
-            <a href="index.php?page=schedules&action=create" class="btn btn-primary btn-sm">
+            <a href="index.php?m=rh&page=schedules&action=create" class="btn btn-primary btn-sm">
                 <i class="bi bi-plus-lg me-1"></i> Novo Compromisso
             </a>
         <?php endif; ?>
@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded', function () {
         nowIndicator: true,
         eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
         events: {
-            url: 'index.php?page=schedules&action=events',
+            url: 'index.php?m=rh&page=schedules&action=events',
             method: 'GET',
             failure: function () {
                 console.error('Falha ao carregar eventos.');
@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         dateClick: function (info) {
             <?php if (Auth::can('schedules', 'create')): ?>
-            window.location.href = 'index.php?page=schedules&action=create&date=' + info.dateStr;
+            window.location.href = 'index.php?m=rh&page=schedules&action=create&date=' + info.dateStr;
             <?php endif; ?>
         },
         eventClick: function (info) {

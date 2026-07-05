@@ -9,7 +9,6 @@
 
 function indicators_index($param = null) {
     require_login();
-    _indicators_check_schema();
     $hospital_id = get_hospital_id();
 
     $type     = (string) query('type', '');
@@ -62,7 +61,6 @@ function indicators_index($param = null) {
 
 function indicators_create($param = null) {
     require_login();
-    _indicators_check_schema();  // avisa se migrations pendentes
 
     // Pré-popula com template, se veio ?template=slug
     $template_slug = query('template', '');
@@ -204,7 +202,6 @@ function indicators_dashboard($param = null) {
 
 function indicators_edit($param = null) {
     require_login();
-    _indicators_check_schema();
     $id = sanitize_int($param ?: query('id'));
     $hospital_id = get_hospital_id();
 
@@ -666,29 +663,6 @@ function _indicators_validate(array $input) {
 }
 
 /**
- * Verifica se migrations 002 e 003 foram aplicadas. Se não, mostra
- * flash message com instruções (só exibe; não bloqueia acesso para não
- * travar a leitura de dados legados).
- */
-function _indicators_check_schema() {
-    $check = db_check_migrations();
-    if (!$check['ok'] && !has_flash('error') && !has_flash('info')) {
-        $list = '<ul class="mb-0 mt-2 small">';
-        foreach ($check['missing'] as $m) $list .= '<li>' . e($m) . '</li>';
-        $list .= '</ul>';
-        $msg = '<strong>⚠ Atualização do banco pendente.</strong> '
-             . 'As novas funcionalidades (variáveis, fórmulas, metas avançadas) só ficam '
-             . 'disponíveis após aplicar as migrations.'
-             . '<br><strong>Como resolver:</strong> '
-             . 'Acesse <a href="' . e(url('migrate.php')) . '"><code>/migrate.php</code></a> '
-             . 'ou importe os arquivos <code>database/migrations/002_*.sql</code> e '
-             . '<code>database/migrations/003_*.sql</code> no phpMyAdmin.'
-             . $list;
-        set_flash('info', $msg);
-    }
-}
-
-/**
  * Monta mensagem de erro amigável, incluindo detalhe técnico para admins
  * ou quando APP_DEBUG está ligado.
  */
@@ -700,7 +674,7 @@ function _indicators_format_error($prefix, Throwable $ex) {
         || stripos($msg, 'doesn\'t exist') !== false
         || stripos($msg, 'table or view') !== false) {
         return $prefix . ': <strong>o schema do banco está desatualizado</strong>. '
-             . 'Aplique as migrations em <code>database/migrations/</code> via phpMyAdmin. '
+             . 'Aplique o schema consolidado <code>sql/modules/documentos.sql</code>. '
              . '(Detalhe: ' . e(substr($msg, 0, 200)) . ')';
     }
 
@@ -831,9 +805,9 @@ function indicators_import($param = null) {
 // ─── Helpers PDCA ───────────────────────────────────────────────────────────
 
 function _action_list($indicator_id = null, $hospital_id = null) {
-    if (!db_has_table('indicator_actions')) return [];
-    $sql = "SELECT a.*, i.name AS indicator_name FROM indicator_actions a
-            JOIN indicators i ON i.id = a.indicator_id
+    if (!db_has_table('doc_indicator_actions')) return [];
+    $sql = "SELECT a.*, i.name AS indicator_name FROM doc_indicator_actions a
+            JOIN doc_indicators i ON i.id = a.indicator_id
             WHERE a.deleted_at IS NULL";
     $params = [];
     if ($indicator_id) { $sql .= " AND a.indicator_id = ?"; $params[] = $indicator_id; }
@@ -843,9 +817,9 @@ function _action_list($indicator_id = null, $hospital_id = null) {
 }
 
 function _action_create($indicator_id, $data, $user_id) {
-    if (!db_has_table('indicator_actions')) return 0;
-    $has_type = db_has_column('indicator_actions', 'action_type');
-    $has_root = db_has_column('indicator_actions', 'root_cause');
+    if (!db_has_table('doc_indicator_actions')) return 0;
+    $has_type = db_has_column('doc_indicator_actions', 'action_type');
+    $has_root = db_has_column('doc_indicator_actions', 'root_cause');
 
     $cols = ['indicator_id','title','description','responsible','due_date','status','created_by'];
     $vals = [$indicator_id, $data['title'], $data['description'],
@@ -854,24 +828,24 @@ function _action_create($indicator_id, $data, $user_id) {
     if ($has_root) { $cols[] = 'root_cause';  $vals[] = $data['root_cause']; }
 
     $ph = implode(',', array_fill(0, count($cols), '?'));
-    db_execute("INSERT INTO indicator_actions (" . implode(',', $cols) . ") VALUES ($ph)", $vals);
+    db_execute("INSERT INTO doc_indicator_actions (" . implode(',', $cols) . ") VALUES ($ph)", $vals);
     return (int) db_last_id();
 }
 
 function _action_set_status($action_id, $status, $verification = '') {
-    if (!db_has_table('indicator_actions')) return 0;
+    if (!db_has_table('doc_indicator_actions')) return 0;
     $sets = ['status = ?', 'updated_at = NOW()'];
     $params = [$status];
     if ($status === 'done') {
         $sets[] = 'completed_at = NOW()';
-        if (db_has_column('indicator_actions', 'verification') && $verification !== '') {
+        if (db_has_column('doc_indicator_actions', 'verification') && $verification !== '') {
             $sets[] = 'verification = ?';
             $sets[] = 'verified_at = NOW()';
             $params[] = $verification;
         }
     }
     $params[] = $action_id;
-    return db_execute("UPDATE indicator_actions SET " . implode(', ', $sets) . " WHERE id = ?", $params);
+    return db_execute("UPDATE doc_indicator_actions SET " . implode(', ', $sets) . " WHERE id = ?", $params);
 }
 
 // ─── Helpers importação CSV ─────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 <?php
 class SignatureController
 {
-    public function index(): void { header('Location: index.php?page=employees'); exit; }
+    public function index(): void { header('Location: index.php?m=rh&page=employees'); exit; }
     public function sign(): void
     {
         Auth::requireLogin(); Csrf::check();
@@ -10,12 +10,12 @@ class SignatureController
         $title = Sanitize::post('document_title'); $content = Sanitize::post('content_to_sign');
         if (!$empId || !$docType || !$title || !$content) {
             Session::flash('error', 'Dados insuficientes para assinatura.');
-            header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? 'index.php?page=dashboard')); exit;
+            header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? 'index.php?m=rh&page=dashboard')); exit;
         }
         $sigId = DigitalSignature::sign($empId, $docType, $docId ?: null, $title, $content);
         AuditLog::log('sign', 'digital_signatures', $sigId);
         Session::flash('success', 'Documento assinado digitalmente.');
-        header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? 'index.php?page=employees&action=show&id=' . $empId)); exit;
+        header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? 'index.php?m=rh&page=employees&action=show&id=' . $empId)); exit;
     }
     public function verify(): void
     {

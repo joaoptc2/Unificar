@@ -1,10 +1,10 @@
 <div class="page-header">
     <h1><i class="bi bi-calendar-event me-2"></i>Reuniões</h1>
     <div class="d-flex gap-2">
-        <a href="index.php?page=meetings&action=calendar" class="btn btn-outline-primary btn-sm">
+        <a href="index.php?m=chat&page=meetings&action=calendar" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-calendar3 me-1"></i> Calendário
         </a>
-        <a href="index.php?page=meetings&action=create" class="btn btn-primary btn-sm">
+        <a href="index.php?m=chat&page=meetings&action=create" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i> Agendar Reunião
         </a>
     </div>
@@ -46,7 +46,7 @@
                 </div>
 
                 <h5 class="mb-2">
-                    <a href="index.php?page=meetings&action=show&id=<?= $meeting['id'] ?>" class="text-decoration-none">
+                    <a href="index.php?m=chat&page=meetings&action=show&id=<?= $meeting['id'] ?>" class="text-decoration-none">
                         <?= Sanitize::e($meeting['title']) ?>
                     </a>
                 </h5>
@@ -62,19 +62,19 @@
 
                 <?php if (($meeting['my_status'] ?? 'pending') === 'pending'): ?>
                 <div class="d-flex gap-2 mt-3">
-                    <form method="POST" action="index.php?page=meetings&action=respond" class="d-inline">
+                    <form method="POST" action="index.php?m=chat&page=meetings&action=respond" class="d-inline">
                         <?= Csrf::field() ?>
                         <input type="hidden" name="meeting_id" value="<?= $meeting['id'] ?>">
                         <input type="hidden" name="status" value="accepted">
                         <button class="btn btn-success btn-sm"><i class="bi bi-check-lg me-1"></i>Aceitar</button>
                     </form>
-                    <form method="POST" action="index.php?page=meetings&action=respond" class="d-inline">
+                    <form method="POST" action="index.php?m=chat&page=meetings&action=respond" class="d-inline">
                         <?= Csrf::field() ?>
                         <input type="hidden" name="meeting_id" value="<?= $meeting['id'] ?>">
                         <input type="hidden" name="status" value="tentative">
                         <button class="btn btn-warning btn-sm">Talvez</button>
                     </form>
-                    <form method="POST" action="index.php?page=meetings&action=respond" class="d-inline">
+                    <form method="POST" action="index.php?m=chat&page=meetings&action=respond" class="d-inline">
                         <?= Csrf::field() ?>
                         <input type="hidden" name="meeting_id" value="<?= $meeting['id'] ?>">
                         <input type="hidden" name="status" value="declined">

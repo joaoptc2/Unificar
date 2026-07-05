@@ -101,7 +101,7 @@
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-header bg-white fw-semibold d-flex justify-content-between">
                 <span><i class="bi bi-clock me-1"></i> Vencimentos Próximos</span>
-                <a href="index.php?page=expirations" class="small text-decoration-none">Ver todos</a>
+                <a href="index.php?m=rh&page=expirations" class="small text-decoration-none">Ver todos</a>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -120,7 +120,7 @@
                                 $text = $diff < 0 ? 'Vencido' : "Em {$diff}d";
                                 ?>
                                 <tr>
-                                    <td><a href="index.php?page=employees&action=show&id=<?= $exp['employee_id'] ?>" class="text-decoration-none"><?= Sanitize::e($exp['employee_name']) ?></a></td>
+                                    <td><a href="index.php?m=rh&page=employees&action=show&id=<?= $exp['employee_id'] ?>" class="text-decoration-none"><?= Sanitize::e($exp['employee_name']) ?></a></td>
                                     <td><?= Sanitize::e($exp['title']) ?></td>
                                     <td><?= Sanitize::formatDate($exp['expiry_date']) ?></td>
                                     <td><span class="badge <?= $badge ?>"><?= $text ?></span></td>
@@ -156,7 +156,7 @@
                         </div>
                     </div>
                 <?php endforeach; endif; ?>
-                <a href="index.php?page=schedules" class="btn btn-outline-primary btn-sm w-100 mt-2">Ver Agenda</a>
+                <a href="index.php?m=rh&page=schedules" class="btn btn-outline-primary btn-sm w-100 mt-2">Ver Agenda</a>
             </div>
         </div>
 
@@ -183,7 +183,7 @@
                         <?php endif; ?>
                     </div>
                 <?php endforeach; endif; ?>
-                <a href="index.php?page=birthdays" class="btn btn-outline-primary btn-sm w-100 mt-2">Ver Todos</a>
+                <a href="index.php?m=rh&page=birthdays" class="btn btn-outline-primary btn-sm w-100 mt-2">Ver Todos</a>
             </div>
         </div>
 

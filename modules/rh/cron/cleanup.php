@@ -1,33 +1,35 @@
 <?php
 /**
- * CRON Job: Limpeza de dados antigos
+ * CRON: Limpeza de dados antigos (módulo RH).
  *
- * Configurar no cPanel/Hostinger:
- * Frequência: Semanalmente (domingo às 03:00)
- * Comando: php /home/usuario/public_html/cron/cleanup.php
+ * Executado pelo cron UNIFICADO da plataforma via manifesto do módulo
+ * (module.php → 'cron'). Limita-se aos dados do módulo:
+ *  - notificações do módulo (module='rh') já lidas e antigas;
+ *  - flags de notificação de vencimentos renovados;
+ *  - rate-limit do formulário público (rh_public_submissions);
+ *  - arquivos órfãos em /uploads/rh/;
+ *  - cache em arquivo expirado.
+ *
+ * login_attempts / password_resets / audit_log são do núcleo — a limpeza
+ * dessas tabelas deixou de ser responsabilidade do módulo.
  */
-
-define('BASE_PATH', dirname(__DIR__));
-
-// Bootstrap comum: valida contexto, carrega config e autoloader.
-require __DIR__ . '/bootstrap.php';
 
 /**
- * Remove arquivos em storage/uploads/{sub}/ que não são referenciados no banco.
+ * Remove arquivos em /uploads/rh/{sub}/ que não são referenciados no banco.
  * Arquivos com menos de 24h são preservados (margem para uploads pendentes).
  */
-function cleanupOrphanFiles(PDO $db): int
+function rh_cleanup_orphan_files(PDO $db): int
 {
     $count = 0;
-    $storageBase = BASE_PATH . '/storage/uploads/';
+    $storageBase = rtrim(Upload::baseDir(), '/') . '/';
     $map = [
-        'documents'    => ['table' => 'employee_documents',    'col' => 'file_path'],
-        'certificates' => ['table' => 'medical_certificates',  'col' => 'file_path'],
-        'resumes'      => ['table' => 'candidates',            'col' => 'resume_path'],
+        'documents'    => ['table' => 'rh_employee_documents',   'col' => 'file_path'],
+        'certificates' => ['table' => 'rh_medical_certificates', 'col' => 'file_path'],
+        'resumes'      => ['table' => 'rh_candidates',           'col' => 'resume_path'],
     ];
 
     // Vencimentos podem usar qualquer subdir — lista separada.
-    $expStmt = $db->query("SELECT file_path FROM expirations WHERE file_path IS NOT NULL");
+    $expStmt = $db->query("SELECT file_path FROM rh_expirations WHERE file_path IS NOT NULL");
     $expirationPaths = array_map(fn($r) => basename($r['file_path']), $expStmt->fetchAll());
 
     foreach ($map as $sub => $cfg) {
@@ -56,56 +58,44 @@ function cleanupOrphanFiles(PDO $db): int
     return $count;
 }
 
-echo "[" . date('Y-m-d H:i:s') . "] Iniciando limpeza...\n";
+echo "[" . date('Y-m-d H:i:s') . "] [rh] Iniciando limpeza...\n";
 
 try {
     $db = Database::getInstance();
 
-    // 1. Notificações lidas com mais de 90 dias
-    $stmt = $db->prepare("DELETE FROM notifications WHERE is_read = 1 AND created_at < DATE_SUB(NOW(), INTERVAL 90 DAY)");
+    // 1. Notificações do módulo lidas com mais de 90 dias
+    $stmt = $db->prepare(
+        "DELETE FROM notifications
+         WHERE module = 'rh' AND read_at IS NOT NULL
+           AND created_at < DATE_SUB(NOW(), INTERVAL 90 DAY)"
+    );
     $stmt->execute();
     echo "  Notificações antigas removidas: {$stmt->rowCount()}\n";
 
-    // 2. Logs de auditoria com mais de 365 dias
-    $stmt = $db->prepare("DELETE FROM audit_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 365 DAY)");
-    $stmt->execute();
-    echo "  Logs de auditoria antigos removidos: {$stmt->rowCount()}\n";
-
-    // 3. Resetar flags de notificação para vencimentos renovados
+    // 2. Resetar flags de notificação para vencimentos renovados
     $stmt = $db->prepare(
-        "UPDATE expirations SET notified_at = NULL, notified_expired_at = NULL
+        "UPDATE rh_expirations SET notified_at = NULL, notified_expired_at = NULL
          WHERE expiry_date > CURDATE() AND (notified_at IS NOT NULL OR notified_expired_at IS NOT NULL)"
     );
     $stmt->execute();
     echo "  Flags de vencimento resetadas: {$stmt->rowCount()}\n";
 
-    // 4. Tokens de reset usados/expirados
-    $stmt = $db->prepare("DELETE FROM password_resets WHERE used_at IS NOT NULL OR expires_at < NOW()");
-    $stmt->execute();
-    echo "  Tokens de reset expirados removidos: {$stmt->rowCount()}\n";
-
-    // 5. Tentativas de login com mais de 30 dias
-    $stmt = $db->prepare("DELETE FROM login_attempts WHERE attempted_at < DATE_SUB(NOW(), INTERVAL 30 DAY)");
-    $stmt->execute();
-    echo "  Tentativas de login antigas removidas: {$stmt->rowCount()}\n";
-
-    // 6. Rate-limit do formulário público com mais de 30 dias
-    $stmt = $db->prepare("DELETE FROM public_submissions WHERE submitted_at < DATE_SUB(NOW(), INTERVAL 30 DAY)");
+    // 3. Rate-limit do formulário público com mais de 30 dias
+    $stmt = $db->prepare("DELETE FROM rh_public_submissions WHERE submitted_at < DATE_SUB(NOW(), INTERVAL 30 DAY)");
     $stmt->execute();
     echo "  Registros de rate-limit removidos: {$stmt->rowCount()}\n";
 
-    // 7. Arquivos órfãos em storage/uploads/
-    $orphans = cleanupOrphanFiles($db);
+    // 4. Arquivos órfãos em /uploads/rh/
+    $orphans = rh_cleanup_orphan_files($db);
     echo "  Arquivos órfãos removidos: {$orphans}\n";
 
-    // 8. Cache em arquivo expirado
+    // 5. Cache em arquivo expirado
     if (class_exists('FileCache')) {
         $purged = FileCache::purgeExpired();
         echo "  Entradas de cache expiradas removidas: {$purged}\n";
     }
 
-    echo "[" . date('Y-m-d H:i:s') . "] Limpeza concluída.\n";
+    echo "[" . date('Y-m-d H:i:s') . "] [rh] Limpeza concluída.\n";
 } catch (Exception $e) {
     echo "[ERRO] " . $e->getMessage() . "\n";
-    exit(1);
 }

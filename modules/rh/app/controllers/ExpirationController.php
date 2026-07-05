@@ -49,15 +49,15 @@ class ExpirationController
 
         $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
-        $countStmt = $this->db->prepare("SELECT COUNT(*) FROM expirations ex JOIN employees e ON ex.employee_id = e.id {$whereClause}");
+        $countStmt = $this->db->prepare("SELECT COUNT(*) FROM rh_expirations ex JOIN rh_employees e ON ex.employee_id = e.id {$whereClause}");
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
 
         $pagination = new Pagination($total, $currentPage);
 
         $sql = "SELECT ex.*, e.full_name as employee_name
-                FROM expirations ex
-                JOIN employees e ON ex.employee_id = e.id
+                FROM rh_expirations ex
+                JOIN rh_employees e ON ex.employee_id = e.id
                 {$whereClause}
                 ORDER BY ex.expiry_date ASC
                 LIMIT {$pagination->perPage} OFFSET {$pagination->offset}";
@@ -77,7 +77,7 @@ class ExpirationController
         Auth::requirePermission('expirations', 'create');
 
         $employeeId = Sanitize::int($_GET['employee_id'] ?? 0);
-        $employees = $this->db->query("SELECT id, full_name FROM employees WHERE status = 'ativo' ORDER BY full_name")->fetchAll();
+        $employees = $this->db->query("SELECT id, full_name FROM rh_employees WHERE status = 'ativo' ORDER BY full_name")->fetchAll();
         $expiration = null;
 
         $pageTitle = 'Novo Vencimento';
@@ -96,7 +96,7 @@ class ExpirationController
 
         if (empty($data['employee_id']) || empty($data['title']) || empty($data['expiry_date'])) {
             Session::flash('error', 'Preencha todos os campos obrigatórios.');
-            header('Location: index.php?page=expirations&action=create');
+            header('Location: index.php?m=rh&page=expirations&action=create');
             exit;
         }
 
@@ -107,7 +107,7 @@ class ExpirationController
         }
 
         $stmt = $this->db->prepare(
-            'INSERT INTO expirations (employee_id, type, title, description, issue_date, expiry_date, alert_days, file_path, created_by)
+            'INSERT INTO rh_expirations (employee_id, type, title, description, issue_date, expiry_date, alert_days, file_path, created_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
@@ -124,7 +124,7 @@ class ExpirationController
         AuditLog::log('create', 'expirations', $expId);
 
         Session::flash('success', 'Vencimento cadastrado com sucesso.');
-        header('Location: index.php?page=expirations');
+        header('Location: index.php?m=rh&page=expirations');
         exit;
     }
 
@@ -136,7 +136,7 @@ class ExpirationController
     public static function syncToSchedule(
         PDO $db, int $expirationId, int $employeeId, string $title, string $expiryDate, string $description = ''
     ): void {
-        $stmt = $db->prepare('SELECT id FROM schedules WHERE expiration_id = ? LIMIT 1');
+        $stmt = $db->prepare('SELECT id FROM rh_schedules WHERE expiration_id = ? LIMIT 1');
         $stmt->execute([$expirationId]);
         $existing = $stmt->fetchColumn();
 
@@ -145,7 +145,7 @@ class ExpirationController
 
         if ($existing) {
             $stmt = $db->prepare(
-                'UPDATE schedules
+                'UPDATE rh_schedules
                     SET employee_id = ?, title = ?, description = ?,
                         event_date = ?, event_type = "vencimento", color = ?
                   WHERE id = ?'
@@ -153,7 +153,7 @@ class ExpirationController
             $stmt->execute([$employeeId, $eventTitle, $description, $expiryDate, $color, $existing]);
         } else {
             $stmt = $db->prepare(
-                'INSERT INTO schedules
+                'INSERT INTO rh_schedules
                     (employee_id, title, description, event_date, event_type, expiration_id, color, created_by)
                  VALUES (?, ?, ?, ?, "vencimento", ?, ?, ?)'
             );
@@ -169,22 +169,22 @@ class ExpirationController
         Auth::requirePermission('expirations', 'edit');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
-        $stmt = $this->db->prepare('SELECT * FROM expirations WHERE id = ?');
+        $stmt = $this->db->prepare('SELECT * FROM rh_expirations WHERE id = ?');
         $stmt->execute([$id]);
         $expiration = $stmt->fetch();
 
         if (!$expiration) {
             Session::flash('error', 'Vencimento não encontrado.');
-            header('Location: index.php?page=expirations');
+            header('Location: index.php?m=rh&page=expirations');
             exit;
         }
 
         $employeeId = $expiration['employee_id'];
-        $employees = $this->db->query("SELECT id, full_name FROM employees ORDER BY full_name")->fetchAll();
+        $employees = $this->db->query("SELECT id, full_name FROM rh_employees ORDER BY full_name")->fetchAll();
 
         // Histórico de renovações
         $stmt = $this->db->prepare(
-            'SELECT h.*, u.name as user_name FROM expiration_history h
+            'SELECT h.*, u.name as user_name FROM rh_expiration_history h
              LEFT JOIN users u ON h.renewed_by = u.id
              WHERE h.expiration_id = ? ORDER BY h.created_at DESC'
         );
@@ -204,13 +204,13 @@ class ExpirationController
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
-        $stmt = $this->db->prepare('SELECT * FROM expirations WHERE id = ?');
+        $stmt = $this->db->prepare('SELECT * FROM rh_expirations WHERE id = ?');
         $stmt->execute([$id]);
         $old = $stmt->fetch();
 
         if (!$old) {
             Session::flash('error', 'Vencimento não encontrado.');
-            header('Location: index.php?page=expirations');
+            header('Location: index.php?m=rh&page=expirations');
             exit;
         }
 
@@ -219,7 +219,7 @@ class ExpirationController
         // Verificar se houve renovação (mudança de data de vencimento)
         if ($old['expiry_date'] !== $data['expiry_date']) {
             $stmt = $this->db->prepare(
-                'INSERT INTO expiration_history (expiration_id, old_expiry_date, new_expiry_date, notes, renewed_by)
+                'INSERT INTO rh_expiration_history (expiration_id, old_expiry_date, new_expiry_date, notes, renewed_by)
                  VALUES (?, ?, ?, ?, ?)'
             );
             $stmt->execute([$id, $old['expiry_date'], $data['expiry_date'], 'Renovação', Session::userId()]);
@@ -235,7 +235,7 @@ class ExpirationController
         }
 
         $stmt = $this->db->prepare(
-            'UPDATE expirations SET employee_id=?, type=?, title=?, description=?, issue_date=?, expiry_date=?, alert_days=?, file_path=?
+            'UPDATE rh_expirations SET employee_id=?, type=?, title=?, description=?, issue_date=?, expiry_date=?, alert_days=?, file_path=?
              WHERE id=?'
         );
         $stmt->execute([
@@ -250,7 +250,7 @@ class ExpirationController
         AuditLog::log('update', 'expirations', $id, $old, $data);
 
         Session::flash('success', 'Vencimento atualizado com sucesso.');
-        header('Location: index.php?page=expirations');
+        header('Location: index.php?m=rh&page=expirations');
         exit;
     }
 
@@ -260,20 +260,20 @@ class ExpirationController
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
-        $stmt = $this->db->prepare('SELECT * FROM expirations WHERE id = ?');
+        $stmt = $this->db->prepare('SELECT * FROM rh_expirations WHERE id = ?');
         $stmt->execute([$id]);
         $exp = $stmt->fetch();
 
         if ($exp) {
             if ($exp['file_path']) Upload::delete($exp['file_path']);
             // Remove o compromisso espelhado na agenda (se houver).
-            $this->db->prepare('DELETE FROM schedules WHERE expiration_id = ?')->execute([$id]);
-            $this->db->prepare('DELETE FROM expirations WHERE id = ?')->execute([$id]);
+            $this->db->prepare('DELETE FROM rh_schedules WHERE expiration_id = ?')->execute([$id]);
+            $this->db->prepare('DELETE FROM rh_expirations WHERE id = ?')->execute([$id]);
             AuditLog::log('delete', 'expirations', $id);
             Session::flash('success', 'Vencimento excluído.');
         }
 
-        header('Location: index.php?page=expirations');
+        header('Location: index.php?m=rh&page=expirations');
         exit;
     }
 
@@ -282,8 +282,8 @@ class ExpirationController
         Auth::requirePermission('expirations', 'export');
 
         $sql = "SELECT ex.*, e.full_name as employee_name
-                FROM expirations ex
-                JOIN employees e ON ex.employee_id = e.id
+                FROM rh_expirations ex
+                JOIN rh_employees e ON ex.employee_id = e.id
                 ORDER BY ex.expiry_date ASC";
         $expirations = $this->db->query($sql)->fetchAll();
 

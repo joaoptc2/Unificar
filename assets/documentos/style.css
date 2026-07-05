@@ -1,0 +1,192 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Módulo DOCUMENTOS — estilos de componentes.
+   O layout (topbar, sidebar, corpo) é do núcleo da plataforma (core/app.css);
+   aqui ficam apenas os componentes próprios das telas do módulo.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Page header ────────────────────────────────────────────────────────── */
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.2rem;
+}
+.page-header h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+}
+@media (max-width: 576px) {
+    .page-header { flex-direction: column; align-items: flex-start; }
+}
+
+/* ── Cards ──────────────────────────────────────────────────────────────── */
+.card .card-header { border-bottom: 1px solid #e2e8f0; }
+
+/* Stat cards (dashboard) */
+.stat-card {
+    border: none;
+    border-radius: 0.75rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+.stat-card .stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+}
+.stat-card .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.stat-card .stat-label {
+    font-size: 0.78rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+@media (max-width: 576px) {
+    .stat-card .stat-value { font-size: 1.2rem; }
+}
+
+/* Background opacos para os ícones */
+.bg-primary-bg-opacity-10 { background-color: rgba(13, 110, 253, 0.1); }
+.bg-success-bg-opacity-10 { background-color: rgba(16, 185, 129, 0.1); }
+.bg-warning-bg-opacity-10 { background-color: rgba(245, 158, 11, 0.1); }
+.bg-danger-bg-opacity-10  { background-color: rgba(239, 68, 68, 0.1); }
+.bg-info-bg-opacity-10    { background-color: rgba(59, 130, 246, 0.1); }
+.bg-secondary-bg-opacity-10 { background-color: rgba(100, 116, 139, 0.1); }
+
+/* ── Tabelas ────────────────────────────────────────────────────────────── */
+.table th {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #64748b;
+    font-weight: 600;
+    border-bottom-width: 2px;
+    white-space: nowrap;
+}
+.table td {
+    vertical-align: middle;
+    font-size: 0.85rem;
+}
+.btn-action { padding: 0.2rem 0.4rem; font-size: 0.78rem; }
+
+@media (max-width: 576px) {
+    .table th, .table td { font-size: 0.8rem; }
+}
+
+/* ── Badges de status ────────────────────────────────────────────────────── */
+.badge-ativo     { background-color: #10b981; color: #fff; }
+.badge-afastado  { background-color: #f59e0b; color: #fff; }
+.badge-desligado { background-color: #ef4444; color: #fff; }
+.badge-valido    { background-color: #10b981; color: #fff; }
+.badge-proximo   { background-color: #f59e0b; color: #fff; }
+.badge-vencido   { background-color: #ef4444; color: #fff; }
+
+/* ── Formulários ────────────────────────────────────────────────────────── */
+.form-label {
+    font-weight: 500;
+    font-size: 0.82rem;
+    margin-bottom: 0.25rem;
+}
+.required::after {
+    content: ' *';
+    color: #ef4444;
+}
+.filter-panel {
+    background: #fff;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid #e2e8f0;
+}
+
+/* ── Componentes especiais ──────────────────────────────────────────────── */
+
+/* Kanban */
+.kanban-column {
+    min-width: 280px;
+    max-width: 320px;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+}
+.kanban-column .column-header {
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fff;
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+.kanban-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+    padding: 0.75rem;
+    margin: 0.5rem;
+    font-size: 0.82rem;
+    transition: box-shadow 0.2s;
+}
+.kanban-card:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
+
+/* Calendário */
+.calendar-day {
+    min-height: 100px;
+    border: 1px solid #e2e8f0;
+    padding: 0.3rem;
+    font-size: 0.8rem;
+}
+.calendar-day.today {
+    background: #eff6ff;
+    border-color: #93c5fd;
+}
+.calendar-day .day-number { font-weight: 600; font-size: 0.85rem; }
+.calendar-event {
+    background: #dbeafe;
+    border-left: 3px solid #3b82f6;
+    padding: 2px 4px;
+    margin-bottom: 2px;
+    border-radius: 2px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+.calendar-event:hover { background: #bfdbfe; }
+
+/* Compliment / quote boxes (amber) */
+.compliment-card {
+    border-left: 4px solid #ffc107;
+    padding: 14px 18px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    background: #fff;
+    border-radius: 0.375rem;
+}
+.compliment-card::before {
+    content: '"';
+    font-size: 2.5rem;
+    line-height: 0;
+    vertical-align: -0.4em;
+    color: #ffc107;
+    margin-right: 0.2em;
+}
+
+/* ── Impressão ──────────────────────────────────────────────────────────── */
+@media print {
+    .btn, .pagination, .filter-panel { display: none !important; }
+}

@@ -1,21 +1,13 @@
 <?php
 /**
- * CRON Job: Verificar vencimentos e gerar notificações
+ * CRON: Verificar vencimentos e gerar notificações (módulo RH).
  *
- * Configurar no cPanel/Hostinger:
- * Frequência: Diariamente às 07:00
- * Comando: php /home/usuario/public_html/cron/check_expirations.php
- *
- * Ou via crontab:
- * 0 7 * * * php /caminho/para/cron/check_expirations.php >> /caminho/para/logs/cron.log 2>&1
+ * Executado pelo cron UNIFICADO da plataforma via manifesto do módulo
+ * (module.php → 'cron'). O núcleo autentica/agenda a execução — não há
+ * mais token próprio nem bootstrap de sessão aqui.
  */
 
-define('BASE_PATH', dirname(__DIR__));
-
-// Bootstrap comum: valida contexto (CLI ou token), carrega config e autoloader.
-require __DIR__ . '/bootstrap.php';
-
-echo "[" . date('Y-m-d H:i:s') . "] Iniciando verificação de vencimentos...\n";
+echo "[" . date('Y-m-d H:i:s') . "] [rh] Iniciando verificação de vencimentos...\n";
 
 try {
     $db = Database::getInstance();
@@ -24,8 +16,8 @@ try {
     // 1. Buscar vencimentos que vencem nos próximos N dias (conforme alert_days)
     $stmt = $db->prepare(
         "SELECT ex.*, e.full_name as employee_name
-         FROM expirations ex
-         JOIN employees e ON ex.employee_id = e.id
+         FROM rh_expirations ex
+         JOIN rh_employees e ON ex.employee_id = e.id
          WHERE e.status = 'ativo'
          AND ex.expiry_date BETWEEN ? AND DATE_ADD(?, INTERVAL ex.alert_days DAY)
          AND ex.notified_at IS NULL"
@@ -38,8 +30,8 @@ try {
     // 2. Buscar vencimentos já vencidos não notificados
     $stmt = $db->prepare(
         "SELECT ex.*, e.full_name as employee_name
-         FROM expirations ex
-         JOIN employees e ON ex.employee_id = e.id
+         FROM rh_expirations ex
+         JOIN rh_employees e ON ex.employee_id = e.id
          WHERE e.status = 'ativo'
          AND ex.expiry_date < ?
          AND ex.notified_expired_at IS NULL"
@@ -49,21 +41,30 @@ try {
 
     echo "Encontrados " . count($expired) . " vencimentos expirados.\n";
 
-    // 3. Buscar todos os admins e RH para notificar
-    $admins = $db->query("SELECT id, email, name FROM users WHERE role IN ('admin', 'rh') AND active = 1")->fetchAll();
+    // 3. Buscar todos os admins e RH (RBAC central + admins globais) para notificar
+    $admins = $db->query(
+        "SELECT DISTINCT u.id, u.email, u.name
+         FROM users u
+         LEFT JOIN user_module_access uma
+           ON uma.user_id = u.id AND uma.module_slug = 'rh'
+         WHERE u.active = 1 AND (u.is_admin = 1 OR uma.role IN ('admin', 'rh'))"
+    )->fetchAll();
+
+    $notify = function (int $userId, string $type, string $title, string $message, string $link) use ($db): void {
+        $db->prepare(
+            "INSERT INTO notifications (user_id, module, type, title, message, link) VALUES (?, 'rh', ?, ?, ?, ?)"
+        )->execute([$userId, $type, $title, $message, $link]);
+    };
 
     // 4. Gerar notificações para vencimentos próximos
     foreach ($upcoming as $exp) {
         $diff = (int)(new DateTime($today))->diff(new DateTime($exp['expiry_date']))->format('%r%a');
         $title = "Vencimento próximo: {$exp['title']}";
         $message = "{$exp['employee_name']} — {$exp['title']} vence em {$diff} dia(s) ({$exp['expiry_date']}).";
-        $link = "index.php?page=expirations&action=edit&id={$exp['id']}";
+        $link = "index.php?m=rh&page=expirations&action=edit&id={$exp['id']}";
 
         $emailSent = false;
         foreach ($admins as $admin) {
-            $stmt = $db->prepare(
-                'INSERT INTO notifications (user_id, title, message, type, link, sent_email) VALUES (?, ?, ?, "warning", ?, ?)'
-            );
             $mailed = Mailer::sendExpiryAlert(
                 $admin['email'],
                 $exp['employee_name'],
@@ -71,11 +72,11 @@ try {
                 date('d/m/Y', strtotime($exp['expiry_date']))
             );
             if ($mailed) $emailSent = true;
-            $stmt->execute([$admin['id'], $title, $message, $link, $mailed ? 1 : 0]);
+            $notify((int)$admin['id'], 'warning', $title, $message, $link);
         }
 
         // Marcar como notificado
-        $db->prepare('UPDATE expirations SET notified_at = NOW() WHERE id = ?')->execute([$exp['id']]);
+        $db->prepare('UPDATE rh_expirations SET notified_at = NOW() WHERE id = ?')->execute([$exp['id']]);
 
         echo "  [ALERTA] {$exp['employee_name']} — {$exp['title']} (vence em {$diff}d)" . ($emailSent ? ' [e-mail]' : '') . "\n";
     }
@@ -84,13 +85,10 @@ try {
     foreach ($expired as $exp) {
         $title = "VENCIDO: {$exp['title']}";
         $message = "{$exp['employee_name']} — {$exp['title']} VENCEU em " . date('d/m/Y', strtotime($exp['expiry_date'])) . ".";
-        $link = "index.php?page=expirations&action=edit&id={$exp['id']}";
+        $link = "index.php?m=rh&page=expirations&action=edit&id={$exp['id']}";
 
         $emailSent = false;
         foreach ($admins as $admin) {
-            $stmt = $db->prepare(
-                'INSERT INTO notifications (user_id, title, message, type, link, sent_email) VALUES (?, ?, ?, "danger", ?, ?)'
-            );
             $mailed = Mailer::sendExpiryAlert(
                 $admin['email'],
                 $exp['employee_name'],
@@ -98,11 +96,11 @@ try {
                 date('d/m/Y', strtotime($exp['expiry_date']))
             );
             if ($mailed) $emailSent = true;
-            $stmt->execute([$admin['id'], $title, $message, $link, $mailed ? 1 : 0]);
+            $notify((int)$admin['id'], 'danger', $title, $message, $link);
         }
 
         // Marcar como notificado
-        $db->prepare('UPDATE expirations SET notified_expired_at = NOW() WHERE id = ?')->execute([$exp['id']]);
+        $db->prepare('UPDATE rh_expirations SET notified_expired_at = NOW() WHERE id = ?')->execute([$exp['id']]);
 
         echo "  [VENCIDO] {$exp['employee_name']} — {$exp['title']}" . ($emailSent ? ' [e-mail]' : '') . "\n";
     }
@@ -110,7 +108,7 @@ try {
     // 6. Verificar conselhos regionais prestes a vencer
     $stmt = $db->prepare(
         "SELECT e.id, e.full_name, e.regional_council, e.council_number, e.council_expiry
-         FROM employees e
+         FROM rh_employees e
          WHERE e.status = 'ativo'
          AND e.council_expiry IS NOT NULL
          AND e.council_expiry BETWEEN ? AND DATE_ADD(?, INTERVAL 30 DAY)"
@@ -122,27 +120,24 @@ try {
         $diff = (int)(new DateTime($today))->diff(new DateTime($c['council_expiry']))->format('%r%a');
         $title = "Conselho Regional próximo do vencimento";
         $message = "{$c['full_name']} — {$c['regional_council']} {$c['council_number']} vence em {$diff} dia(s).";
-        $link = "index.php?page=employees&action=show&id={$c['id']}";
+        $link = "index.php?m=rh&page=employees&action=show&id={$c['id']}";
 
         foreach ($admins as $admin) {
             // Evitar duplicatas no mesmo dia
             $check = $db->prepare(
-                "SELECT id FROM notifications WHERE user_id = ? AND title = ? AND DATE(created_at) = ?"
+                "SELECT id FROM notifications WHERE user_id = ? AND module = 'rh' AND title = ? AND DATE(created_at) = ?"
             );
             $check->execute([$admin['id'], $title, $today]);
             if (!$check->fetch()) {
-                $db->prepare(
-                    'INSERT INTO notifications (user_id, title, message, type, link) VALUES (?, ?, ?, "warning", ?)'
-                )->execute([$admin['id'], $title, $message, $link]);
+                $notify((int)$admin['id'], 'warning', $title, $message, $link);
             }
         }
 
         echo "  [CONSELHO] {$c['full_name']} — {$c['regional_council']} (vence em {$diff}d)\n";
     }
 
-    echo "[" . date('Y-m-d H:i:s') . "] Verificação concluída com sucesso.\n";
+    echo "[" . date('Y-m-d H:i:s') . "] [rh] Verificação de vencimentos concluída com sucesso.\n";
 
 } catch (Exception $e) {
     echo "[ERRO] " . $e->getMessage() . "\n";
-    exit(1);
 }

@@ -19,8 +19,8 @@ class PublicRecruitmentController
     {
         $jobs = $this->db->query(
             "SELECT rj.*, d.name as department_name
-             FROM recruitment_jobs rj
-             LEFT JOIN departments d ON rj.department_id = d.id
+             FROM rh_recruitment_jobs rj
+             LEFT JOIN rh_departments d ON rj.department_id = d.id
              WHERE rj.status = 'aberta'
              ORDER BY rj.created_at DESC"
         )->fetchAll();
@@ -36,8 +36,8 @@ class PublicRecruitmentController
         $jobId = Sanitize::int($_GET['job_id'] ?? 0);
         $stmt = $this->db->prepare(
             "SELECT rj.*, d.name as department_name
-             FROM recruitment_jobs rj
-             LEFT JOIN departments d ON rj.department_id = d.id
+             FROM rh_recruitment_jobs rj
+             LEFT JOIN rh_departments d ON rj.department_id = d.id
              WHERE rj.id = ? AND rj.status = 'aberta'"
         );
         $stmt->execute([$jobId]);
@@ -61,7 +61,7 @@ class PublicRecruitmentController
     public function submit(): void
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: index.php?page=public_recruitment');
+            header('Location: index.php?m=rh&page=public_recruitment');
             exit;
         }
 
@@ -74,7 +74,7 @@ class PublicRecruitmentController
         // dar feedback sobre a proteção.
         if (!empty($_POST['website'])) {
             Session::flash('success', 'Inscrição recebida.');
-            header('Location: index.php?page=public_recruitment&action=apply&job_id=' . $jobId);
+            header('Location: index.php?m=rh&page=public_recruitment&action=apply&job_id=' . $jobId);
             exit;
         }
 
@@ -82,7 +82,7 @@ class PublicRecruitmentController
         $ts = (int)($_POST['form_ts'] ?? 0);
         if ($ts <= 0 || (time() - $ts) < 3) {
             Session::flash('error', 'Por favor, preencha o formulário com calma e tente novamente.');
-            header('Location: index.php?page=public_recruitment&action=apply&job_id=' . $jobId);
+            header('Location: index.php?m=rh&page=public_recruitment&action=apply&job_id=' . $jobId);
             exit;
         }
 
@@ -92,7 +92,7 @@ class PublicRecruitmentController
         $ip      = RateLimit::clientIp();
         if ($maxHour > 0 && RateLimit::recentPublicSubmissions($ip, 60) >= $maxHour) {
             Session::flash('error', 'Limite de envios excedido. Tente novamente mais tarde.');
-            header('Location: index.php?page=public_recruitment&action=apply&job_id=' . $jobId);
+            header('Location: index.php?m=rh&page=public_recruitment&action=apply&job_id=' . $jobId);
             exit;
         }
 
@@ -107,38 +107,38 @@ class PublicRecruitmentController
         // Validações básicas.
         if (!$lgpdGiven) {
             Session::flash('error', 'É necessário aceitar a Política de Privacidade (LGPD) para se inscrever.');
-            header('Location: index.php?page=public_recruitment&action=apply&job_id=' . $jobId);
+            header('Location: index.php?m=rh&page=public_recruitment&action=apply&job_id=' . $jobId);
             exit;
         }
         if (empty($fullName) || empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             Session::flash('error', 'Nome e e-mail válidos são obrigatórios.');
-            header('Location: index.php?page=public_recruitment&action=apply&job_id=' . $jobId);
+            header('Location: index.php?m=rh&page=public_recruitment&action=apply&job_id=' . $jobId);
             exit;
         }
         if (!empty($cpf) && !Sanitize::isValidCpf($cpf)) {
             Session::flash('error', 'CPF inválido.');
-            header('Location: index.php?page=public_recruitment&action=apply&job_id=' . $jobId);
+            header('Location: index.php?m=rh&page=public_recruitment&action=apply&job_id=' . $jobId);
             exit;
         }
         if (mb_strlen($fullName) > 200 || mb_strlen($experience) > 5000) {
             Session::flash('error', 'Dados enviados são muito extensos.');
-            header('Location: index.php?page=public_recruitment&action=apply&job_id=' . $jobId);
+            header('Location: index.php?m=rh&page=public_recruitment&action=apply&job_id=' . $jobId);
             exit;
         }
 
         // Checa candidato duplicado na mesma vaga.
         if ($jobId && RateLimit::candidateAlreadyApplied($jobId, $email)) {
             Session::flash('error', 'Você já se candidatou a esta vaga com este e-mail.');
-            header('Location: index.php?page=public_recruitment&action=apply&job_id=' . $jobId);
+            header('Location: index.php?m=rh&page=public_recruitment&action=apply&job_id=' . $jobId);
             exit;
         }
 
         // Valida a vaga.
-        $stmt = $this->db->prepare("SELECT id FROM recruitment_jobs WHERE id = ? AND status = 'aberta'");
+        $stmt = $this->db->prepare("SELECT id FROM rh_recruitment_jobs WHERE id = ? AND status = 'aberta'");
         $stmt->execute([$jobId]);
         if (!$stmt->fetch()) {
             Session::flash('error', 'Vaga não encontrada ou já encerrada.');
-            header('Location: index.php?page=public_recruitment');
+            header('Location: index.php?m=rh&page=public_recruitment');
             exit;
         }
 
@@ -148,7 +148,7 @@ class PublicRecruitmentController
             $upload = Upload::handle('resume', 'resumes');
             if (!$upload['success']) {
                 Session::flash('error', 'Erro no envio do currículo: ' . $upload['error']);
-                header('Location: index.php?page=public_recruitment&action=apply&job_id=' . $jobId);
+                header('Location: index.php?m=rh&page=public_recruitment&action=apply&job_id=' . $jobId);
                 exit;
             }
             $resumePath = $upload['path'];
@@ -158,7 +158,7 @@ class PublicRecruitmentController
         $accessToken = bin2hex(random_bytes(32));
 
         $stmt = $this->db->prepare(
-            'INSERT INTO candidates
+            'INSERT INTO rh_candidates
                 (job_id, full_name, email, phone, cpf, area, experience, resume_path, access_token, status,
                  lgpd_consent_at, lgpd_consent_ip)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "inscrito", NOW(), ?)'
@@ -169,7 +169,7 @@ class PublicRecruitmentController
         RateLimit::recordPublicSubmission($ip, $jobId, $email);
 
         Session::flash('success', 'Inscrição realizada com sucesso! Seu código de acompanhamento: ' . substr($accessToken, 0, 12));
-        header('Location: index.php?page=public_recruitment&action=apply&job_id=' . $jobId);
+        header('Location: index.php?m=rh&page=public_recruitment&action=apply&job_id=' . $jobId);
         exit;
     }
 
@@ -187,9 +187,9 @@ class PublicRecruitmentController
         if ($token && strlen($token) >= 12) {
             $stmt = $this->db->prepare(
                 'SELECT c.*, rj.title as job_title, rs.name as current_step_name
-                 FROM candidates c
-                 LEFT JOIN recruitment_jobs rj ON c.job_id = rj.id
-                 LEFT JOIN recruitment_steps rs ON c.current_step_id = rs.id
+                 FROM rh_candidates c
+                 LEFT JOIN rh_recruitment_jobs rj ON c.job_id = rj.id
+                 LEFT JOIN rh_recruitment_steps rs ON c.current_step_id = rs.id
                  WHERE c.access_token LIKE ?'
             );
             $stmt->execute([$token . '%']);
@@ -198,8 +198,8 @@ class PublicRecruitmentController
             if ($candidate) {
                 $stmt = $this->db->prepare(
                     'SELECT cp.*, rs.name as step_name
-                     FROM candidate_progress cp
-                     JOIN recruitment_steps rs ON cp.step_id = rs.id
+                     FROM rh_candidate_progress cp
+                     JOIN rh_recruitment_steps rs ON cp.step_id = rs.id
                      WHERE cp.candidate_id = ?
                      ORDER BY cp.created_at ASC'
                 );

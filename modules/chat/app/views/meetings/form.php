@@ -1,7 +1,7 @@
 <?php $isEdit = !empty($meeting['id']); ?>
 <div class="page-header">
     <h1><i class="bi bi-calendar-event me-2"></i><?= $isEdit ? 'Editar Reunião' : 'Agendar Reunião' ?></h1>
-    <a href="index.php?page=meetings" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=chat&page=meetings" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>
@@ -10,7 +10,7 @@
     <div class="col-md-8">
         <div class="card border-0 shadow-sm">
             <div class="card-body">
-                <form method="POST" action="index.php?page=meetings&action=<?= $isEdit ? 'update' : 'store' ?>">
+                <form method="POST" action="index.php?m=chat&page=meetings&action=<?= $isEdit ? 'update' : 'store' ?>">
                     <?= Csrf::field() ?>
                     <?php if ($isEdit): ?>
                         <input type="hidden" name="id" value="<?= $meeting['id'] ?>">
@@ -83,7 +83,7 @@
                         <?php endif; ?>
 
                         <div class="col-12 text-end">
-                            <a href="index.php?page=meetings" class="btn btn-outline-secondary me-2">Cancelar</a>
+                            <a href="index.php?m=chat&page=meetings" class="btn btn-outline-secondary me-2">Cancelar</a>
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-check-lg me-1"></i> <?= $isEdit ? 'Atualizar' : 'Agendar' ?>
                             </button>

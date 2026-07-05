@@ -7,7 +7,7 @@
 
 <?php if (Auth::can('trainings', 'create')): ?>
 <div class="card border-0 shadow-sm mb-3"><div class="card-header bg-white fw-semibold"><i class="bi bi-plus-circle me-1"></i> Adicionar ao catalogo</div><div class="card-body">
-<form method="POST" action="index.php?page=trainings&action=store_catalog" class="row g-2 align-items-end">
+<form method="POST" action="index.php?m=rh&page=trainings&action=store_catalog" class="row g-2 align-items-end">
     <?= Csrf::field() ?>
     <div class="col-md-3"><label class="form-label small">Titulo</label><input type="text" name="title" class="form-control form-control-sm" required></div>
     <div class="col-md-2"><label class="form-label small">Categoria</label><input type="text" name="category" class="form-control form-control-sm" placeholder="NR-32, BLS..."></div>

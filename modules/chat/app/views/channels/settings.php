@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-gear me-2"></i>Configurações — #<?= Sanitize::e($channel['name']) ?></h1>
-    <a href="index.php?page=chat&channel_id=<?= $channel['id'] ?>" class="btn btn-outline-secondary btn-sm">
+    <a href="index.php?m=chat&page=chat&channel_id=<?= $channel['id'] ?>" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar ao Canal
     </a>
 </div>
@@ -9,7 +9,7 @@
     <div class="col-md-8">
         <div class="card border-0 shadow-sm">
             <div class="card-body">
-                <form method="POST" action="index.php?page=channels&action=updateSettings">
+                <form method="POST" action="index.php?m=chat&page=channels&action=updateSettings">
                     <?= Csrf::field() ?>
                     <input type="hidden" name="id" value="<?= $channel['id'] ?>">
 
@@ -59,7 +59,7 @@
                         </div>
 
                         <div class="col-12 text-end mt-3">
-                            <a href="index.php?page=chat&channel_id=<?= $channel['id'] ?>" class="btn btn-outline-secondary me-2">Cancelar</a>
+                            <a href="index.php?m=chat&page=chat&channel_id=<?= $channel['id'] ?>" class="btn btn-outline-secondary me-2">Cancelar</a>
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-check-lg me-1"></i> Salvar Configurações
                             </button>

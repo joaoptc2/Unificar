@@ -20,9 +20,9 @@ class RecruitmentController
         $params = $status ? [$status] : [];
 
         $sql = "SELECT rj.*, d.name as department_name,
-                       (SELECT COUNT(*) FROM candidates c WHERE c.job_id = rj.id) as candidate_count
-                FROM recruitment_jobs rj
-                LEFT JOIN departments d ON rj.department_id = d.id
+                       (SELECT COUNT(*) FROM rh_candidates c WHERE c.job_id = rj.id) as candidate_count
+                FROM rh_recruitment_jobs rj
+                LEFT JOIN rh_departments d ON rj.department_id = d.id
                 {$where}
                 ORDER BY rj.created_at DESC";
         $stmt = $this->db->prepare($sql);
@@ -40,7 +40,7 @@ class RecruitmentController
     {
         Auth::requirePermission('recruitment', 'create');
 
-        $departments = $this->db->query('SELECT id, name FROM departments WHERE active = 1 ORDER BY name')->fetchAll();
+        $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
         $job = null;
 
         $pageTitle = 'Nova Vaga';
@@ -63,12 +63,12 @@ class RecruitmentController
 
         if (empty($title)) {
             Session::flash('error', 'Título é obrigatório.');
-            header('Location: index.php?page=recruitment&action=create');
+            header('Location: index.php?m=rh&page=recruitment&action=create');
             exit;
         }
 
         $stmt = $this->db->prepare(
-            'INSERT INTO recruitment_jobs (title, description, requirements, department_id, status, created_by)
+            'INSERT INTO rh_recruitment_jobs (title, description, requirements, department_id, status, created_by)
              VALUES (?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([$title, $description, $requirements, $departmentId ?: null, $status, Session::userId()]);
@@ -77,13 +77,13 @@ class RecruitmentController
         // Criar etapas padrão
         $defaultSteps = ['Triagem', 'Entrevista RH', 'Teste Prático', 'Entrevista Final', 'Contratação'];
         foreach ($defaultSteps as $order => $stepName) {
-            $stmt = $this->db->prepare('INSERT INTO recruitment_steps (job_id, name, step_order) VALUES (?, ?, ?)');
+            $stmt = $this->db->prepare('INSERT INTO rh_recruitment_steps (job_id, name, step_order) VALUES (?, ?, ?)');
             $stmt->execute([$jobId, $stepName, $order + 1]);
         }
 
         AuditLog::log('create', 'recruitment_jobs', $jobId);
         Session::flash('success', 'Vaga criada com sucesso.');
-        header('Location: index.php?page=recruitment&action=show&id=' . $jobId);
+        header('Location: index.php?m=rh&page=recruitment&action=show&id=' . $jobId);
         exit;
     }
 
@@ -94,8 +94,8 @@ class RecruitmentController
         $id = Sanitize::int($_GET['id'] ?? 0);
         $stmt = $this->db->prepare(
             'SELECT rj.*, d.name as department_name
-             FROM recruitment_jobs rj
-             LEFT JOIN departments d ON rj.department_id = d.id
+             FROM rh_recruitment_jobs rj
+             LEFT JOIN rh_departments d ON rj.department_id = d.id
              WHERE rj.id = ?'
         );
         $stmt->execute([$id]);
@@ -103,12 +103,12 @@ class RecruitmentController
 
         if (!$job) {
             Session::flash('error', 'Vaga não encontrada.');
-            header('Location: index.php?page=recruitment');
+            header('Location: index.php?m=rh&page=recruitment');
             exit;
         }
 
         // Etapas
-        $steps = $this->db->prepare('SELECT * FROM recruitment_steps WHERE job_id = ? ORDER BY step_order');
+        $steps = $this->db->prepare('SELECT * FROM rh_recruitment_steps WHERE job_id = ? ORDER BY step_order');
         $steps->execute([$id]);
         $steps = $steps->fetchAll();
 
@@ -116,7 +116,7 @@ class RecruitmentController
         $candidatesByStep = [];
         foreach ($steps as $step) {
             $stmt = $this->db->prepare(
-                'SELECT c.* FROM candidates c WHERE c.job_id = ? AND c.current_step_id = ? ORDER BY c.created_at DESC'
+                'SELECT c.* FROM rh_candidates c WHERE c.job_id = ? AND c.current_step_id = ? ORDER BY c.created_at DESC'
             );
             $stmt->execute([$id, $step['id']]);
             $candidatesByStep[$step['id']] = $stmt->fetchAll();
@@ -124,7 +124,7 @@ class RecruitmentController
 
         // Candidatos sem etapa (recém inscritos)
         $stmt = $this->db->prepare(
-            'SELECT c.* FROM candidates c WHERE c.job_id = ? AND c.current_step_id IS NULL ORDER BY c.created_at DESC'
+            'SELECT c.* FROM rh_candidates c WHERE c.job_id = ? AND c.current_step_id IS NULL ORDER BY c.created_at DESC'
         );
         $stmt->execute([$id]);
         $newCandidates = $stmt->fetchAll();
@@ -141,17 +141,17 @@ class RecruitmentController
         Auth::requirePermission('recruitment', 'edit');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
-        $stmt = $this->db->prepare('SELECT * FROM recruitment_jobs WHERE id = ?');
+        $stmt = $this->db->prepare('SELECT * FROM rh_recruitment_jobs WHERE id = ?');
         $stmt->execute([$id]);
         $job = $stmt->fetch();
 
         if (!$job) {
             Session::flash('error', 'Vaga não encontrada.');
-            header('Location: index.php?page=recruitment');
+            header('Location: index.php?m=rh&page=recruitment');
             exit;
         }
 
-        $departments = $this->db->query('SELECT id, name FROM departments WHERE active = 1 ORDER BY name')->fetchAll();
+        $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
 
         $pageTitle = 'Editar Vaga';
         $page = 'recruitment';
@@ -168,7 +168,7 @@ class RecruitmentController
         $id = Sanitize::int($_POST['id'] ?? 0);
 
         $stmt = $this->db->prepare(
-            'UPDATE recruitment_jobs SET title=?, description=?, requirements=?, department_id=?, status=? WHERE id=?'
+            'UPDATE rh_recruitment_jobs SET title=?, description=?, requirements=?, department_id=?, status=? WHERE id=?'
         );
         $stmt->execute([
             Sanitize::post('title'),
@@ -181,7 +181,7 @@ class RecruitmentController
 
         AuditLog::log('update', 'recruitment_jobs', $id);
         Session::flash('success', 'Vaga atualizada.');
-        header('Location: index.php?page=recruitment&action=show&id=' . $id);
+        header('Location: index.php?m=rh&page=recruitment&action=show&id=' . $id);
         exit;
     }
 
@@ -204,8 +204,8 @@ class RecruitmentController
 
         // Validações: etapa deve pertencer à vaga, candidato à vaga.
         $stmt = $this->db->prepare(
-            'SELECT (SELECT job_id FROM recruitment_steps WHERE id = ?) AS step_job,
-                    (SELECT job_id FROM candidates WHERE id = ?)        AS cand_job'
+            'SELECT (SELECT job_id FROM rh_recruitment_steps WHERE id = ?) AS step_job,
+                    (SELECT job_id FROM rh_candidates WHERE id = ?)        AS cand_job'
         );
         $stmt->execute([$stepId, $candidateId]);
         $check = $stmt->fetch();
@@ -213,11 +213,11 @@ class RecruitmentController
             $this->moveResponse(false, 'Vaga, candidato ou etapa inválidos.', $jobId);
         }
 
-        $stmt = $this->db->prepare('UPDATE candidates SET current_step_id = ?, status = "em_andamento" WHERE id = ?');
+        $stmt = $this->db->prepare('UPDATE rh_candidates SET current_step_id = ?, status = "em_andamento" WHERE id = ?');
         $stmt->execute([$stepId, $candidateId]);
 
         $stmt = $this->db->prepare(
-            'INSERT INTO candidate_progress (candidate_id, step_id, status, notes, evaluated_by, evaluated_at)
+            'INSERT INTO rh_candidate_progress (candidate_id, step_id, status, notes, evaluated_by, evaluated_at)
              VALUES (?, ?, "pendente", ?, ?, NOW())'
         );
         $stmt->execute([$candidateId, $stepId, $notes, Session::userId()]);
@@ -236,7 +236,7 @@ class RecruitmentController
             exit;
         }
         Session::flash($ok ? 'success' : 'error', $msg);
-        header('Location: index.php?page=recruitment&action=show&id=' . $jobId);
+        header('Location: index.php?m=rh&page=recruitment&action=show&id=' . $jobId);
         exit;
     }
 
@@ -258,18 +258,18 @@ class RecruitmentController
         $jobId       = Sanitize::int($_POST['job_id'] ?? 0);
         $notes       = Sanitize::post('notes');
 
-        $stmt = $this->db->prepare('UPDATE candidates SET status = ?, notes = CONCAT(IFNULL(notes,""), "\n", ?) WHERE id = ?');
+        $stmt = $this->db->prepare('UPDATE rh_candidates SET status = ?, notes = CONCAT(IFNULL(notes,""), "\n", ?) WHERE id = ?');
         $stmt->execute([$status, date('d/m/Y') . ': ' . $notes, $candidateId]);
 
         // Se reprovado, enviar para banco de talentos
         if ($status === 'reprovado') {
-            $stmt = $this->db->prepare('UPDATE candidates SET in_talent_pool = 1 WHERE id = ?');
+            $stmt = $this->db->prepare('UPDATE rh_candidates SET in_talent_pool = 1 WHERE id = ?');
             $stmt->execute([$candidateId]);
         }
 
         AuditLog::log('evaluate', 'candidates', $candidateId);
         Session::flash('success', 'Candidato avaliado com sucesso.');
-        header('Location: index.php?page=recruitment&action=show&id=' . $jobId);
+        header('Location: index.php?m=rh&page=recruitment&action=show&id=' . $jobId);
         exit;
     }
 
@@ -279,10 +279,10 @@ class RecruitmentController
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
-        $this->db->prepare('DELETE FROM recruitment_jobs WHERE id = ?')->execute([$id]);
+        $this->db->prepare('DELETE FROM rh_recruitment_jobs WHERE id = ?')->execute([$id]);
         AuditLog::log('delete', 'recruitment_jobs', $id);
         Session::flash('success', 'Vaga excluída.');
-        header('Location: index.php?page=recruitment');
+        header('Location: index.php?m=rh&page=recruitment');
         exit;
     }
 }

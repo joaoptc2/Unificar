@@ -1,42 +1,30 @@
 <?php
 /**
- * Funções de Segurança
+ * Funções de Segurança do módulo DOCUMENTOS.
  *
- * - CSRF tokens (preservados entre requisições; rotacionados por sessão)
+ * - CSRF: delegado ao token único da plataforma (Core\Csrf)
+ * - Auditoria: delegada ao log global (Core\Audit, module='documentos')
  * - Sanitização apenas no OUTPUT (input é armazenado cru)
- * - Hash de senhas com bcrypt cost 12
  * - Validação de uploads por extensão + MIME real
- * - Download com streaming (friendly para hospedagem compartilhada)
- * - Auditoria
+ * - Download com streaming a partir de /uploads/documentos
  */
 
-// ── CSRF ────────────────────────────────────────────────────────────────────
+// ── CSRF (Core\Csrf) ────────────────────────────────────────────────────────
 
-/**
- * Gera / retorna o token CSRF da sessão. NÃO destrói após uso
- * para permitir múltiplas abas. É rotacionado junto da sessão
- * (session_regenerate_id em session.php).
- */
 function csrf_token() {
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
-    return $_SESSION['csrf_token'];
+    return Core\Csrf::token();
 }
 
-/**
- * Retorna o campo hidden HTML com o token CSRF.
- */
 function csrf_field() {
-    return '<input type="hidden" name="csrf_token" value="' . csrf_token() . '">';
+    return Core\Csrf::field();
 }
 
 /**
- * Valida o token CSRF enviado no POST.
+ * Valida o token CSRF enviado no POST (aceita _csrf_token, csrf_token ou
+ * o header X-CSRF-TOKEN — ver Core\Csrf::validate).
  */
 function csrf_validate() {
-    $token = $_POST['csrf_token'] ?? '';
-    if (empty($token) || !hash_equals($_SESSION['csrf_token'] ?? '', $token)) {
+    if (!Core\Csrf::validate()) {
         http_response_code(403);
         die('Token CSRF inválido. Recarregue a página e tente novamente.');
     }
@@ -58,66 +46,23 @@ function e($string) {
  */
 function clean($value) {
     if ($value === null) return '';
-    // Remove caracteres de controle exceto tab/newline/cr
     $value = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', (string) $value);
     return trim($value);
 }
 
-/**
- * Sanitiza e-mail (apenas filtra caracteres inválidos).
- */
 function sanitize_email($email) {
     $email = trim((string) $email);
     return filter_var($email, FILTER_SANITIZE_EMAIL);
 }
 
-/**
- * Valida e-mail.
- */
 function is_valid_email($email) {
     return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
 }
 
-/**
- * Coerção segura para inteiro.
- */
 function sanitize_int($value) {
     if (is_int($value)) return $value;
     $v = filter_var($value, FILTER_VALIDATE_INT);
     return $v === false ? 0 : $v;
-}
-
-// ── Senhas ──────────────────────────────────────────────────────────────────
-
-/**
- * Gera hash seguro de senha.
- */
-function hash_password($password) {
-    return password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
-}
-
-/**
- * Verifica senha contra hash.
- */
-function verify_password($password, $hash) {
-    return password_verify($password, $hash);
-}
-
-/**
- * Valida força mínima da senha. Retorna array de erros (vazio se OK).
- */
-function validate_password_strength($password) {
-    $errors = [];
-    if (strlen($password) < PASSWORD_MIN_LENGTH) {
-        $errors[] = 'A senha deve ter no mínimo ' . PASSWORD_MIN_LENGTH . ' caracteres.';
-    }
-    if (!preg_match('/[A-Za-z]/', $password)) {
-        $errors[] = 'A senha deve conter pelo menos uma letra.';
-    }
-    if (!preg_match('/[0-9]/', $password)) {
-        $errors[] = 'A senha deve conter pelo menos um número.';
-    }
-    return $errors;
 }
 
 // ── Upload de Arquivos ──────────────────────────────────────────────────────
@@ -159,14 +104,14 @@ function validate_upload($file) {
 }
 
 /**
- * Salva arquivo de upload de forma segura.
+ * Salva arquivo de upload de forma segura em /uploads/documentos.
  * Nome randomizado, organizado por hospital.
  */
 function save_upload($file, $hospital_id) {
     $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
     $safe_name = uniqid('doc_', true) . '.' . $ext;
 
-    $dest_dir = UPLOADS_PATH . '/hospital_' . (int) $hospital_id;
+    $dest_dir = DOC_UPLOADS_PATH . '/hospital_' . (int) $hospital_id;
     if (!is_dir($dest_dir)) {
         mkdir($dest_dir, 0755, true);
     }
@@ -197,7 +142,8 @@ function save_upload($file, $hospital_id) {
 
 /**
  * Envia um arquivo para download em modo streaming (não carrega tudo em memória).
- * Protege contra path traversal garantindo que o arquivo está dentro de UPLOADS_PATH.
+ * Protege contra path traversal garantindo que o arquivo está dentro de
+ * DOC_UPLOADS_PATH (/uploads/documentos).
  *
  * @param string $file_full_path Caminho completo do arquivo no servidor
  * @param string $download_name  Nome que o usuário verá ao baixar
@@ -205,7 +151,7 @@ function save_upload($file, $hospital_id) {
  */
 function stream_download($file_full_path, $download_name, $mime_type = 'application/octet-stream') {
     $real = realpath($file_full_path);
-    $base = realpath(UPLOADS_PATH);
+    $base = realpath(DOC_UPLOADS_PATH);
 
     if ($real === false || $base === false || strpos($real, $base) !== 0) {
         http_response_code(404);
@@ -243,27 +189,23 @@ function stream_download($file_full_path, $download_name, $mime_type = 'applicat
 // ── Logging ─────────────────────────────────────────────────────────────────
 
 /**
- * Registra ação no log de auditoria.
+ * Registra ação no log de auditoria global da plataforma (audit_log),
+ * sempre com module = 'documentos'. Assinatura legada preservada;
+ * $hospital_id é ignorado (contexto multi-hospital saiu da auditoria).
  */
 function audit_log($action, $details = '', $user_id = null, $hospital_id = null) {
-    if ($user_id === null)     $user_id     = $_SESSION['user_id']     ?? 0;
-    if ($hospital_id === null) $hospital_id = $_SESSION['hospital_id'] ?? 0;
-
     try {
-        db_execute(
-            "INSERT INTO audit_logs (user_id, hospital_id, action, details, ip_address, user_agent, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, NOW())",
-            [
-                $user_id ?: null,
-                $hospital_id ?: null,
-                $action,
-                $details,
-                client_ip(),
-                substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255),
-            ]
+        Core\Audit::log(
+            (string) $action,
+            null,
+            null,
+            $details !== '' ? (string) $details : null,
+            $user_id !== null ? (int) $user_id : null,
+            'documentos'
         );
-    } catch (Exception $ex) {
-        $line = date('Y-m-d H:i:s') . " | user=$user_id | $action | $details | " . $ex->getMessage() . "\n";
+    } catch (Throwable $ex) {
+        $uid  = $user_id ?? ($_SESSION['user_id'] ?? 0);
+        $line = date('Y-m-d H:i:s') . " | user=$uid | $action | $details | " . $ex->getMessage() . "\n";
         @file_put_contents(LOGS_PATH . '/audit.log', $line, FILE_APPEND | LOCK_EX);
     }
 }
@@ -286,7 +228,7 @@ function log_error($context, Throwable $ex) {
 }
 
 /**
- * Retorna o IP do cliente considerando proxy (Hostinger usa Cloudflare/proxy).
+ * Retorna o IP do cliente considerando proxy.
  */
 function client_ip() {
     foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP'] as $h) {

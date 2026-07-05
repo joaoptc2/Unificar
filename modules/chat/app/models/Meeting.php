@@ -1,7 +1,7 @@
 <?php
 class Meeting extends Model
 {
-    protected static string $table = 'meetings';
+    protected static string $table = 'chat_meetings';
     protected static array  $fillable = [
         'channel_id', 'title', 'description', 'scheduled_at',
         'duration_minutes', 'location', 'meeting_link', 'type',
@@ -17,7 +17,7 @@ class Meeting extends Model
         $stmt = $db->prepare(
             'SELECT u.id, u.name, u.email, u.avatar, mp.status, mp.responded_at
              FROM users u
-             INNER JOIN meeting_participants mp ON mp.user_id = u.id
+             INNER JOIN chat_meeting_participants mp ON mp.user_id = u.id
              WHERE mp.meeting_id = ?
              ORDER BY u.name ASC'
         );
@@ -38,9 +38,9 @@ class Meeting extends Model
         $stmt = $db->prepare(
             'SELECT m.*, u.name AS creator_name,
                     mp.status AS my_status
-             FROM meetings m
+             FROM chat_meetings m
              LEFT JOIN users u ON u.id = m.created_by
-             INNER JOIN meeting_participants mp ON mp.meeting_id = m.id AND mp.user_id = ?
+             INNER JOIN chat_meeting_participants mp ON mp.meeting_id = m.id AND mp.user_id = ?
              WHERE m.scheduled_at >= NOW() AND m.status IN ("scheduled","in_progress")
              ORDER BY m.scheduled_at ASC
              LIMIT ?'
@@ -54,7 +54,7 @@ class Meeting extends Model
         $db = Database::getInstance();
         $stmt = $db->prepare(
             'SELECT m.*, u.name AS creator_name
-             FROM meetings m
+             FROM chat_meetings m
              LEFT JOIN users u ON u.id = m.created_by
              WHERE m.channel_id = ?
              ORDER BY m.scheduled_at DESC'
@@ -66,9 +66,9 @@ class Meeting extends Model
     public static function setParticipants(int $meetingId, array $userIds): void
     {
         $db = Database::getInstance();
-        $db->prepare('DELETE FROM meeting_participants WHERE meeting_id = ?')->execute([$meetingId]);
+        $db->prepare('DELETE FROM chat_meeting_participants WHERE meeting_id = ?')->execute([$meetingId]);
         $stmt = $db->prepare(
-            'INSERT INTO meeting_participants (meeting_id, user_id, status) VALUES (?, ?, "pending")'
+            'INSERT INTO chat_meeting_participants (meeting_id, user_id, status) VALUES (?, ?, "pending")'
         );
         foreach ($userIds as $uid) {
             $stmt->execute([$meetingId, $uid]);
@@ -79,7 +79,7 @@ class Meeting extends Model
     {
         $db = Database::getInstance();
         $db->prepare(
-            'UPDATE meeting_participants SET status = ?, responded_at = NOW()
+            'UPDATE chat_meeting_participants SET status = ?, responded_at = NOW()
              WHERE meeting_id = ? AND user_id = ?'
         )->execute([$status, $meetingId, $userId]);
     }
@@ -89,8 +89,8 @@ class Meeting extends Model
         $db = Database::getInstance();
         $stmt = $db->prepare(
             'SELECT m.*, mp.status AS my_status
-             FROM meetings m
-             INNER JOIN meeting_participants mp ON mp.meeting_id = m.id AND mp.user_id = ?
+             FROM chat_meetings m
+             INNER JOIN chat_meeting_participants mp ON mp.meeting_id = m.id AND mp.user_id = ?
              WHERE m.scheduled_at BETWEEN ? AND ?
              ORDER BY m.scheduled_at ASC'
         );
