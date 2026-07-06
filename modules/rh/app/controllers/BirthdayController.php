@@ -13,7 +13,7 @@ class BirthdayController
 
     public function index(): void
     {
-        Auth::requirePermission('birthdays', 'view');
+        core_require('birthdays.view');
 
         $month = Sanitize::int($_GET['month'] ?? date('n'));
         $department = Sanitize::int($_GET['department'] ?? 0);

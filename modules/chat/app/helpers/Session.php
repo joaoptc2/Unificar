@@ -2,8 +2,8 @@
 /**
  * Adaptador de sessão — a sessão única é iniciada e mantida pelo núcleo
  * (Core\Session / Core\Auth). Este helper apenas lê as chaves garantidas
- * pelo núcleo (user_id, user_name, user_email, user_avatar) e resolve o
- * papel do usuário NESTE módulo via $GLOBALS['MODULE_ROLE'].
+ * pelo núcleo (user_id, user_name, user_email, user_avatar). Permissões
+ * do usuário neste módulo: core_can()/core_require() (micropermissões).
  */
 class Session
 {
@@ -57,12 +57,6 @@ class Session
     public static function userId(): ?int
     {
         return isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
-    }
-
-    /** Papel do usuário NESTE módulo (admin|manager|member|none). */
-    public static function userRole(): ?string
-    {
-        return $GLOBALS['MODULE_ROLE'] ?? null;
     }
 
     public static function userName(): ?string

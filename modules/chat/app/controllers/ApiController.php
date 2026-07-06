@@ -27,6 +27,7 @@ class ApiController
     {
         $this->requireAuth();
         $this->requireCsrf();
+        $this->requirePerm('chat.create');
 
         $userId    = Session::userId();
         $channelId = Sanitize::int($_POST['channel_id'] ?? 0);
@@ -44,7 +45,7 @@ class ApiController
         }
 
         $channel = Channel::find($channelId);
-        if ($channel && (int)($channel['is_readonly'] ?? 0) === 1 && !Auth::isAdmin()) {
+        if ($channel && (int)($channel['is_readonly'] ?? 0) === 1 && !core_can('chat.moderate')) {
             $this->json(['success' => false, 'error' => 'Este canal está em modo somente leitura.'], 403);
             return;
         }
@@ -133,6 +134,7 @@ class ApiController
     public function getMessages(): void
     {
         $this->requireAuth();
+        $this->requirePerm('chat.view');
 
         $userId    = Session::userId();
         $channelId = Sanitize::int($_GET['channel_id'] ?? 0);
@@ -222,6 +224,7 @@ class ApiController
     {
         $this->requireAuth();
         $this->requireCsrf();
+        $this->requirePerm('chat.edit');
 
         $userId    = Session::userId();
         $messageId = Sanitize::int($_POST['message_id'] ?? 0);
@@ -274,9 +277,9 @@ class ApiController
 
         $isOwner = (int) $message['user_id'] === $userId;
 
-        if (Auth::isAdmin()) {
-            // Admin can delete any message
-        } elseif ($isOwner) {
+        if (core_can('chat.moderate')) {
+            // Moderador pode excluir qualquer mensagem, sem janela de tempo.
+        } elseif ($isOwner && core_can('chat.delete')) {
             $sentAt = strtotime($message['created_at']);
             if ((time() - $sentAt) > 60) {
                 $this->json(['success' => false, 'error' => 'Só é possível excluir mensagens até 1 minuto após o envio.'], 403);
@@ -306,6 +309,7 @@ class ApiController
     {
         $this->requireAuth();
         $this->requireCsrf();
+        $this->requirePerm('chat.view');
 
         $userId    = Session::userId();
         $messageId = Sanitize::int($_POST['message_id'] ?? 0);
@@ -335,6 +339,7 @@ class ApiController
     public function getReactions(): void
     {
         $this->requireAuth();
+        $this->requirePerm('chat.view');
         $messageId = Sanitize::int($_GET['message_id'] ?? 0);
         if ($messageId <= 0) { $this->json(['reactions' => []]); return; }
         $reactions = Message::reactions($messageId);
@@ -344,6 +349,7 @@ class ApiController
     public function getReactionsBatch(): void
     {
         $this->requireAuth();
+        $this->requirePerm('chat.view');
         $idsRaw = Sanitize::string($_GET['ids'] ?? '');
         if (!$idsRaw) { $this->json(['reactions' => []]); return; }
 
@@ -379,8 +385,8 @@ class ApiController
             return;
         }
 
-        if (!Auth::isAdmin()) {
-            $this->json(['success' => false, 'error' => 'Apenas administradores podem fixar mensagens.'], 403);
+        if (!core_can('chat.moderate')) {
+            $this->json(['success' => false, 'error' => 'Sem permissão para fixar mensagens (requer moderação do chat).'], 403);
             return;
         }
 
@@ -426,6 +432,7 @@ class ApiController
     public function getThread(): void
     {
         $this->requireAuth();
+        $this->requirePerm('chat.view');
 
         $messageId = Sanitize::int($_GET['message_id'] ?? 0);
 
@@ -472,6 +479,7 @@ class ApiController
     {
         $this->requireAuth();
         $this->requireCsrf();
+        $this->requirePerm('chat.create');
 
         $userId    = Session::userId();
         $channelId = Sanitize::int($_POST['channel_id'] ?? 0);
@@ -521,6 +529,7 @@ class ApiController
     public function searchMessages(): void
     {
         $this->requireAuth();
+        $this->requirePerm('chat.view');
 
         $query = Sanitize::string($_GET['query'] ?? '');
         if (mb_strlen($query) < 2) {
@@ -543,6 +552,7 @@ class ApiController
     public function getNotifications(): void
     {
         $this->requireAuth();
+        $this->requirePerm('chat.view');
 
         $notifications = Notification::recent(Session::userId());
 
@@ -557,6 +567,7 @@ class ApiController
     {
         $this->requireAuth();
         $this->requireCsrf();
+        $this->requirePerm('chat.view');
 
         $notificationId = Sanitize::int($_POST['notification_id'] ?? 0);
 
@@ -582,6 +593,7 @@ class ApiController
     public function heartbeat(): void
     {
         $this->requireAuth();
+        $this->requirePerm('chat.view');
 
         $userId = Session::userId();
         User::updateLastSeen($userId);
@@ -617,6 +629,7 @@ class ApiController
     {
         $this->requireAuth();
         $this->requireCsrf();
+        $this->requirePerm('chat.view');
 
         $status = Sanitize::string($_POST['status'] ?? '');
         $allowed = ['online', 'away', 'dnd'];
@@ -642,6 +655,7 @@ class ApiController
     public function searchUsers(): void
     {
         $this->requireAuth();
+        $this->requirePerm('chat.view');
 
         $query = Sanitize::string($_GET['query'] ?? '');
         if (mb_strlen($query) < 1) {
@@ -666,6 +680,7 @@ class ApiController
     {
         $this->requireAuth();
         $this->requireCsrf();
+        $this->requirePerm('chat.view');
 
         $userId    = Session::userId();
         $channelId = Sanitize::int($_POST['channel_id'] ?? 0);
@@ -696,6 +711,7 @@ class ApiController
     public function typing(): void
     {
         $this->requireAuth();
+        $this->requirePerm('chat.view');
         $channelId = Sanitize::int($_POST['channel_id'] ?? 0);
         $typing    = Sanitize::int($_POST['typing'] ?? 0);
         $userId    = Session::userId();
@@ -725,6 +741,7 @@ class ApiController
     public function linkPreview(): void
     {
         $this->requireAuth();
+        $this->requirePerm('chat.view');
         $url = Sanitize::string($_GET['url'] ?? '');
 
         if (!$url || !filter_var($url, FILTER_VALIDATE_URL)) {
@@ -776,6 +793,7 @@ class ApiController
     public function getPinnedMessages(): void
     {
         $this->requireAuth();
+        $this->requirePerm('chat.view');
         $channelId = Sanitize::int($_GET['channel_id'] ?? 0);
         if ($channelId <= 0) { $this->json(['messages' => []]); return; }
 
@@ -790,6 +808,8 @@ class ApiController
     public function getCustomEmojis(): void
     {
         $this->requireAuth();
+        // Lido pelo seletor de emojis do chat — basta enxergar o chat.
+        $this->requirePerm('chat.view');
         $stmt = $this->db->query('SELECT name, image_path FROM chat_custom_emojis ORDER BY name ASC');
         $emojis = $stmt->fetchAll();
         $this->json(['emojis' => $emojis]);
@@ -807,6 +827,18 @@ class ApiController
     {
         if (!Session::isLoggedIn()) {
             $this->json(['success' => false, 'error' => 'Autenticação necessária.'], 401);
+            exit;
+        }
+    }
+
+    /**
+     * Enforce a module micropermission — 403 JSON quando ausente
+     * (core_require() renderiza HTML; aqui a resposta é sempre JSON).
+     */
+    private function requirePerm(string $permKey): void
+    {
+        if (!core_can($permKey)) {
+            $this->json(['success' => false, 'error' => 'Você não tem permissão para esta ação.'], 403);
             exit;
         }
     }

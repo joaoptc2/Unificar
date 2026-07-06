@@ -1,6 +1,6 @@
 <?php
-$canEdit   = Auth::can('recruitment', 'edit');
-$canDelete = Auth::can('recruitment', 'delete');
+$canEdit   = core_can('recruitment.edit');
+$canDelete = core_can('recruitment.delete');
 $publicUrl = rtrim(BASE_URL, '/') . '/index.php?m=rh&page=public_recruitment&action=apply&job_id=' . (int)$job['id'];
 ?>
 <div class="page-header">

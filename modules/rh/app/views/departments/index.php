@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-building me-2"></i>Departamentos</h1>
-    <?php if (Auth::can('departments', 'create')): ?>
+    <?php if (core_can('departments.create')): ?>
         <a href="index.php?m=rh&page=departments&action=create" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i> Novo Departamento
         </a>
@@ -24,10 +24,10 @@
                             <td><span class="badge bg-primary"><?= $d['employee_count'] ?></span></td>
                             <td><span class="badge <?= $d['active'] ? 'bg-success' : 'bg-secondary' ?>"><?= $d['active'] ? 'Ativo' : 'Inativo' ?></span></td>
                             <td class="text-end">
-                                <?php if (Auth::can('departments', 'edit')): ?>
+                                <?php if (core_can('departments.edit')): ?>
                                     <a href="index.php?m=rh&page=departments&action=edit&id=<?= $d['id'] ?>" class="btn btn-outline-warning btn-action"><i class="bi bi-pencil"></i></a>
                                 <?php endif; ?>
-                                <?php if (Auth::can('departments', 'delete')): ?>
+                                <?php if (core_can('departments.delete')): ?>
                                     <form method="POST" action="index.php?m=rh&page=departments&action=delete" class="d-inline">
                                         <?= Csrf::field() ?>
                                         <input type="hidden" name="id" value="<?= $d['id'] ?>">

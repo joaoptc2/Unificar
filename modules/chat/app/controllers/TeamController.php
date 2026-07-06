@@ -21,10 +21,12 @@ class TeamController
     public function index(): void
     {
         Auth::requireLogin();
+        core_require('teams.view');
 
         $userId = Session::userId();
 
-        if (Auth::isManager()) {
+        // Quem gerencia equipes (teams.edit) vê todas; demais, as suas.
+        if (core_can('teams.edit')) {
             $teams = Team::allActive();
         } else {
             $teams = Team::userTeams($userId);
@@ -43,6 +45,7 @@ class TeamController
     public function show(): void
     {
         Auth::requireLogin();
+        core_require('teams.view');
 
         $teamId = isset($_GET['id']) ? Sanitize::int($_GET['id']) : 0;
         $team   = Team::withMembers($teamId);
@@ -66,7 +69,8 @@ class TeamController
      * ----------------------------------------------------------------*/
     public function create(): void
     {
-        Auth::requirePermission('teams', 'create');
+        Auth::requireLogin();
+        core_require('teams.create');
 
         $users = User::active();
 
@@ -83,7 +87,8 @@ class TeamController
      * ----------------------------------------------------------------*/
     public function store(): void
     {
-        Auth::requirePermission('teams', 'create');
+        Auth::requireLogin();
+        core_require('teams.create');
         Csrf::check();
 
         $userId      = Session::userId();
@@ -180,7 +185,7 @@ class TeamController
             exit;
         }
 
-        if (!$this->canManageTeam($team)) {
+        if (!$this->canManageTeam($team, 'teams.edit')) {
             Session::flash('error', 'Você não tem permissão para editar esta equipe.');
             header('Location: index.php?m=chat&page=teams&action=show&id=' . $teamId);
             exit;
@@ -213,7 +218,7 @@ class TeamController
             exit;
         }
 
-        if (!$this->canManageTeam($team)) {
+        if (!$this->canManageTeam($team, 'teams.edit')) {
             Session::flash('error', 'Você não tem permissão para editar esta equipe.');
             header('Location: index.php?m=chat&page=teams&action=show&id=' . $teamId);
             exit;
@@ -267,6 +272,12 @@ class TeamController
             return;
         }
 
+        // Gerir membros = teams.edit (criador/líder continuam podendo).
+        if (!$this->canManageTeam($team, 'teams.edit')) {
+            $this->jsonResponse(false, 'Sem permissão para gerenciar membros desta equipe.', 403);
+            return;
+        }
+
         if (Team::isMember($teamId, $userId)) {
             $this->jsonResponse(false, 'Usuário já é membro desta equipe.', 409);
             return;
@@ -303,6 +314,12 @@ class TeamController
             return;
         }
 
+        // Gerir membros = teams.edit (criador/líder continuam podendo).
+        if (!$this->canManageTeam($team, 'teams.edit')) {
+            $this->jsonResponse(false, 'Sem permissão para gerenciar membros desta equipe.', 403);
+            return;
+        }
+
         if (!Team::isMember($teamId, $userId)) {
             $this->jsonResponse(false, 'Usuário não é membro desta equipe.', 404);
             return;
@@ -331,7 +348,7 @@ class TeamController
             exit;
         }
 
-        if (!$this->canManageTeam($team)) {
+        if (!$this->canManageTeam($team, 'teams.delete')) {
             Session::flash('error', 'Você não tem permissão para excluir esta equipe.');
             header('Location: index.php?m=chat&page=teams');
             exit;
@@ -352,11 +369,12 @@ class TeamController
 
     /**
      * Check whether the current user may manage (edit/delete) a team.
-     * Team creator, team leaders, and system admins/managers are allowed.
+     * Permitidos: quem tem a micropermissão ($permKey — teams.edit ou
+     * teams.delete), o criador da equipe e os líderes da equipe.
      */
-    private function canManageTeam(array $team): bool
+    private function canManageTeam(array $team, string $permKey = 'teams.edit'): bool
     {
-        if (Auth::isManager()) {
+        if (core_can($permKey)) {
             return true;
         }
 

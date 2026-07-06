@@ -4,7 +4,7 @@
         <a href="index.php?m=rh&page=recruitment&status=aberta" class="btn btn-outline-success btn-sm <?= $status === 'aberta' ? 'active' : '' ?>">Abertas</a>
         <a href="index.php?m=rh&page=recruitment&status=fechada" class="btn btn-outline-secondary btn-sm <?= $status === 'fechada' ? 'active' : '' ?>">Fechadas</a>
         <a href="index.php?m=rh&page=recruitment" class="btn btn-outline-primary btn-sm <?= !$status ? 'active' : '' ?>">Todas</a>
-        <?php if (Auth::can('recruitment', 'create')): ?>
+        <?php if (core_can('recruitment.create')): ?>
             <a href="index.php?m=rh&page=recruitment&action=create" class="btn btn-primary btn-sm">
                 <i class="bi bi-plus-lg me-1"></i> Nova Vaga
             </a>

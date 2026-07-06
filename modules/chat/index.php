@@ -4,8 +4,9 @@
  *
  * Executado pelo front controller da plataforma (/index.php?m=chat&...),
  * que já iniciou a sessão, autenticou o usuário (Core\Auth), verificou o
- * acesso ao módulo (Core\Access) e definiu:
- *   MODULE_SLUG, MODULE_PATH, MODULE_URL e $GLOBALS['MODULE_ROLE'].
+ * acesso ao módulo e definiu:
+ *   MODULE_SLUG, MODULE_PATH, MODULE_URL e as micropermissões do usuário
+ *   (consultadas via core_can()/core_require()).
  */
 
 // Caminho raiz do módulo para o código legado (views, config, autoloader).

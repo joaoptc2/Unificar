@@ -19,7 +19,7 @@ class ComplimentController
 
     public function store(): void
     {
-        Auth::requirePermission('employees', 'edit');
+        core_require('compliments.create');
         Csrf::check();
 
         $employeeId = Sanitize::int($_POST['employee_id'] ?? 0);
@@ -53,7 +53,7 @@ class ComplimentController
 
     public function delete(): void
     {
-        Auth::requirePermission('employees', 'edit');
+        core_require('compliments.delete');
         Csrf::check();
 
         $id         = Sanitize::int($_POST['id'] ?? 0);

@@ -32,7 +32,7 @@ class SearchController
         $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $term) . '%';
         $groups = [];
 
-        if (Auth::can('employees', 'view')) {
+        if (core_can('employees.view')) {
             $stmt = $this->db->prepare(
                 'SELECT id, full_name, cpf, email FROM rh_employees
                  WHERE full_name LIKE ? OR cpf LIKE ? OR email LIKE ?
@@ -53,7 +53,7 @@ class SearchController
             }
         }
 
-        if (Auth::can('expirations', 'view')) {
+        if (core_can('expirations.view')) {
             $stmt = $this->db->prepare(
                 'SELECT ex.id, ex.title, ex.expiry_date, e.full_name AS employee_name
                  FROM rh_expirations ex JOIN rh_employees e ON ex.employee_id = e.id
@@ -75,7 +75,7 @@ class SearchController
             }
         }
 
-        if (Auth::can('schedules', 'view')) {
+        if (core_can('schedules.view')) {
             $stmt = $this->db->prepare(
                 'SELECT s.id, s.title, s.event_date, s.event_time, e.full_name AS employee_name
                  FROM rh_schedules s LEFT JOIN rh_employees e ON s.employee_id = e.id
@@ -99,7 +99,7 @@ class SearchController
             }
         }
 
-        if (Auth::can('recruitment', 'view') || Auth::can('talent_pool', 'view')) {
+        if (core_can('recruitment.view') || core_can('talent_pool.view')) {
             $stmt = $this->db->prepare(
                 'SELECT c.id, c.full_name, c.email, c.status, rj.title AS job_title
                  FROM rh_candidates c LEFT JOIN rh_recruitment_jobs rj ON c.job_id = rj.id

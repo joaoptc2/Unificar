@@ -65,12 +65,13 @@ if ($loc && $_SERVER['REQUEST_METHOD'] === 'POST') {
             try { addOsHistory($newOsId, 'Solicitacao de limpeza via QR', 'Local: ' . $loc['name']); } catch (Throwable $ignored) {}
 
             try {
-                // Notificações globais (por usuário) para os gestores do módulo
+                // Notificações globais (por usuário) para quem trabalha as OS
                 manNotifyManagers(
                     'warning',
                     'Solicitacao de limpeza',
                     'Local: ' . $loc['name'] . ($loc['sector_name'] ? ' - Setor: ' . $loc['sector_name'] : '') . ' (OS ' . $osNumber . ')',
-                    'index.php?m=manutencao&page=service-orders&action=edit&id=' . $newOsId
+                    'index.php?m=manutencao&page=service-orders&action=edit&id=' . $newOsId,
+                    'service_orders.edit'
                 );
             } catch (Throwable $ignored) {}
 

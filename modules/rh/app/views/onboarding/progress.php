@@ -16,7 +16,7 @@
         <?php foreach ($items as $i): ?>
             <tr class="<?= (int)$i['completed'] ? 'table-success' : '' ?>">
                 <td class="text-center">
-                    <?php if (Auth::can('onboarding', 'edit')): ?>
+                    <?php if (core_can('onboarding.edit')): ?>
                         <form method="POST" action="index.php?m=rh&page=onboarding&action=toggle_item" class="d-inline">
                             <?= Csrf::field() ?>
                             <input type="hidden" name="progress_id" value="<?= $i['id'] ?>">

@@ -7,12 +7,13 @@
  *   index.php?m=manutencao&page=export&type=service_orders[&format=csv]
  *   index.php?m=manutencao&page=export&type=cleaning[&format=csv]
  *
- * Apenas usuários logados (index.php aplica requireLogin antes do include).
- * O filtro por hospital_id é aplicado sempre. "format=print" renderiza HTML
- * otimizado para impressão — o usuário usa Ctrl+P para salvar em PDF.
+ * Requer a micropermissão export.view (index.php aplica requireModule
+ * antes do include; o gate é repetido aqui por segurança). O filtro por
+ * hospital_id é aplicado sempre. "format=print" renderiza HTML otimizado
+ * para impressão — o usuário usa Ctrl+P para salvar em PDF.
  */
 
-requireLogin();
+requireModule('export');
 
 $type   = preg_replace('/[^a-z_]/', '', strtolower($_GET['type'] ?? ''));
 $format = in_array($_GET['format'] ?? 'csv', ['csv', 'print'], true) ? $_GET['format'] : 'csv';

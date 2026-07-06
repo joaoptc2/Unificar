@@ -1,75 +1,23 @@
 <?php
 /**
- * Auth — controle de acesso (RBAC) do módulo RH.
+ * Auth — adaptador de MICROPERMISSÕES do módulo RH.
  *
  * Autenticação (login/logout/2FA/reset) é responsabilidade do núcleo.
- * Este adaptador mantém a MESMA matriz de permissões legada, mas o papel
- * do usuário vem de $GLOBALS['MODULE_ROLE'] (RBAC central por módulo).
+ * A antiga matriz de papéis (admin/rh/gestor/visualizador/funcionario) foi
+ * substituída pelo catálogo de micropermissões do manifesto (module.php →
+ * 'permissions'), resolvido pelo núcleo (Core\Perms, $GLOBALS['MODULE_PERMS'])
+ * e exposto pelos helpers globais core_can()/core_require().
+ *
+ * Esta classe é apenas um WRAPPER FINO de compatibilidade com o vocabulário
+ * legado Auth::can('<recurso>', '<ação>') — nenhuma decisão de acesso é
+ * tomada aqui. Código novo deve chamar core_can()/core_require() direto.
  */
 class Auth
 {
-    /**
-     * Mapa de permissões por perfil
-     * Formato: 'modulo' => ['ação1', 'ação2', ...]
-     */
-    private static array $permissions = [
-        'admin' => [
-            '*' => ['*'], // acesso total
-        ],
-        'rh' => [
-            'dashboard'     => ['view'],
-            'employees'     => ['view', 'create', 'edit', 'delete', 'export'],
-            'documents'     => ['view', 'create', 'edit', 'delete'],
-            'expirations'   => ['view', 'create', 'edit', 'delete', 'export'],
-            'schedules'     => ['view', 'create', 'edit', 'delete'],
-            'birthdays'     => ['view'],
-            'recruitment'   => ['view', 'create', 'edit', 'delete'],
-            'talent_pool'   => ['view', 'create', 'edit', 'delete', 'export'],
-            'notifications' => ['view', 'delete'],
-            'certificates'  => ['view', 'create', 'edit', 'delete'],
-            'departments'   => ['view'],
-            'positions'     => ['view'],
-            'vacations'     => ['view', 'create', 'edit', 'delete'],
-            'shifts'        => ['view', 'create', 'edit', 'delete'],
-            'onboarding'    => ['view', 'create', 'edit', 'delete'],
-            'announcements' => ['view', 'create', 'edit', 'delete'],
-            'surveys'       => ['view', 'create', 'edit', 'delete'],
-            'trainings'     => ['view', 'create', 'edit', 'delete'],
-            'requests'      => ['view', 'edit'],
-        ],
-        'gestor' => [
-            'dashboard'     => ['view'],
-            'employees'     => ['view'],
-            'documents'     => ['view'],
-            'expirations'   => ['view'],
-            'schedules'     => ['view', 'create', 'edit'],
-            'birthdays'     => ['view'],
-            'recruitment'   => ['view'],
-            'talent_pool'   => ['view'],
-            'notifications' => ['view'],
-            'certificates'  => ['view'],
-            'vacations'     => ['view', 'edit'],
-            'shifts'        => ['view', 'create', 'edit'],
-            'onboarding'    => ['view', 'edit'],
-            'announcements' => ['view'],
-            'surveys'       => ['view'],
-            'trainings'     => ['view'],
-            'requests'      => ['view'],
-        ],
-        'visualizador' => [
-            'dashboard'     => ['view'],
-            'employees'     => ['view'],
-            'birthdays'     => ['view'],
-            'notifications' => ['view'],
-            'announcements' => ['view'],
-        ],
-        // Funcionário comum — acesso exclusivo ao portal "Minha Área".
-        // (announcements.view permite ler os comunicados internos, item
-        // presente no menu do funcionário na plataforma unificada.)
-        'funcionario' => [
-            'my'            => ['view'],
-            'announcements' => ['view'],
-        ],
+    /** Recursos renomeados no catálogo de micropermissões. */
+    private const RESOURCE_MAP = [
+        'documents' => 'employee_documents',
+        'users'     => 'user_links',
     ];
 
     /**
@@ -81,43 +29,29 @@ class Auth
     }
 
     /**
-     * Verifica se o utilizador tem permissão para a ação
+     * Wrapper fino: traduz o par legado (recurso, ação) para a chave nova
+     * "<recurso>.<ação>" e delega ao núcleo (core_can).
      */
-    public static function can(string $module, string $action): bool
+    public static function can(string $resource, string $action): bool
     {
-        $role = Session::userRole();
-        if (!$role || $role === 'none') return false;
-
-        // Admin tem acesso total
-        if ($role === 'admin') return true;
-
-        $perms = self::$permissions[$role] ?? [];
-
-        if (!isset($perms[$module])) return false;
-
-        return in_array('*', $perms[$module]) || in_array($action, $perms[$module]);
+        return core_can(self::key($resource, $action));
     }
 
     /**
-     * Exige permissão ou aborta
+     * Exige a micropermissão ou aborta com 403 (via núcleo).
      */
-    public static function requirePermission(string $module, string $action): void
+    public static function requirePermission(string $resource, string $action): void
     {
-        self::requireLogin();
-        if (!self::can($module, $action)) {
-            http_response_code(403);
-            Session::flash('error', 'Você não tem permissão para acessar este recurso.');
-            header('Location: index.php?m=rh&page=dashboard');
-            exit;
+        core_require(self::key($resource, $action));
+    }
+
+    /** Traduz o vocabulário legado para a chave do catálogo atual. */
+    private static function key(string $resource, string $action): string
+    {
+        $resource = self::RESOURCE_MAP[$resource] ?? $resource;
+        if ($resource === 'requests' && $action === 'edit') {
+            $action = 'respond'; // no legado, responder solicitação era 'edit'
         }
-    }
-
-    /**
-     * Verifica se o utilizador é admin (do módulo RH ou admin global,
-     * que recebe automaticamente o admin_role do manifesto).
-     */
-    public static function isAdmin(): bool
-    {
-        return Session::userRole() === 'admin';
+        return $resource . '.' . $action;
     }
 }

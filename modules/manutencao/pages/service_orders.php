@@ -12,10 +12,10 @@ $action = $_GET['action'] ?? 'list';
 // PROCESSAR POST
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-    requireWrite();
     $act = $_POST['action'] ?? '';
 
     if ($act === 'add') {
+        core_require('service_orders.create');
         $title       = trim($_POST['title'] ?? '');
         $type        = $_POST['type'] ?? 'corrective';
         $priority    = $_POST['priority'] ?? 'medium';
@@ -52,6 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'edit') {
+        core_require('service_orders.edit');
         $id          = (int)($_POST['id'] ?? 0);
         $title       = trim($_POST['title'] ?? '');
         $type        = $_POST['type'] ?? 'corrective';
@@ -103,6 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'change_status') {
+        core_require('service_orders.edit');
         $id     = (int)($_POST['id'] ?? 0);
         $status = $_POST['status'] ?? '';
         $valid  = ['open', 'in_progress', 'waiting_part', 'completed', 'cancelled'];
@@ -152,6 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'delete') {
+        core_require('service_orders.delete');
         $id = (int)($_POST['id'] ?? 0);
         try {
             db()->prepare("DELETE FROM man_os_history WHERE os_id = ?")->execute([$id]);
@@ -165,6 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'generate_anonymous_link') {
+        core_require('service_orders.edit');
         $id = (int)($_POST['id'] ?? 0);
         $token = generateToken(16);
         db()->prepare("UPDATE man_service_orders SET anonymous_token = ? WHERE id = ? AND hospital_id = ?")->execute([$token, $id, $hid]);
@@ -173,6 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'add_part') {
+        core_require('service_orders.edit');
         $osId     = (int)($_POST['os_id'] ?? 0);
         $partId   = (int)($_POST['part_id'] ?? 0);
         $qty      = (int)($_POST['quantity'] ?? 1);
@@ -212,6 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'remove_part') {
+        core_require('service_orders.edit');
         $osId     = (int)($_POST['os_id'] ?? 0);
         $osPartId = (int)($_POST['os_part_id'] ?? 0);
         try {
@@ -237,6 +243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'save_signature') {
+        core_require('service_orders.edit');
         $osId = (int)($_POST['os_id'] ?? 0);
         $sigData = $_POST['signature_data'] ?? '';
         try {
@@ -258,17 +265,16 @@ $equipments = db()->prepare("SELECT id, name, code FROM man_equipment WHERE hosp
 $equipments->execute([$hid]);
 $equipments = $equipments->fetchAll();
 
-// Usuários atribuíveis: quem tem acesso ao módulo (tabela global users +
-// user_module_access) ou é admin global da plataforma.
-$users = db()->prepare("
-    SELECT DISTINCT u.id, u.name
-    FROM users u
-    LEFT JOIN user_module_access uma ON uma.user_id = u.id AND uma.module_slug = 'manutencao'
-    WHERE u.active = 1 AND (uma.id IS NOT NULL OR u.is_admin = 1)
-    ORDER BY u.name
-");
-$users->execute();
-$users = $users->fetchAll();
+// Usuários atribuíveis: quem pode trabalhar as OS (micropermissão
+// service_orders.edit, via Core\Perms::usersWith — inclui admins globais).
+$users = [];
+$assignableIds = Core\Perms::usersWith(MAN_MODULE_SLUG, 'service_orders.edit');
+if ($assignableIds !== []) {
+    $in   = implode(',', array_fill(0, count($assignableIds), '?'));
+    $stmt = db()->prepare("SELECT id, name FROM users WHERE active = 1 AND id IN ({$in}) ORDER BY name");
+    $stmt->execute($assignableIds);
+    $users = $stmt->fetchAll();
+}
 
 $statusLabels = ['open'=>'Aberta','in_progress'=>'Em Andamento','waiting_part'=>'Aguardando Peça','completed'=>'Concluída','cancelled'=>'Cancelada'];
 $typeLabels   = ['preventive'=>'Preventiva','corrective'=>'Corretiva','predictive'=>'Preditiva','calibration'=>'Calibração','inspection'=>'Inspeção'];
@@ -417,7 +423,7 @@ if (!empty($osParts) || !empty($partsList)):
                     <td>R$ <?php echo number_format((float)$op['unit_cost'], 2, ',', '.'); ?></td>
                     <td>R$ <?php echo number_format((float)$op['unit_cost'] * (int)$op['quantity'], 2, ',', '.'); ?></td>
                     <td class="text-end">
-                        <?php if (canWrite()): ?>
+                        <?php if (core_can('service_orders.edit')): ?>
                         <form method="POST" action="<?php echo url('service-orders'); ?>" class="d-inline">
                             <?php echo csrfField(); ?>
                             <input type="hidden" name="action" value="remove_part">
@@ -434,7 +440,7 @@ if (!empty($osParts) || !empty($partsList)):
         </div>
         <?php endif; ?>
 
-        <?php if (canWrite() && !empty($partsList)): ?>
+        <?php if (core_can('service_orders.edit') && !empty($partsList)): ?>
         <form method="POST" action="<?php echo url('service-orders'); ?>" class="row g-2 align-items-end">
             <?php echo csrfField(); ?>
             <input type="hidden" name="action" value="add_part">
@@ -507,7 +513,7 @@ try {
         <small class="text-muted d-block mt-2">Assinatura registrada</small>
     </div>
 </div>
-<?php elseif ($showSignaturePad && canWrite()): ?>
+<?php elseif ($showSignaturePad && core_can('service_orders.edit')): ?>
 <div class="card border-0 shadow-sm mt-3">
     <div class="card-header bg-white fw-semibold"><i class="bi bi-pen me-1"></i> Assinatura Digital</div>
     <div class="card-body">
@@ -580,7 +586,7 @@ try {
         <?php if ($os['anonymous_token']): ?>
             <p class="mb-0 small">Link: <code><?php echo e(core_url('index.php') . '?m=manutencao&page=anonymous-os&token=' . $os['anonymous_token']); ?></code></p>
         <?php else: ?>
-            <?php if (canWrite()): ?>
+            <?php if (core_can('service_orders.edit')): ?>
             <form method="POST" action="<?php echo url('service-orders'); ?>">
                 <?php echo csrfField(); ?>
                 <input type="hidden" name="action" value="generate_anonymous_link">
@@ -663,7 +669,7 @@ else:
     <div class="d-flex gap-2">
         <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=service_orders&format=csv"><i class="bi bi-download me-1"></i> CSV</a>
         <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=service_orders&format=print" target="_blank" rel="noopener"><i class="bi bi-printer me-1"></i> Imprimir</a>
-        <?php if (canWrite()): ?>
+        <?php if (core_can('service_orders.create')): ?>
             <button onclick="openModal('modalAdd')" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nova OS</button>
         <?php endif; ?>
     </div>
@@ -726,7 +732,7 @@ else:
                         <td><?php echo $typeLabels[$os['type']] ?? $os['type']; ?></td>
                         <td><span class="badge badge-<?php echo $os['priority']; ?>"><?php echo $prioLabels[$os['priority']] ?? $os['priority']; ?></span></td>
                         <td>
-                            <?php if (canWrite()): ?>
+                            <?php if (core_can('service_orders.edit')): ?>
                             <form method="POST" class="d-inline">
                                 <?php echo csrfField(); ?>
                                 <input type="hidden" name="action" value="change_status">
@@ -744,7 +750,7 @@ else:
                         <td class="text-end">
                             <div class="d-inline-flex gap-1">
                                 <a href="<?php echo url('service-orders', ['action'=>'edit','id'=>$os['id']]); ?>" class="btn btn-outline-warning btn-action" title="Editar"><i class="bi bi-pencil"></i></a>
-                                <?php if (canWrite()): ?>
+                                <?php if (core_can('service_orders.delete')): ?>
                                 <form method="POST" class="d-inline">
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="delete">

@@ -4,7 +4,7 @@ class SalaryHistoryController
     public function index(): void { header('Location: index.php?m=rh&page=employees'); exit; }
     public function store(): void
     {
-        Auth::requirePermission('employees', 'edit'); Csrf::check();
+        core_require('salary_history.create'); Csrf::check();
         $empId = Sanitize::int($_POST['employee_id'] ?? 0);
         $salary = (float)str_replace(['.', ','], ['', '.'], $_POST['salary'] ?? '0');
         $reason = Sanitize::post('reason'); $date = Sanitize::date($_POST['effective_date'] ?? '');
@@ -15,7 +15,7 @@ class SalaryHistoryController
     }
     public function delete(): void
     {
-        Auth::requirePermission('employees', 'edit'); Csrf::check();
+        core_require('salary_history.delete'); Csrf::check();
         $id = Sanitize::int($_POST['id'] ?? 0); $empId = Sanitize::int($_POST['employee_id'] ?? 0);
         SalaryHistory::delete($id); AuditLog::log('delete', 'salary_history', $id);
         Session::flash('success', 'Registro removido.'); header('Location: index.php?m=rh&page=employees&action=show&id=' . $empId); exit;

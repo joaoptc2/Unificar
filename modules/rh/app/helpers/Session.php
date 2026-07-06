@@ -4,8 +4,8 @@
  *
  * A sessão é iniciada pelo core/bootstrap.php (Core\Session::start()).
  * As chaves user_id/user_name/user_email são mantidas pelo núcleo.
- * O papel do usuário NESTE módulo vem de $GLOBALS['MODULE_ROLE']
- * (definido por request pelo front controller da plataforma).
+ * Acesso é decidido por MICROPERMISSÕES (core_can/core_require) — este
+ * adaptador não expõe papel/nível de usuário.
  */
 class Session
 {
@@ -59,12 +59,6 @@ class Session
     public static function userId(): ?int
     {
         return Core\Auth::id();
-    }
-
-    /** Papel do usuário no módulo RH (vocabulário legado do módulo). */
-    public static function userRole(): ?string
-    {
-        return $GLOBALS['MODULE_ROLE'] ?? ($_SESSION['user_role'] ?? null);
     }
 
     public static function userName(): ?string

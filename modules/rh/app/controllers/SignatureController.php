@@ -4,7 +4,7 @@ class SignatureController
     public function index(): void { header('Location: index.php?m=rh&page=employees'); exit; }
     public function sign(): void
     {
-        Auth::requireLogin(); Csrf::check();
+        core_require('signatures.create'); Csrf::check();
         $empId = Sanitize::int($_POST['employee_id'] ?? 0);
         $docType = Sanitize::post('document_type'); $docId = Sanitize::int($_POST['document_id'] ?? 0);
         $title = Sanitize::post('document_title'); $content = Sanitize::post('content_to_sign');
@@ -19,7 +19,7 @@ class SignatureController
     }
     public function verify(): void
     {
-        Auth::requireLogin();
+        core_require('signatures.view');
         $id = Sanitize::int($_GET['id'] ?? 0);
         $sig = DigitalSignature::find($id);
         header('Content-Type: application/json');

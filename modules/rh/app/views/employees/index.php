@@ -2,13 +2,13 @@
 <div class="page-header">
     <h1><i class="bi bi-people me-2"></i>Funcionários</h1>
     <div class="d-flex gap-2">
-        <?php if (Auth::can('employees', 'export')): ?>
+        <?php if (core_can('employees.export')): ?>
             <a href="index.php?m=rh&page=employees&action=export&<?= http_build_query(array_filter(['status' => $status, 'department' => $department])) ?>"
                class="btn btn-outline-success btn-sm">
                 <i class="bi bi-file-earmark-excel me-1"></i> Exportar CSV
             </a>
         <?php endif; ?>
-        <?php if (Auth::can('employees', 'create')): ?>
+        <?php if (core_can('employees.create')): ?>
             <a href="index.php?m=rh&page=employees&action=create" class="btn btn-primary btn-sm">
                 <i class="bi bi-plus-lg me-1"></i> Novo Funcionário
             </a>
@@ -123,7 +123,7 @@
                                    class="btn btn-outline-primary btn-action" title="Ver">
                                     <i class="bi bi-eye"></i>
                                 </a>
-                                <?php if (Auth::can('employees', 'edit')): ?>
+                                <?php if (core_can('employees.edit')): ?>
                                     <a href="index.php?m=rh&page=employees&action=edit&id=<?= $emp['id'] ?>"
                                        class="btn btn-outline-warning btn-action" title="Editar">
                                         <i class="bi bi-pencil"></i>

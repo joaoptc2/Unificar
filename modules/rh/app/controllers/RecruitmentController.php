@@ -13,7 +13,7 @@ class RecruitmentController
 
     public function index(): void
     {
-        Auth::requirePermission('recruitment', 'view');
+        core_require('recruitment.view');
 
         $status = Sanitize::get('status');
         $where = $status ? 'WHERE rj.status = ?' : '';
@@ -38,7 +38,7 @@ class RecruitmentController
 
     public function create(): void
     {
-        Auth::requirePermission('recruitment', 'create');
+        core_require('recruitment.create');
 
         $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
         $job = null;
@@ -52,7 +52,7 @@ class RecruitmentController
 
     public function store(): void
     {
-        Auth::requirePermission('recruitment', 'create');
+        core_require('recruitment.create');
         Csrf::check();
 
         $title        = Sanitize::post('title');
@@ -89,7 +89,7 @@ class RecruitmentController
 
     public function show(): void
     {
-        Auth::requirePermission('recruitment', 'view');
+        core_require('recruitment.view');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
         $stmt = $this->db->prepare(
@@ -138,7 +138,7 @@ class RecruitmentController
 
     public function edit(): void
     {
-        Auth::requirePermission('recruitment', 'edit');
+        core_require('recruitment.edit');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
         $stmt = $this->db->prepare('SELECT * FROM rh_recruitment_jobs WHERE id = ?');
@@ -162,7 +162,7 @@ class RecruitmentController
 
     public function update(): void
     {
-        Auth::requirePermission('recruitment', 'edit');
+        core_require('recruitment.edit');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -194,7 +194,7 @@ class RecruitmentController
      */
     public function move_candidate(): void
     {
-        Auth::requirePermission('recruitment', 'edit');
+        core_require('recruitment.edit');
         Csrf::check();
 
         $candidateId = Sanitize::int($_POST['candidate_id'] ?? 0);
@@ -250,7 +250,7 @@ class RecruitmentController
      */
     public function evaluate_candidate(): void
     {
-        Auth::requirePermission('recruitment', 'edit');
+        core_require('recruitment.edit');
         Csrf::check();
 
         $candidateId = Sanitize::int($_POST['candidate_id'] ?? 0);
@@ -275,7 +275,7 @@ class RecruitmentController
 
     public function delete(): void
     {
-        Auth::requirePermission('recruitment', 'delete');
+        core_require('recruitment.delete');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);

@@ -20,8 +20,10 @@ class TaskController
     public function index(): void
     {
         Auth::requireLogin();
+        core_require('tasks.view');
 
-        $userId = Auth::isAdmin() ? null : Session::userId();
+        // Visão administrativa (todas as tarefas) — legado: isAdmin.
+        $userId = core_can('admin.view') ? null : Session::userId();
         $tasksByStatus = Task::byStatus($userId);
         $stats         = Task::stats();
 
@@ -40,6 +42,7 @@ class TaskController
     public function show(): void
     {
         Auth::requireLogin();
+        core_require('tasks.view');
 
         $taskId = isset($_GET['id']) ? Sanitize::int($_GET['id']) : 0;
         $task   = Task::withDetails($taskId);
@@ -64,6 +67,7 @@ class TaskController
     public function create(): void
     {
         Auth::requireLogin();
+        core_require('tasks.create');
 
         $users    = User::active();
         $channels = Channel::userChannels(Session::userId());
@@ -83,6 +87,7 @@ class TaskController
     public function store(): void
     {
         Auth::requireLogin();
+        core_require('tasks.create');
         Csrf::check();
 
         $userId = Session::userId();
@@ -170,6 +175,7 @@ class TaskController
     public function edit(): void
     {
         Auth::requireLogin();
+        core_require('tasks.edit');
 
         $taskId = isset($_GET['id']) ? Sanitize::int($_GET['id']) : 0;
         $task   = Task::withDetails($taskId);
@@ -198,6 +204,7 @@ class TaskController
     public function update(): void
     {
         Auth::requireLogin();
+        core_require('tasks.edit');
         Csrf::check();
 
         $taskId = Sanitize::int($_POST['id'] ?? 0);
@@ -264,6 +271,10 @@ class TaskController
     public function updateStatus(): void
     {
         Auth::requireLogin();
+        if (!core_can('tasks.edit')) {
+            $this->jsonResponse(false, 'Sem permissão para alterar tarefas.', 403);
+            return;
+        }
         Csrf::check();
 
         $taskId = Sanitize::int($_POST['id'] ?? 0);
@@ -306,6 +317,8 @@ class TaskController
     public function comment(): void
     {
         Auth::requireLogin();
+        // Comentar exige apenas enxergar tarefas (legado: qualquer logado).
+        core_require('tasks.view');
         Csrf::check();
 
         $taskId  = Sanitize::int($_POST['task_id'] ?? 0);
@@ -338,6 +351,7 @@ class TaskController
     public function delete(): void
     {
         Auth::requireLogin();
+        core_require('tasks.delete');
         Csrf::check();
 
         $taskId = Sanitize::int($_POST['id'] ?? 0);
@@ -365,6 +379,7 @@ class TaskController
     public function my(): void
     {
         Auth::requireLogin();
+        core_require('tasks.view');
 
         $userId = Session::userId();
         $tasks  = Task::userTasks($userId);

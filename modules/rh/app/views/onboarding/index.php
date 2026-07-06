@@ -1,7 +1,7 @@
 <div class="page-header">
     <h1><i class="bi bi-list-check me-2"></i>Onboarding / Offboarding</h1>
     <div class="d-flex gap-2">
-        <?php if (Auth::can('onboarding', 'create')): ?>
+        <?php if (core_can('onboarding.manage_templates')): ?>
             <a href="index.php?m=rh&page=onboarding&action=create_template" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Novo Template</a>
             <a href="index.php?m=rh&page=onboarding&action=assign" class="btn btn-outline-primary btn-sm"><i class="bi bi-person-plus me-1"></i> Atribuir Checklist</a>
         <?php endif; ?>

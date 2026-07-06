@@ -4,7 +4,7 @@ class DependentController
     public function index(): void { header('Location: index.php?m=rh&page=employees'); exit; }
     public function store(): void
     {
-        Auth::requirePermission('employees', 'edit'); Csrf::check();
+        core_require('dependents.create'); Csrf::check();
         $empId = Sanitize::int($_POST['employee_id'] ?? 0);
         $name = Sanitize::post('full_name');
         if (!$empId || !$name) { Session::flash('error', 'Nome obrigatorio.'); header('Location: index.php?m=rh&page=employees&action=show&id=' . $empId); exit; }
@@ -20,7 +20,7 @@ class DependentController
     }
     public function delete(): void
     {
-        Auth::requirePermission('employees', 'edit'); Csrf::check();
+        core_require('dependents.delete'); Csrf::check();
         $id = Sanitize::int($_POST['id'] ?? 0); $empId = Sanitize::int($_POST['employee_id'] ?? 0);
         EmployeeDependent::delete($id); AuditLog::log('delete', 'employee_dependents', $id);
         Session::flash('success', 'Dependente removido.'); header('Location: index.php?m=rh&page=employees&action=show&id=' . $empId); exit;

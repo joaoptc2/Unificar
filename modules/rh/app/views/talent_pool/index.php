@@ -1,7 +1,7 @@
 <div class="page-header">
     <h1><i class="bi bi-person-lines-fill me-2"></i>Banco de Talentos</h1>
     <div class="d-flex gap-2">
-        <?php if (Auth::can('talent_pool', 'export')): ?>
+        <?php if (core_can('talent_pool.export')): ?>
             <a href="index.php?m=rh&page=talent_pool&action=export" class="btn btn-outline-success btn-sm">
                 <i class="bi bi-file-earmark-excel me-1"></i> Exportar
             </a>
@@ -68,7 +68,7 @@
                             </td>
                             <td class="text-end">
                                 <a href="index.php?m=rh&page=talent_pool&action=show&id=<?= $c['id'] ?>" class="btn btn-outline-primary btn-action" title="Ver"><i class="bi bi-eye"></i></a>
-                                <?php if (Auth::can('talent_pool', 'delete')): ?>
+                                <?php if (core_can('talent_pool.delete')): ?>
                                     <form method="POST" action="index.php?m=rh&page=talent_pool&action=remove" class="d-inline">
                                         <?= Csrf::field() ?>
                                         <input type="hidden" name="id" value="<?= $c['id'] ?>">

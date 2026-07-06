@@ -19,7 +19,7 @@
     <td><span class="badge <?= match($r['status']) { 'aprovada' => 'bg-success', 'rejeitada' => 'bg-danger', 'em_analise' => 'bg-warning text-dark', default => 'bg-secondary' } ?>"><?= ucfirst(str_replace('_',' ',$r['status'])) ?></span></td>
     <td><?= Sanitize::formatDateTime($r['created_at']) ?></td>
     <td>
-        <?php if (Auth::can('requests', 'edit') && $r['status'] === 'pendente'): ?>
+        <?php if (core_can('requests.respond') && $r['status'] === 'pendente'): ?>
         <form method="POST" action="index.php?m=rh&page=requests&action=respond" class="d-inline">
             <?= Csrf::field() ?><input type="hidden" name="id" value="<?= $r['id'] ?>">
             <input type="hidden" name="response" value="">

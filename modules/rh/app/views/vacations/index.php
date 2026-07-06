@@ -1,7 +1,7 @@
 <div class="page-header">
     <h1><i class="bi bi-sun me-2"></i>Ferias</h1>
     <div class="d-flex gap-2">
-        <?php if (Auth::can('vacations', 'create')): ?>
+        <?php if (core_can('vacations.create')): ?>
             <a href="index.php?m=rh&page=vacations&action=create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nova</a>
         <?php endif; ?>
     </div>
@@ -37,7 +37,7 @@
                         <td><?= (int)$v['days'] ?></td>
                         <td><span class="badge <?= match($v['status']) { 'aprovada','em_gozo','concluida' => 'bg-success', 'rejeitada' => 'bg-danger', 'solicitada' => 'bg-warning text-dark', default => 'bg-secondary' } ?>"><?= ucfirst($v['status']) ?></span></td>
                         <td class="text-end">
-                            <?php if (Auth::can('vacations', 'edit') && in_array($v['status'], ['planejada','solicitada'])): ?>
+                            <?php if (core_can('vacations.edit') && in_array($v['status'], ['planejada','solicitada'])): ?>
                                 <a href="index.php?m=rh&page=vacations&action=edit&id=<?= $v['id'] ?>" class="btn btn-outline-warning btn-action"><i class="bi bi-pencil"></i></a>
                                 <form method="POST" action="index.php?m=rh&page=vacations&action=approve" class="d-inline">
                                     <?= Csrf::field() ?><input type="hidden" name="id" value="<?= $v['id'] ?>">

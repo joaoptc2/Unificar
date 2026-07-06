@@ -2,11 +2,11 @@
 /**
  * UserController — "Vínculos de usuários" (administração do módulo).
  *
- * O CRUD de usuários (criação, edição, senha, papel) agora é da
+ * O CRUD de usuários (criação, edição, senha, permissões) agora é da
  * administração CENTRAL da plataforma (?m=admin&a=users). Esta tela lista
- * os usuários globais com acesso ao módulo RH (user_module_access) e
- * permite definir o vínculo funcional do módulo (rh_user_profile:
- * employee_id / department_id).
+ * os usuários globais com acesso ao módulo RH (qualquer micropermissão
+ * efetiva — Core\Perms) e permite definir o vínculo funcional do módulo
+ * (rh_user_profile: employee_id / department_id).
  */
 class UserController
 {
@@ -19,23 +19,30 @@ class UserController
 
     public function index(): void
     {
-        Auth::requirePermission('users', 'view'); // apenas admin do módulo
+        core_require('user_links.view');
 
-        $users = $this->db->query(
+        $rows = $this->db->query(
             "SELECT u.id, u.name, u.email, u.active, u.is_admin, u.last_login_at,
-                    uma.role AS rh_role,
                     p.employee_id, p.department_id,
                     e.full_name AS employee_name,
                     d.name AS department_name
              FROM users u
-             LEFT JOIN user_module_access uma
-               ON uma.user_id = u.id AND uma.module_slug = 'rh'
              LEFT JOIN rh_user_profile p ON p.user_id = u.id
              LEFT JOIN rh_employees e ON e.id = p.employee_id
              LEFT JOIN rh_departments d ON d.id = p.department_id
-             WHERE uma.id IS NOT NULL OR u.is_admin = 1
              ORDER BY u.name"
         )->fetchAll();
+
+        // Mantém apenas quem tem alguma micropermissão efetiva no módulo
+        // (admins globais têm todas automaticamente).
+        $users = [];
+        foreach ($rows as $row) {
+            $perms = Core\Perms::effective((int)$row['id'], 'rh');
+            if ($perms !== []) {
+                $row['perm_count'] = count($perms);
+                $users[] = $row;
+            }
+        }
 
         $employees = $this->db->query(
             "SELECT id, full_name FROM rh_employees ORDER BY full_name"
@@ -57,7 +64,7 @@ class UserController
      */
     public function link(): void
     {
-        Auth::requirePermission('users', 'edit');
+        core_require('user_links.edit');
         Csrf::check();
 
         $userId       = Sanitize::int($_POST['user_id'] ?? 0);

@@ -5,7 +5,7 @@
 <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i> <strong><?= count($expiring) ?></strong> treinamento(s) vencem nos proximos 30 dias.</div>
 <?php endif; ?>
 
-<?php if (Auth::can('trainings', 'create')): ?>
+<?php if (core_can('trainings.create')): ?>
 <div class="card border-0 shadow-sm mb-3"><div class="card-header bg-white fw-semibold"><i class="bi bi-plus-circle me-1"></i> Adicionar ao catalogo</div><div class="card-body">
 <form method="POST" action="index.php?m=rh&page=trainings&action=store_catalog" class="row g-2 align-items-end">
     <?= Csrf::field() ?>

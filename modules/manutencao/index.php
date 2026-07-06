@@ -8,7 +8,8 @@
  *
  * O núcleo já autenticou (exceto páginas públicas declaradas no
  * manifesto), verificou o acesso ao módulo e definiu MODULE_SLUG,
- * MODULE_PATH, MODULE_URL e $GLOBALS['MODULE_ROLE'].
+ * MODULE_PATH, MODULE_URL e $GLOBALS['MODULE_PERMS'] (micropermissões
+ * efetivas do usuário, consultadas via core_can()/core_require()).
  * ============================================================
  */
 
@@ -35,7 +36,7 @@ if (!in_array($page, $publicPages, true) && !isLoggedIn()) {
 
 // Exportações CSV/impressão (antigo export.php da raiz do sistema)
 if ($page === 'export') {
-    requireLogin();
+    requireModule('export'); // export.view
     require __DIR__ . '/export.php';
     exit;
 }

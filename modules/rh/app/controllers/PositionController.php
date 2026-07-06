@@ -13,7 +13,7 @@ class PositionController
 
     public function index(): void
     {
-        Auth::requirePermission('positions', 'view');
+        core_require('positions.view');
 
         $positions = $this->db->query(
             "SELECT j.*, d.name as department_name,
@@ -32,7 +32,7 @@ class PositionController
 
     public function create(): void
     {
-        Auth::requirePermission('positions', 'create');
+        core_require('positions.create');
         $position = null;
         $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
 
@@ -45,7 +45,7 @@ class PositionController
 
     public function store(): void
     {
-        Auth::requirePermission('positions', 'create');
+        core_require('positions.create');
         Csrf::check();
 
         $stmt = $this->db->prepare('INSERT INTO rh_job_positions (title, department_id, description, active) VALUES (?, ?, ?, ?)');
@@ -64,7 +64,7 @@ class PositionController
 
     public function edit(): void
     {
-        Auth::requirePermission('positions', 'edit');
+        core_require('positions.edit');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
         $stmt = $this->db->prepare('SELECT * FROM rh_job_positions WHERE id = ?');
@@ -88,7 +88,7 @@ class PositionController
 
     public function update(): void
     {
-        Auth::requirePermission('positions', 'edit');
+        core_require('positions.edit');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -109,7 +109,7 @@ class PositionController
 
     public function delete(): void
     {
-        Auth::requirePermission('positions', 'delete');
+        core_require('positions.delete');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);

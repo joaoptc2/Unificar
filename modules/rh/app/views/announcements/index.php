@@ -1,7 +1,7 @@
 <div class="page-header">
     <h1><i class="bi bi-megaphone me-2"></i>Comunicados</h1>
     <div class="d-flex gap-2">
-        <?php if (Auth::can('announcements', 'create')): ?>
+        <?php if (core_can('announcements.create')): ?>
             <a href="index.php?m=rh&page=announcements&action=create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Novo</a>
         <?php endif; ?>
     </div>
@@ -20,7 +20,7 @@
         <p class="mt-2 mb-0"><?= nl2br(Sanitize::e(mb_substr($a['body'], 0, 300))) ?><?= mb_strlen($a['body']) > 300 ? '...' : '' ?></p>
         <div class="mt-2">
             <a href="index.php?m=rh&page=announcements&action=read&id=<?= $a['id'] ?>" class="btn btn-outline-primary btn-sm">Ler completo</a>
-            <?php if (Auth::can('announcements', 'delete')): ?>
+            <?php if (core_can('announcements.delete')): ?>
                 <form method="POST" action="index.php?m=rh&page=announcements&action=delete" class="d-inline"><?= Csrf::field() ?><input type="hidden" name="id" value="<?= $a['id'] ?>"><button type="submit" class="btn btn-outline-danger btn-sm" data-confirm="Excluir?"><i class="bi bi-trash"></i></button></form>
             <?php endif; ?>
         </div>

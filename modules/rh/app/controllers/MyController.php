@@ -1,6 +1,6 @@
 <?php
 /**
- * MyController — portal do funcionário (papel 'funcionario' no módulo RH).
+ * MyController — portal do funcionário (micropermissão my.view).
  *
  * Acesso via ?m=rh&page=my  (action default = index).
  * O usuário autenticado deve estar vinculado a um employee via
@@ -19,19 +19,19 @@ class MyController
 
     public function index(): void
     {
-        Auth::requireLogin();
+        core_require('my.view');
 
         $employeeId = $this->currentEmployeeId();
         if (!$employeeId) {
-            // Usuário sem vínculo com funcionário.
-            if (Session::userRole() === 'funcionario') {
-                // Sem vínculo não há portal — volta ao portal inicial da
-                // plataforma (evita loop my ⇄ dashboard).
-                Session::flash('error', 'Seu usuário ainda não está vinculado a um funcionário. Procure o RH.');
-                core_redirect('index.php');
+            // Usuário sem vínculo com funcionário: quem enxerga o dashboard
+            // volta para ele; os demais voltam ao portal inicial da
+            // plataforma (evita loop my ⇄ dashboard).
+            if (core_can('dashboard.view')) {
+                header('Location: index.php?m=rh&page=dashboard');
+                exit;
             }
-            header('Location: index.php?m=rh&page=dashboard');
-            exit;
+            Session::flash('error', 'Seu usuário ainda não está vinculado a um funcionário. Procure o RH.');
+            core_redirect('index.php');
         }
 
         $employee = Employee::findWithRelations($employeeId);

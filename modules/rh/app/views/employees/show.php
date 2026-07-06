@@ -4,12 +4,12 @@
         <a href="index.php?m=rh&page=employees&action=print&id=<?= $employee['id'] ?>" target="_blank" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-printer me-1"></i> Imprimir / PDF
         </a>
-        <?php if (Auth::can('employees', 'edit') && empty($employee['anonymized_at'])): ?>
+        <?php if (core_can('employees.edit') && empty($employee['anonymized_at'])): ?>
             <a href="index.php?m=rh&page=employees&action=edit&id=<?= $employee['id'] ?>" class="btn btn-warning btn-sm">
                 <i class="bi bi-pencil me-1"></i> Editar
             </a>
         <?php endif; ?>
-        <?php if (Auth::can('employees', 'delete') && $employee['status'] === 'desligado' && empty($employee['anonymized_at'])): ?>
+        <?php if (core_can('employees.delete') && $employee['status'] === 'desligado' && empty($employee['anonymized_at'])): ?>
             <form method="POST" action="index.php?m=rh&page=employees&action=anonymize" class="d-inline">
                 <?= Csrf::field() ?>
                 <input type="hidden" name="id" value="<?= $employee['id'] ?>">
@@ -60,25 +60,25 @@
         <div class="card border-0 shadow-sm mt-3">
             <div class="card-body">
                 <h6 class="fw-semibold mb-3">Ações Rápidas</h6>
-                <?php if (Auth::can('documents', 'create')): ?>
+                <?php if (core_can('employee_documents.create')): ?>
                     <a href="index.php?m=rh&page=documents&action=create&employee_id=<?= $employee['id'] ?>"
                        class="btn btn-outline-primary btn-sm w-100 mb-2">
                         <i class="bi bi-upload me-1"></i> Enviar Documento
                     </a>
                 <?php endif; ?>
-                <?php if (Auth::can('expirations', 'create')): ?>
+                <?php if (core_can('expirations.create')): ?>
                     <a href="index.php?m=rh&page=expirations&action=create&employee_id=<?= $employee['id'] ?>"
                        class="btn btn-outline-primary btn-sm w-100 mb-2">
                         <i class="bi bi-clock me-1"></i> Novo Vencimento
                     </a>
                 <?php endif; ?>
-                <?php if (Auth::can('certificates', 'create')): ?>
+                <?php if (core_can('certificates.create')): ?>
                     <a href="index.php?m=rh&page=certificates&action=create&employee_id=<?= $employee['id'] ?>"
                        class="btn btn-outline-primary btn-sm w-100 mb-2">
                         <i class="bi bi-file-medical me-1"></i> Novo Atestado
                     </a>
                 <?php endif; ?>
-                <?php if (Auth::can('employees', 'delete')): ?>
+                <?php if (core_can('employees.delete')): ?>
                     <form method="POST" action="index.php?m=rh&page=employees&action=delete" class="mt-3">
                         <?= Csrf::field() ?>
                         <input type="hidden" name="id" value="<?= $employee['id'] ?>">
@@ -213,7 +213,7 @@
                                             <td><a href="<?= Sanitize::e(Upload::url($doc['file_path'], 'document', (int)$doc['id'])) ?>" target="_blank" class="text-decoration-none"><i class="bi bi-download me-1"></i>Baixar</a></td>
                                             <td><?= Sanitize::formatDateTime($doc['created_at']) ?></td>
                                             <td>
-                                                <?php if (Auth::can('documents', 'delete')): ?>
+                                                <?php if (core_can('employee_documents.delete')): ?>
                                                     <form method="POST" action="index.php?m=rh&page=documents&action=delete" class="d-inline">
                                                         <?= Csrf::field() ?>
                                                         <input type="hidden" name="id" value="<?= $doc['id'] ?>">
@@ -308,7 +308,7 @@
             <div class="tab-pane fade" id="tabTreinamentos">
                 <div class="card border-0 shadow-sm border-top-0 rounded-top-0">
                     <div class="card-body">
-                        <?php if (Auth::can('documents', 'create')): ?>
+                        <?php if (core_can('employee_documents.create')): ?>
                             <a class="btn btn-sm btn-outline-primary mb-2"
                                href="index.php?m=rh&page=documents&action=create&employee_id=<?= $employee['id'] ?>&type=Treinamento">
                                 <i class="bi bi-plus-lg me-1"></i> Novo treinamento
@@ -327,7 +327,7 @@
                                             <td><a href="<?= Sanitize::e(Upload::url($doc['file_path'], 'document', (int)$doc['id'])) ?>" target="_blank"><i class="bi bi-download me-1"></i>Baixar</a></td>
                                             <td><?= Sanitize::formatDateTime($doc['created_at']) ?></td>
                                             <td>
-                                                <?php if (Auth::can('documents', 'delete')): ?>
+                                                <?php if (core_can('employee_documents.delete')): ?>
                                                     <form method="POST" action="index.php?m=rh&page=documents&action=delete" class="d-inline">
                                                         <?= Csrf::field() ?>
                                                         <input type="hidden" name="id" value="<?= $doc['id'] ?>">
@@ -350,7 +350,7 @@
             <div class="tab-pane fade" id="tabEpis">
                 <div class="card border-0 shadow-sm border-top-0 rounded-top-0">
                     <div class="card-body">
-                        <?php if (Auth::can('documents', 'create')): ?>
+                        <?php if (core_can('employee_documents.create')): ?>
                             <a class="btn btn-sm btn-outline-primary mb-2"
                                href="index.php?m=rh&page=documents&action=create&employee_id=<?= $employee['id'] ?>&type=EPI">
                                 <i class="bi bi-plus-lg me-1"></i> Registrar entrega de EPI
@@ -369,7 +369,7 @@
                                             <td><a href="<?= Sanitize::e(Upload::url($doc['file_path'], 'document', (int)$doc['id'])) ?>" target="_blank"><i class="bi bi-download me-1"></i>Baixar</a></td>
                                             <td><?= Sanitize::formatDateTime($doc['created_at']) ?></td>
                                             <td>
-                                                <?php if (Auth::can('documents', 'delete')): ?>
+                                                <?php if (core_can('employee_documents.delete')): ?>
                                                     <form method="POST" action="index.php?m=rh&page=documents&action=delete" class="d-inline">
                                                         <?= Csrf::field() ?>
                                                         <input type="hidden" name="id" value="<?= $doc['id'] ?>">
@@ -401,7 +401,7 @@
                             </div>
                         </div>
 
-                        <?php if (Auth::can('employees', 'edit')): ?>
+                        <?php if (core_can('employees.edit')): ?>
                         <form method="POST" action="index.php?m=rh&page=scores&action=store" class="border rounded p-3 mb-3 bg-light">
                             <?= Csrf::field() ?>
                             <input type="hidden" name="employee_id" value="<?= $employee['id'] ?>">
@@ -440,7 +440,7 @@
                                             <td><?= nl2br(Sanitize::e($s['reason'])) ?></td>
                                             <td><?= Sanitize::e($s['created_by_name'] ?: '-') ?></td>
                                             <td>
-                                                <?php if (Auth::can('employees', 'edit')): ?>
+                                                <?php if (core_can('employees.edit')): ?>
                                                 <form method="POST" action="index.php?m=rh&page=scores&action=delete" class="d-inline">
                                                     <?= Csrf::field() ?>
                                                     <input type="hidden" name="id" value="<?= $s['id'] ?>">
@@ -463,7 +463,7 @@
             <div class="tab-pane fade" id="tabElogios">
                 <div class="card border-0 shadow-sm border-top-0 rounded-top-0">
                     <div class="card-body">
-                        <?php if (Auth::can('employees', 'edit')): ?>
+                        <?php if (core_can('employees.edit')): ?>
                         <form method="POST" action="index.php?m=rh&page=compliments&action=store" class="border rounded p-3 mb-3 bg-light">
                             <?= Csrf::field() ?>
                             <input type="hidden" name="employee_id" value="<?= $employee['id'] ?>">
@@ -494,7 +494,7 @@
                                         <?= Sanitize::formatDateTime($c['created_at']) ?>
                                         <?= $c['created_by_name'] ? ' &middot; registrado por ' . Sanitize::e($c['created_by_name']) : '' ?>
                                     </small>
-                                    <?php if (Auth::can('employees', 'edit')): ?>
+                                    <?php if (core_can('employees.edit')): ?>
                                         <form method="POST" action="index.php?m=rh&page=compliments&action=delete" class="d-inline ms-2">
                                             <?= Csrf::field() ?>
                                             <input type="hidden" name="id" value="<?= $c['id'] ?>">

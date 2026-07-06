@@ -13,7 +13,7 @@ class TalentPoolController
 
     public function index(): void
     {
-        Auth::requirePermission('talent_pool', 'view');
+        core_require('talent_pool.view');
 
         $search = Sanitize::get('search');
         $area   = Sanitize::get('area');
@@ -63,7 +63,7 @@ class TalentPoolController
 
     public function show(): void
     {
-        Auth::requirePermission('talent_pool', 'view');
+        core_require('talent_pool.view');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
         $stmt = $this->db->prepare(
@@ -90,7 +90,7 @@ class TalentPoolController
 
     public function remove(): void
     {
-        Auth::requirePermission('talent_pool', 'delete');
+        core_require('talent_pool.delete');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -104,7 +104,7 @@ class TalentPoolController
 
     public function export(): void
     {
-        Auth::requirePermission('talent_pool', 'export');
+        core_require('talent_pool.export');
 
         $candidates = $this->db->query(
             "SELECT c.*, rj.title as job_title

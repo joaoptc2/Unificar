@@ -20,6 +20,7 @@ class ChannelController
     public function create(): void
     {
         Auth::requireLogin();
+        core_require('channels.create');
 
         $users = User::active();
 
@@ -37,6 +38,7 @@ class ChannelController
     public function store(): void
     {
         Auth::requireLogin();
+        core_require('channels.create');
         Csrf::check();
 
         $userId      = Session::userId();
@@ -106,9 +108,9 @@ class ChannelController
             exit;
         }
 
-        // Only channel owner or system admin may edit
+        // Only channel owner or holders of channels.edit may edit
         $userId = Session::userId();
-        if (!$this->canManageChannel($channel, $userId)) {
+        if (!$this->canManageChannel($channel, $userId, 'channels.edit')) {
             Session::flash('error', 'Você não tem permissão para editar este canal.');
             header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
             exit;
@@ -143,7 +145,7 @@ class ChannelController
         }
 
         $userId = Session::userId();
-        if (!$this->canManageChannel($channel, $userId)) {
+        if (!$this->canManageChannel($channel, $userId, 'channels.edit')) {
             Session::flash('error', 'Você não tem permissão para editar este canal.');
             header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
             exit;
@@ -191,7 +193,7 @@ class ChannelController
         }
 
         $userId = Session::userId();
-        if (!$this->canManageChannel($channel, $userId)) {
+        if (!$this->canManageChannel($channel, $userId, 'channels.delete')) {
             Session::flash('error', 'Você não tem permissão para arquivar este canal.');
             header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
             exit;
@@ -221,6 +223,10 @@ class ChannelController
     public function members(): void
     {
         Auth::requireLogin();
+        if (!core_can('channels.view')) {
+            $this->jsonResponse(false, 'Sem permissão.', 403);
+            return;
+        }
 
         $channelId = isset($_GET['id']) ? Sanitize::int($_GET['id']) : 0;
 
@@ -254,6 +260,12 @@ class ChannelController
         $channel = Channel::find($channelId);
         if (!$channel || $memberId <= 0) {
             $this->jsonResponse(false, 'Dados inválidos.', 400);
+            return;
+        }
+
+        // Gerir membros = channels.edit (donos do canal continuam podendo).
+        if (!$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
+            $this->jsonResponse(false, 'Sem permissão para gerenciar membros deste canal.', 403);
             return;
         }
 
@@ -295,6 +307,12 @@ class ChannelController
             return;
         }
 
+        // Gerir membros = channels.edit (donos do canal continuam podendo).
+        if (!$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
+            $this->jsonResponse(false, 'Sem permissão para gerenciar membros deste canal.', 403);
+            return;
+        }
+
         Channel::removeMember($channelId, $memberId);
 
         // System message
@@ -317,6 +335,7 @@ class ChannelController
     public function join(): void
     {
         Auth::requireLogin();
+        core_require('channels.view');
         Csrf::check();
 
         $channelId = Sanitize::int($_POST['channel_id'] ?? 0);
@@ -357,6 +376,7 @@ class ChannelController
     public function leave(): void
     {
         Auth::requireLogin();
+        core_require('channels.view');
         Csrf::check();
 
         $channelId = Sanitize::int($_POST['channel_id'] ?? 0);
@@ -391,6 +411,7 @@ class ChannelController
     public function browse(): void
     {
         Auth::requireLogin();
+        core_require('channels.view');
 
         $userId         = Session::userId();
         $publicChannels = Channel::publicChannels();
@@ -415,6 +436,7 @@ class ChannelController
     public function direct(): void
     {
         Auth::requireLogin();
+        core_require('chat.view');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Csrf::check();
         }
@@ -464,7 +486,7 @@ class ChannelController
         Auth::requireLogin();
         $channelId = Sanitize::int($_GET['id'] ?? 0);
         $channel = Channel::find($channelId);
-        if (!$channel || !$this->canManageChannel($channel, Session::userId())) {
+        if (!$channel || !$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
             Session::flash('error', 'Sem permissão.');
             header('Location: index.php?m=chat&page=chat');
             exit;
@@ -482,7 +504,7 @@ class ChannelController
         Csrf::check();
         $channelId = Sanitize::int($_POST['id'] ?? 0);
         $channel = Channel::find($channelId);
-        if (!$channel || !$this->canManageChannel($channel, Session::userId())) {
+        if (!$channel || !$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
             Session::flash('error', 'Sem permissão.');
             header('Location: index.php?m=chat&page=chat');
             exit;
@@ -505,12 +527,14 @@ class ChannelController
      * ----------------------------------------------------------------*/
 
     /**
-     * Check whether the current user may manage (edit/archive) a channel.
-     * Owners, channel admins, and system admins are allowed.
+     * Check whether the current user may manage a channel.
+     * Permitidos: quem tem a micropermissão do módulo ($permKey —
+     * channels.edit para editar/configurar/membros, channels.delete para
+     * arquivar), o criador do canal e os owners/admins do próprio canal.
      */
-    private function canManageChannel(array $channel, int $userId): bool
+    private function canManageChannel(array $channel, int $userId, string $permKey = 'channels.edit'): bool
     {
-        if (Auth::isAdmin()) {
+        if (core_can($permKey)) {
             return true;
         }
 

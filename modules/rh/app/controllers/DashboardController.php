@@ -17,13 +17,7 @@ class DashboardController
 
     public function index(): void
     {
-        Auth::requireLogin();
-
-        // Funcionário comum não tem acesso ao dashboard de RH — redireciona ao portal.
-        if (Session::userRole() === 'funcionario') {
-            header('Location: index.php?m=rh&page=my');
-            exit;
-        }
+        core_require('dashboard.view');
 
         $today = date('Y-m-d');
         $currentMonth = (int)date('n');

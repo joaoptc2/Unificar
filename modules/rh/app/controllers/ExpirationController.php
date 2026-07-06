@@ -13,7 +13,7 @@ class ExpirationController
 
     public function index(): void
     {
-        Auth::requirePermission('expirations', 'view');
+        core_require('expirations.view');
 
         $search     = Sanitize::get('search');
         $type       = Sanitize::get('type');
@@ -74,7 +74,7 @@ class ExpirationController
 
     public function create(): void
     {
-        Auth::requirePermission('expirations', 'create');
+        core_require('expirations.create');
 
         $employeeId = Sanitize::int($_GET['employee_id'] ?? 0);
         $employees = $this->db->query("SELECT id, full_name FROM rh_employees WHERE status = 'ativo' ORDER BY full_name")->fetchAll();
@@ -89,7 +89,7 @@ class ExpirationController
 
     public function store(): void
     {
-        Auth::requirePermission('expirations', 'create');
+        core_require('expirations.create');
         Csrf::check();
 
         $data = $this->getFormData();
@@ -166,7 +166,7 @@ class ExpirationController
 
     public function edit(): void
     {
-        Auth::requirePermission('expirations', 'edit');
+        core_require('expirations.edit');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
         $stmt = $this->db->prepare('SELECT * FROM rh_expirations WHERE id = ?');
@@ -200,7 +200,7 @@ class ExpirationController
 
     public function update(): void
     {
-        Auth::requirePermission('expirations', 'edit');
+        core_require('expirations.edit');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -256,7 +256,7 @@ class ExpirationController
 
     public function delete(): void
     {
-        Auth::requirePermission('expirations', 'delete');
+        core_require('expirations.delete');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -279,7 +279,7 @@ class ExpirationController
 
     public function export(): void
     {
-        Auth::requirePermission('expirations', 'export');
+        core_require('expirations.export');
 
         $sql = "SELECT ex.*, e.full_name as employee_name
                 FROM rh_expirations ex

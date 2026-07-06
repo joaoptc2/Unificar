@@ -6,7 +6,7 @@ class ShiftController
 
     public function index(): void
     {
-        Auth::requirePermission('shifts', 'view');
+        core_require('shifts.view');
         $deptId = Sanitize::int($_GET['department'] ?? 0);
         $weekStart = Sanitize::date($_GET['week'] ?? '') ?: date('Y-m-d', strtotime('monday this week'));
         $weekEnd = date('Y-m-d', strtotime($weekStart . ' +6 days'));
@@ -30,7 +30,7 @@ class ShiftController
 
     public function store(): void
     {
-        Auth::requirePermission('shifts', 'create');
+        core_require('shifts.create');
         Csrf::check();
         $empId = Sanitize::int($_POST['employee_id'] ?? 0);
         $date = Sanitize::date($_POST['shift_date'] ?? '');
@@ -60,7 +60,7 @@ class ShiftController
 
     public function delete(): void
     {
-        Auth::requirePermission('shifts', 'delete');
+        core_require('shifts.delete');
         Csrf::check();
         $id = Sanitize::int($_POST['id'] ?? 0);
         $shift = Shift::find($id);
@@ -87,7 +87,7 @@ class ShiftController
 
     public function approve_swap(): void
     {
-        Auth::requirePermission('shifts', 'edit');
+        core_require('shifts.edit');
         Csrf::check();
         $shiftId = Sanitize::int($_POST['shift_id'] ?? 0);
         $shift = Shift::find($shiftId);
@@ -103,7 +103,7 @@ class ShiftController
 
     public function events(): void
     {
-        Auth::requirePermission('shifts', 'view');
+        core_require('shifts.view');
         $deptId = Sanitize::int($_GET['department'] ?? 0);
         $start = Sanitize::date(substr($_GET['start'] ?? '', 0, 10)) ?: date('Y-m-01');
         $end = Sanitize::date(substr($_GET['end'] ?? '', 0, 10)) ?: date('Y-m-t');

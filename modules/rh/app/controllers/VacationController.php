@@ -6,7 +6,7 @@ class VacationController
 
     public function index(): void
     {
-        Auth::requirePermission('vacations', 'view');
+        core_require('vacations.view');
         $status = Sanitize::get('status');
         $currentPage = max(1, Sanitize::int($_GET['p'] ?? 1));
         $where = []; $params = [];
@@ -29,7 +29,7 @@ class VacationController
 
     public function create(): void
     {
-        Auth::requirePermission('vacations', 'create');
+        core_require('vacations.create');
         $employees = $this->db->query("SELECT id, full_name FROM rh_employees WHERE status = 'ativo' ORDER BY full_name")->fetchAll();
         View::render('vacations/form', [
             'pageTitle' => 'Nova Ferias', 'page' => 'vacations',
@@ -39,7 +39,7 @@ class VacationController
 
     public function store(): void
     {
-        Auth::requirePermission('vacations', 'create');
+        core_require('vacations.create');
         Csrf::check();
         $data = $this->formData();
         if (!$data['employee_id'] || !$data['start_date'] || !$data['end_date']) {
@@ -61,7 +61,7 @@ class VacationController
 
     public function edit(): void
     {
-        Auth::requirePermission('vacations', 'edit');
+        core_require('vacations.edit');
         $item = Vacation::find(Sanitize::int($_GET['id'] ?? 0));
         if (!$item) { Session::flash('error', 'Nao encontrado.'); header('Location: index.php?m=rh&page=vacations'); exit; }
         $employees = $this->db->query("SELECT id, full_name FROM rh_employees WHERE status = 'ativo' ORDER BY full_name")->fetchAll();
@@ -73,7 +73,7 @@ class VacationController
 
     public function update(): void
     {
-        Auth::requirePermission('vacations', 'edit');
+        core_require('vacations.edit');
         Csrf::check();
         $id = Sanitize::int($_POST['id'] ?? 0);
         $data = $this->formData();
@@ -86,7 +86,7 @@ class VacationController
 
     public function approve(): void
     {
-        Auth::requirePermission('vacations', 'edit');
+        core_require('vacations.edit');
         Csrf::check();
         $id = Sanitize::int($_POST['id'] ?? 0);
         $action = Sanitize::post('decision');
@@ -100,7 +100,7 @@ class VacationController
 
     public function delete(): void
     {
-        Auth::requirePermission('vacations', 'delete');
+        core_require('vacations.delete');
         Csrf::check();
         $id = Sanitize::int($_POST['id'] ?? 0);
         $this->db->prepare("DELETE FROM rh_schedules WHERE title LIKE ? AND event_type = 'compromisso'")->execute(['Ferias:%' . $id . '%']);

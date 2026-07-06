@@ -1,7 +1,7 @@
 <div class="page-header">
     <h1><i class="bi bi-clipboard-data me-2"></i>Pesquisas de Clima</h1>
     <div class="d-flex gap-2">
-        <?php if (Auth::can('surveys', 'create')): ?>
+        <?php if (core_can('surveys.create')): ?>
             <a href="index.php?m=rh&page=surveys&action=create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nova pesquisa</a>
         <?php endif; ?>
     </div>

@@ -15,7 +15,10 @@
  *   4. Limpa notificações lidas do módulo com mais de 60 dias.
  *
  * Notificações agora são por usuário (tabela global notifications):
- * os alertas vão para os gestores do módulo (admin/manager + admin global).
+ * cada alerta vai para quem tem a micropermissão do assunto
+ * (Core\Perms::usersWith — preventivas → service_orders.edit,
+ * calibração → calibration.edit, estoque → stock.edit; admins globais
+ * sempre incluídos).
  *
  * Idempotência: para cada "assunto × dia × usuário" só gera uma
  * notificação, evitando flood mesmo com múltiplas execuções ao dia.
@@ -43,11 +46,11 @@ try {
 
 if (!function_exists('man_cron_push_notification')) {
     /**
-     * Notifica os gestores do módulo (dedupe por usuário × tipo × link × dia).
-     * Quando cria ao menos uma notificação, dispara email best-effort.
-     * Retorna true se criou alguma notificação nova.
+     * Notifica os usuários com a micropermissão indicada (dedupe por
+     * usuário × tipo × link × dia). Quando cria ao menos uma notificação,
+     * dispara email best-effort. Retorna true se criou alguma nova.
      */
-    function man_cron_push_notification(PDO $pdo, string $type, string $title, string $message, ?string $link = null): bool
+    function man_cron_push_notification(PDO $pdo, string $type, string $title, string $message, ?string $link = null, string $permKey = 'service_orders.edit'): bool
     {
         $createdAny = false;
         $check = $pdo->prepare("
@@ -65,7 +68,7 @@ if (!function_exists('man_cron_push_notification')) {
             VALUES (?, ?, ?, ?, ?, ?, NOW())
         ");
 
-        foreach (manModuleManagers() as $u) {
+        foreach (manModuleManagers($permKey) as $u) {
             try {
                 $check->execute([(int) $u['id'], MAN_MODULE_SLUG, $type, $link, $title]);
                 if ($check->fetchColumn()) {
@@ -133,7 +136,8 @@ try {
             'maintenance_due',
             'Preventiva gerada: ' . $plan['title'],
             'OS ' . $osNumber . ' criada automaticamente para o equipamento "' . ($plan['equipment_name'] ?? '—') . '".',
-            'index.php?m=manutencao&page=service-orders&action=edit&id=' . $newOsId
+            'index.php?m=manutencao&page=service-orders&action=edit&id=' . $newOsId,
+            'service_orders.edit'
         );
 
         $osCreated++;
@@ -172,7 +176,8 @@ try {
                 'calibration_overdue',
                 'Calibração VENCIDA: ' . $r['equipment_name'],
                 'O equipamento "' . $r['equipment_name'] . '" está com calibração vencida há ' . abs($days) . ' dia(s).',
-                $link
+                $link,
+                'calibration.edit'
             );
         } elseif ($days <= 15) {
             $created = man_cron_push_notification(
@@ -180,7 +185,8 @@ try {
                 'calibration_urgent',
                 'Calibração urgente: ' . $r['equipment_name'],
                 'Vence em ' . $days . ' dia(s). Programe a calibração imediatamente.',
-                'index.php?m=manutencao&page=calibration&status=due_soon'
+                'index.php?m=manutencao&page=calibration&status=due_soon',
+                'calibration.edit'
             );
         } else {
             $created = man_cron_push_notification(
@@ -188,7 +194,8 @@ try {
                 'calibration_due_soon',
                 'Calibração a vencer: ' . $r['equipment_name'],
                 'Vence em ' . $days . ' dia(s).',
-                'index.php?m=manutencao&page=calibration&status=due_soon'
+                'index.php?m=manutencao&page=calibration&status=due_soon',
+                'calibration.edit'
             );
         }
         if ($created) $calibNotifs++;
@@ -215,7 +222,8 @@ try {
             'stock_low',
             'Estoque baixo: ' . $p['name'],
             'Quantidade atual: ' . $p['quantity'] . ' / mínimo: ' . $p['min_quantity'] . '.',
-            'index.php?m=manutencao&page=stock&action=edit&id=' . (int) $p['id']
+            'index.php?m=manutencao&page=stock&action=edit&id=' . (int) $p['id'],
+            'stock.edit'
         );
         if ($created) $stockNotifs++;
     }

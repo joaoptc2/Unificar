@@ -6,7 +6,7 @@ class OnboardingController
 
     public function index(): void
     {
-        Auth::requirePermission('onboarding', 'view');
+        core_require('onboarding.view');
         $templates = OnboardingTemplate::all(['order' => 'type, name']);
         View::render('onboarding/index', [
             'pageTitle' => 'Onboarding / Offboarding', 'page' => 'onboarding', 'templates' => $templates,
@@ -15,7 +15,7 @@ class OnboardingController
 
     public function show(): void
     {
-        Auth::requirePermission('onboarding', 'view');
+        core_require('onboarding.view');
         $id = Sanitize::int($_GET['id'] ?? 0);
         $template = OnboardingTemplate::withItems($id);
         if (!$template) { Session::flash('error', 'Template nao encontrado.'); header('Location: index.php?m=rh&page=onboarding'); exit; }
@@ -26,7 +26,7 @@ class OnboardingController
 
     public function create_template(): void
     {
-        Auth::requirePermission('onboarding', 'create');
+        core_require('onboarding.manage_templates');
         $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
         View::render('onboarding/template_form', [
             'pageTitle' => 'Novo Template', 'page' => 'onboarding',
@@ -36,7 +36,7 @@ class OnboardingController
 
     public function store_template(): void
     {
-        Auth::requirePermission('onboarding', 'create');
+        core_require('onboarding.manage_templates');
         Csrf::check();
         $name = Sanitize::post('name');
         $type = Sanitize::post('type') ?: 'onboarding';
@@ -59,7 +59,7 @@ class OnboardingController
 
     public function assign(): void
     {
-        Auth::requirePermission('onboarding', 'create');
+        core_require('onboarding.manage_templates');
         $employees = $this->db->query("SELECT id, full_name FROM rh_employees ORDER BY full_name")->fetchAll();
         $templates = OnboardingTemplate::all(['where' => 'active = 1', 'order' => 'type, name']);
         View::render('onboarding/assign', [
@@ -70,7 +70,7 @@ class OnboardingController
 
     public function assign_store(): void
     {
-        Auth::requirePermission('onboarding', 'create');
+        core_require('onboarding.manage_templates');
         Csrf::check();
         $empId = Sanitize::int($_POST['employee_id'] ?? 0);
         $tplId = Sanitize::int($_POST['template_id'] ?? 0);
@@ -94,7 +94,7 @@ class OnboardingController
 
     public function progress(): void
     {
-        Auth::requirePermission('onboarding', 'view');
+        core_require('onboarding.view');
         $empId = Sanitize::int($_GET['employee_id'] ?? 0);
         $stmt = $this->db->prepare('SELECT id, full_name FROM rh_employees WHERE id = ?');
         $stmt->execute([$empId]);
@@ -122,7 +122,7 @@ class OnboardingController
 
     public function toggle_item(): void
     {
-        Auth::requirePermission('onboarding', 'edit');
+        core_require('onboarding.edit');
         Csrf::check();
         $progressId = Sanitize::int($_POST['progress_id'] ?? 0);
         $empId = Sanitize::int($_POST['employee_id'] ?? 0);
@@ -139,7 +139,7 @@ class OnboardingController
 
     public function delete_template(): void
     {
-        Auth::requirePermission('onboarding', 'delete');
+        core_require('onboarding.manage_templates');
         Csrf::check();
         $id = Sanitize::int($_POST['id'] ?? 0);
         OnboardingTemplate::delete($id);

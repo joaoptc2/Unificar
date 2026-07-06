@@ -1,7 +1,7 @@
 <div class="page-header">
     <h1><i class="bi bi-calendar3 me-2"></i>Agenda</h1>
     <div class="d-flex gap-2">
-        <?php if (Auth::can('schedules', 'create')): ?>
+        <?php if (core_can('schedules.create')): ?>
             <a href="index.php?m=rh&page=schedules&action=create" class="btn btn-primary btn-sm">
                 <i class="bi bi-plus-lg me-1"></i> Novo Compromisso
             </a>
@@ -35,7 +35,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
                 <a href="#" id="eventModalEditBtn" class="btn btn-primary"
-                   <?= Auth::can('schedules', 'edit') ? '' : 'style="display:none;"' ?>>
+                   <?= core_can('schedules.edit') ? '' : 'style="display:none;"' ?>>
                     <i class="bi bi-pencil me-1"></i> Editar
                 </a>
             </div>
@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', function () {
             },
         },
         dateClick: function (info) {
-            <?php if (Auth::can('schedules', 'create')): ?>
+            <?php if (core_can('schedules.create')): ?>
             window.location.href = 'index.php?m=rh&page=schedules&action=create&date=' + info.dateStr;
             <?php endif; ?>
         },

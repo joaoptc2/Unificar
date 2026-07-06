@@ -69,20 +69,15 @@ class NotificationController
     }
 
     /**
-     * Notificar todos os administradores do módulo RH (RBAC central) e os
-     * administradores globais da plataforma.
+     * Notificar os administradores do módulo RH e os administradores globais
+     * da plataforma. "Admin do módulo" = quem pode gerenciar vínculos de
+     * usuários (user_links.edit, permissão exclusiva do preset Administrador);
+     * Core\Perms::usersWith já inclui os admins globais.
      */
     public static function notifyAdmins(string $title, string $message, string $type = 'warning', string $link = ''): void
     {
-        $admins = Core\DB::query(
-            "SELECT DISTINCT u.id
-             FROM users u
-             LEFT JOIN user_module_access uma
-               ON uma.user_id = u.id AND uma.module_slug = 'rh'
-             WHERE u.active = 1 AND (u.is_admin = 1 OR uma.role = 'admin')"
-        );
-        foreach ($admins as $admin) {
-            self::create((int)$admin['id'], $title, $message, $type, $link);
+        foreach (Core\Perms::usersWith('rh', 'user_links.edit') as $userId) {
+            self::create((int)$userId, $title, $message, $type, $link);
         }
     }
 }

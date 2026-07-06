@@ -51,7 +51,7 @@ class DownloadController
     {
         switch ($type) {
             case 'document': // employee_documents
-                Auth::requirePermission('documents', 'view');
+                core_require('employee_documents.view');
                 $stmt = $this->db->prepare(
                     'SELECT file_path, file_original_name FROM rh_employee_documents WHERE id = ?'
                 );
@@ -60,14 +60,14 @@ class DownloadController
                 return $row ? [$row['file_path'], $row['file_original_name']] : [null, null];
 
             case 'certificate': // medical_certificates
-                Auth::requirePermission('certificates', 'view');
+                core_require('certificates.view');
                 $stmt = $this->db->prepare('SELECT file_path FROM rh_medical_certificates WHERE id = ?');
                 $stmt->execute([$id]);
                 $row = $stmt->fetch();
                 return $row ? [$row['file_path'], null] : [null, null];
 
             case 'expiration':
-                Auth::requirePermission('expirations', 'view');
+                core_require('expirations.view');
                 $stmt = $this->db->prepare('SELECT file_path, title FROM rh_expirations WHERE id = ?');
                 $stmt->execute([$id]);
                 $row = $stmt->fetch();
@@ -75,7 +75,7 @@ class DownloadController
 
             case 'resume': // currículo do candidato
                 // Acesso a currículos exige permissão de recrutamento OU banco de talentos.
-                if (!Auth::can('recruitment', 'view') && !Auth::can('talent_pool', 'view')) {
+                if (!core_can('recruitment.view') && !core_can('talent_pool.view')) {
                     $this->abort(403, 'Sem permissão.');
                 }
                 $stmt = $this->db->prepare('SELECT resume_path, full_name FROM rh_candidates WHERE id = ?');

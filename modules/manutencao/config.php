@@ -34,15 +34,6 @@ if (!defined('MODULE_URL')) {
     define('MODULE_URL', core_url('index.php?m=' . MAN_MODULE_SLUG));
 }
 
-/*
- * Compatibilidade: as pages legadas leem $_SESSION['user_role'] diretamente.
- * O papel agora é por módulo ($GLOBALS['MODULE_ROLE'], definido pelo núcleo
- * a cada request), então espelhamos na sessão.
- */
-if (isset($GLOBALS['MODULE_ROLE']) && PHP_SAPI !== 'cli') {
-    $_SESSION['user_role'] = $GLOBALS['MODULE_ROLE'];
-}
-
 // ============================================================
 // BANCO DE DADOS — conexão única do núcleo
 // ============================================================
@@ -53,7 +44,16 @@ function db(): PDO
 }
 
 // ============================================================
-// AUTENTICAÇÃO / PAPÉIS (adaptadores do núcleo)
+// AUTENTICAÇÃO / MICROPERMISSÕES (adaptadores do núcleo)
+//
+// O núcleo define $GLOBALS['MODULE_PERMS'] (conjunto efetivo do usuário
+// neste módulo) a cada request e expõe core_can()/core_require(). Os
+// wrappers abaixo só traduzem os nomes de página legados do ManuHosp
+// para as chaves "<recurso>.<ação>" do catálogo do manifesto — toda a
+// decisão de acesso é delegada ao núcleo (Core\Perms).
+//
+// Escritas NÃO usam wrapper genérico: cada bloco POST das pages chama
+// core_require('<recurso>.<create|edit|delete>') da ação específica.
 // ============================================================
 
 function isLoggedIn(): bool
@@ -68,84 +68,64 @@ function requireLogin(): void
     }
 }
 
-/** Papel do usuário NESTE módulo (vocabulário legado do ManuHosp). */
-function moduleRole(): string
-{
-    return (string) ($GLOBALS['MODULE_ROLE'] ?? ($_SESSION['user_role'] ?? 'none'));
-}
-
-function requireRole(string ...$roles): void
-{
-    requireLogin();
-    if (!in_array(moduleRole(), $roles, true)) {
-        http_response_code(403);
-        die('Acesso negado.');
-    }
-}
-
-/** Checa sem interromper — útil dentro de templates. */
-function hasRole(string ...$roles): bool
-{
-    return in_array(moduleRole(), $roles, true);
-}
-
 /**
- * Permissões por módulo (submódulos internos do ManuHosp).
- *
- * Roles:
- *   admin       — acesso total
- *   manager     — acesso a todos os módulos (sem admin)
- *   maintenance — OS, equipamentos, estoque, manutenção, calibração, técnicos
- *   cleaning    — somente limpeza
- *   viewer      — somente leitura em tudo
+ * Mapa página legada → micropermissão de visualização (recurso.view).
+ * A página 'admin' é especial (sectors.view OU org_settings.edit) e é
+ * tratada diretamente em canAccessModule()/requireModule().
  */
-function canWrite(): bool
+function manPagePermission(string $page): ?string
 {
-    return hasRole('admin', 'manager', 'maintenance', 'cleaning');
-}
-
-function canAccessModule(string $module): bool
-{
-    $role = moduleRole();
     $map = [
-        'dashboard'      => ['admin','manager','maintenance','cleaning','viewer'],
-        'equipment'      => ['admin','manager','maintenance'],
-        'service-orders' => ['admin','manager','maintenance'],
-        'stock'          => ['admin','manager','maintenance'],
-        'maintenance'    => ['admin','manager','maintenance'],
-        'calibration'    => ['admin','manager','maintenance'],
-        'technicians'    => ['admin','manager','maintenance'],
-        'cleaning'       => ['admin','manager','cleaning'],
-        'indicators'     => ['admin','manager','maintenance','cleaning'],
-        'notifications'  => ['admin','manager','maintenance','cleaning','viewer'],
-        'admin'          => ['admin'],
-        'qr-locations'   => ['admin','manager'],
-        'anvisa-report'  => ['admin','manager','maintenance'],
-        'heatmap'        => ['admin','manager'],
-        'calendar'       => ['admin','manager','maintenance','cleaning'],
-        'inspections'    => ['admin','manager','maintenance'],
-        'search'         => ['admin','manager','maintenance','cleaning','viewer'],
-        'export'         => ['admin','manager','maintenance','cleaning','viewer'],
+        'dashboard'      => 'dashboard.view',
+        'equipment'      => 'equipment.view',
+        'service-orders' => 'service_orders.view',
+        'stock'          => 'stock.view',
+        'maintenance'    => 'maintenance.view',
+        'calibration'    => 'calibration.view',
+        'technicians'    => 'technicians.view',
+        'cleaning'       => 'cleaning.view',
+        'indicators'     => 'indicators.view',
+        'notifications'  => 'notifications.view',
+        'qr-locations'   => 'qr_locations.view',
+        'anvisa-report'  => 'anvisa.view',
+        'heatmap'        => 'heatmap.view',
+        'calendar'       => 'calendar.view',
+        'inspections'    => 'inspections.view',
+        'search'         => 'search.view',
+        'export'         => 'export.view',
     ];
-    $allowed = $map[$module] ?? ['admin'];
-    return in_array($role, $allowed, true);
+    return $map[$page] ?? null;
 }
 
-function requireModule(string $module): void
+/** O usuário pode VER a página? (wrapper legado — delega a core_can()). */
+function canAccessModule(string $page): bool
+{
+    if ($page === 'admin') {
+        return core_can('sectors.view') || core_can('org_settings.edit');
+    }
+    $perm = manPagePermission($page);
+    return $perm !== null && core_can($perm);
+}
+
+/** Interrompe com 403 quando o usuário não pode ver a página (via núcleo). */
+function requireModule(string $page): void
 {
     requireLogin();
-    if (!canAccessModule($module)) {
-        http_response_code(403);
-        die('Acesso negado. Seu perfil não tem permissão para este módulo.');
+    if ($page === 'admin') {
+        if (!canAccessModule('admin')) {
+            http_response_code(403);
+            Core\Layout::renderError(403, 'Você não tem permissão para esta ação. Solicite ao administrador.');
+            exit;
+        }
+        return;
     }
-}
-
-function requireWrite(): void
-{
-    if (!canWrite()) {
+    $perm = manPagePermission($page);
+    if ($perm === null) {
         http_response_code(403);
-        die('Acesso negado. Seu perfil não tem permissão para modificar dados.');
+        Core\Layout::renderError(403, 'Você não tem permissão para esta ação. Solicite ao administrador.');
+        exit;
     }
+    core_require($perm);
 }
 
 function addOsHistory(int $osId, string $action, string $details = ''): void
@@ -395,35 +375,39 @@ function auditLog(string $action, string $entity = '', ?int $entityId = null, st
 // ============================================================
 
 /**
- * Usuários que devem receber alertas operacionais do módulo:
- * admins/gestores do módulo (user_module_access) + admins globais.
+ * Usuários que devem receber alertas operacionais do módulo: quem tem a
+ * micropermissão indicada (via Core\Perms::usersWith — já inclui admins
+ * globais e respeita negações individuais).
+ *
+ * A chave padrão é service_orders.edit (quem "trabalha" as OS); passe a
+ * chave adequada ao assunto (calibração vencendo → calibration.edit,
+ * estoque baixo → stock.edit, ...).
  *
  * @return array<int, array{id:int, name:string, email:string}>
  */
-function manModuleManagers(): array
+function manModuleManagers(string $permKey = 'service_orders.edit'): array
 {
     try {
-        return db()->query("
-            SELECT DISTINCT u.id, u.name, u.email
-            FROM users u
-            LEFT JOIN user_module_access uma
-                   ON uma.user_id = u.id
-                  AND uma.module_slug = '" . MAN_MODULE_SLUG . "'
-            WHERE u.active = 1
-              AND (u.is_admin = 1 OR uma.role IN ('admin','manager'))
-        ")->fetchAll();
+        $ids = Core\Perms::usersWith(MAN_MODULE_SLUG, $permKey);
+        if ($ids === []) {
+            return [];
+        }
+        $in   = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = db()->prepare("SELECT id, name, email FROM users WHERE active = 1 AND id IN ({$in}) ORDER BY name");
+        $stmt->execute($ids);
+        return $stmt->fetchAll();
     } catch (Throwable $ex) {
         return [];
     }
 }
 
 /**
- * Cria uma notificação (global) para todos os gestores do módulo.
+ * Cria uma notificação (global) para os responsáveis pela permissão dada.
  * Substitui as notificações "hospital-wide" (user_id NULL) do legado.
  */
-function manNotifyManagers(string $type, string $title, string $message, ?string $link = null): void
+function manNotifyManagers(string $type, string $title, string $message, ?string $link = null, string $permKey = 'service_orders.edit'): void
 {
-    foreach (manModuleManagers() as $u) {
+    foreach (manModuleManagers($permKey) as $u) {
         try {
             Core\Notifications::add((int) $u['id'], $title, $message, $link, $type, MAN_MODULE_SLUG);
         } catch (Throwable $ex) {

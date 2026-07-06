@@ -13,7 +13,7 @@ class DepartmentController
 
     public function index(): void
     {
-        Auth::requirePermission('departments', 'view');
+        core_require('departments.view');
 
         $departments = $this->db->query(
             "SELECT d.*, (SELECT COUNT(*) FROM rh_employees e WHERE e.department_id = d.id AND e.status = 'ativo') as employee_count
@@ -29,7 +29,7 @@ class DepartmentController
 
     public function create(): void
     {
-        Auth::requirePermission('departments', 'create');
+        core_require('departments.create');
         $department = null;
         $pageTitle = 'Novo Departamento';
         $page = 'departments';
@@ -40,7 +40,7 @@ class DepartmentController
 
     public function store(): void
     {
-        Auth::requirePermission('departments', 'create');
+        core_require('departments.create');
         Csrf::check();
 
         $name = Sanitize::post('name');
@@ -64,7 +64,7 @@ class DepartmentController
 
     public function edit(): void
     {
-        Auth::requirePermission('departments', 'edit');
+        core_require('departments.edit');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
         $stmt = $this->db->prepare('SELECT * FROM rh_departments WHERE id = ?');
@@ -86,7 +86,7 @@ class DepartmentController
 
     public function update(): void
     {
-        Auth::requirePermission('departments', 'edit');
+        core_require('departments.edit');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -105,7 +105,7 @@ class DepartmentController
 
     public function delete(): void
     {
-        Auth::requirePermission('departments', 'delete');
+        core_require('departments.delete');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);

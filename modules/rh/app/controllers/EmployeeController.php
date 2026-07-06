@@ -16,7 +16,7 @@ class EmployeeController
      */
     public function index(): void
     {
-        Auth::requirePermission('employees', 'view');
+        core_require('employees.view');
 
         $search     = Sanitize::get('search');
         $status     = Sanitize::get('status');
@@ -83,7 +83,7 @@ class EmployeeController
      */
     public function create(): void
     {
-        Auth::requirePermission('employees', 'create');
+        core_require('employees.create');
 
         $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
         $positions = $this->db->query('SELECT id, title FROM rh_job_positions WHERE active = 1 ORDER BY title')->fetchAll();
@@ -101,7 +101,7 @@ class EmployeeController
      */
     public function store(): void
     {
-        Auth::requirePermission('employees', 'create');
+        core_require('employees.create');
         Csrf::check();
 
         $data = $this->getFormData();
@@ -234,7 +234,9 @@ class EmployeeController
     }
 
     /**
-     * Cria o usuário do portal do funcionário (role=funcionario).
+     * Cria o usuário do portal do funcionário (preset de micropermissões
+     * "funcionario": my.view, requests.view, requests.create,
+     * announcements.view).
      * Pré-condições: e-mail preenchido, CPF válido, e-mail ainda não cadastrado.
      * Retorna ['created'=>bool, 'reason'=>string, 'email'=>string].
      */
@@ -273,8 +275,13 @@ class EmployeeController
         );
         $stmt->execute([$userId, $employeeId, $data['department_id'] ?: null]);
 
-        // Acesso ao módulo RH com papel "funcionario" (RBAC central).
-        Core\Access::set($userId, 'rh', 'funcionario', Core\Auth::id());
+        // Acesso ao módulo RH com o preset "Funcionário" (micropermissões).
+        Core\Perms::setUserGrants(
+            $userId,
+            'rh',
+            Core\Perms::expand('rh', ['my.view', 'requests.view', 'requests.create', 'announcements.view']),
+            Core\Auth::id()
+        );
 
         return ['created' => true, 'reason' => '', 'email' => $email];
     }
@@ -284,7 +291,7 @@ class EmployeeController
      */
     public function show(): void
     {
-        Auth::requirePermission('employees', 'view');
+        core_require('employees.view');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
         $employee = $this->getEmployee($id);
@@ -352,7 +359,7 @@ class EmployeeController
      */
     public function edit(): void
     {
-        Auth::requirePermission('employees', 'edit');
+        core_require('employees.edit');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
         $employee = $this->getEmployee($id);
@@ -378,7 +385,7 @@ class EmployeeController
      */
     public function update(): void
     {
-        Auth::requirePermission('employees', 'edit');
+        core_require('employees.edit');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -468,7 +475,7 @@ class EmployeeController
      */
     public function anonymize(): void
     {
-        Auth::requirePermission('employees', 'delete');
+        core_require('employees.delete');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -504,7 +511,7 @@ class EmployeeController
      */
     public function delete(): void
     {
-        Auth::requirePermission('employees', 'delete');
+        core_require('employees.delete');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -529,7 +536,7 @@ class EmployeeController
      */
     public function printView(): void
     {
-        Auth::requirePermission('employees', 'view');
+        core_require('employees.view');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
         $employee = $this->getEmployee($id);
@@ -581,7 +588,7 @@ class EmployeeController
      */
     public function export(): void
     {
-        Auth::requirePermission('employees', 'export');
+        core_require('employees.export');
 
         $status = Sanitize::get('status');
         $where = $status ? 'WHERE e.status = ?' : '';

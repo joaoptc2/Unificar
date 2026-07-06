@@ -9,7 +9,7 @@
 
 <div class="alert alert-info small">
     <i class="bi bi-info-circle me-1"></i>
-    Criação, edição, senha e nível de acesso dos usuários são gerenciados na
+    Criação, edição, senha e permissões dos usuários são gerenciadas na
     <a href="<?= core_url('index.php?m=admin&a=users') ?>" class="alert-link">administração central</a>.
     Aqui você define apenas o vínculo funcional do módulo RH: qual funcionário
     e departamento cada usuário representa.
@@ -31,7 +31,7 @@
                     <tr>
                         <th>Usuário</th>
                         <th>E-mail</th>
-                        <th>Papel no RH</th>
+                        <th>Permissões no RH</th>
                         <th style="min-width:220px">Funcionário vinculado</th>
                         <th style="min-width:180px">Departamento</th>
                         <th class="text-end">Ações</th>
@@ -53,8 +53,7 @@
                         </td>
                         <td class="text-muted small"><?= Sanitize::e($u['email']) ?></td>
                         <td>
-                            <?php $role = $u['rh_role'] ?: (!empty($u['is_admin']) ? 'admin' : '—'); ?>
-                            <span class="badge text-bg-light border"><?= Sanitize::e(ucfirst((string)$role)) ?></span>
+                            <span class="badge text-bg-light border"><?= (int)($u['perm_count'] ?? 0) ?> permissão(ões)</span>
                         </td>
                         <td>
                             <select name="employee_id" form="linkForm<?= (int)$u['id'] ?>" class="form-select form-select-sm">

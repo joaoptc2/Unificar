@@ -19,7 +19,7 @@ class CertificateController
 
     public function create(): void
     {
-        Auth::requirePermission('certificates', 'create');
+        core_require('certificates.create');
         $employeeId = Sanitize::int($_GET['employee_id'] ?? 0);
 
         $stmt = $this->db->prepare('SELECT id, full_name FROM rh_employees WHERE id = ?');
@@ -41,7 +41,7 @@ class CertificateController
 
     public function store(): void
     {
-        Auth::requirePermission('certificates', 'create');
+        core_require('certificates.create');
         Csrf::check();
 
         $employeeId = Sanitize::int($_POST['employee_id'] ?? 0);

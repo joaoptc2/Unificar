@@ -5,18 +5,18 @@ class SurveyController
     public function __construct() { $this->db = Database::getInstance(); }
     public function index(): void
     {
-        Auth::requirePermission('surveys', 'view');
+        core_require('surveys.view');
         $surveys = Survey::all(['order' => 'created_at DESC']);
         View::render('surveys/index', ['pageTitle' => 'Pesquisas', 'page' => 'surveys', 'surveys' => $surveys]);
     }
     public function create(): void
     {
-        Auth::requirePermission('surveys', 'create');
+        core_require('surveys.create');
         View::render('surveys/form', ['pageTitle' => 'Nova Pesquisa', 'page' => 'surveys', 'survey' => null]);
     }
     public function store(): void
     {
-        Auth::requirePermission('surveys', 'create'); Csrf::check();
+        core_require('surveys.create'); Csrf::check();
         $title = Sanitize::post('title');
         if (!$title) { Session::flash('error', 'Titulo obrigatorio.'); header('Location: index.php?m=rh&page=surveys&action=create'); exit; }
         $id = Survey::insert([
@@ -40,7 +40,7 @@ class SurveyController
     }
     public function show(): void
     {
-        Auth::requirePermission('surveys', 'view');
+        core_require('surveys.view');
         $survey = Survey::withQuestions(Sanitize::int($_GET['id'] ?? 0));
         if (!$survey) { Session::flash('error', 'Nao encontrada.'); header('Location: index.php?m=rh&page=surveys'); exit; }
         $results = Survey::results((int)$survey['id']);
@@ -65,7 +65,7 @@ class SurveyController
     }
     public function delete(): void
     {
-        Auth::requirePermission('surveys', 'delete'); Csrf::check();
+        core_require('surveys.delete'); Csrf::check();
         Survey::delete(Sanitize::int($_POST['id'] ?? 0));
         Session::flash('success', 'Pesquisa excluida.'); header('Location: index.php?m=rh&page=surveys'); exit;
     }

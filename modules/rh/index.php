@@ -4,8 +4,10 @@
  *
  * Executado pelo front controller da plataforma (/index.php?m=rh&...),
  * que já: iniciou a sessão única, autenticou (exceto rotas públicas),
- * validou o acesso ao módulo, definiu MODULE_SLUG/MODULE_PATH/MODULE_URL
- * e $GLOBALS['MODULE_ROLE'], e fez chdir(MODULE_PATH).
+ * validou o acesso ao módulo, definiu MODULE_SLUG/MODULE_PATH/MODULE_URL,
+ * carregou o conjunto de micropermissões do usuário
+ * ($GLOBALS['MODULE_PERMS'] → core_can()/core_require()) e fez
+ * chdir(MODULE_PATH).
  */
 
 // Autoloader do módulo (controllers/helpers/models sem namespace).
@@ -20,24 +22,6 @@ if (!defined('ASSET_URL')) {
 // Uploads do módulo agora vivem em /uploads/rh/ (fora de modules/).
 if (!defined('RH_UPLOADS_PATH')) {
     define('RH_UPLOADS_PATH', UPLOADS_PATH . '/rh');
-}
-
-// ---- Compatibilidade de sessão -----------------------------------------
-// O núcleo não grava user_role/user_department_id; o código legado lê
-// essas chaves diretamente em alguns pontos. Papel vem SEMPRE do RBAC do
-// núcleo ($GLOBALS['MODULE_ROLE']) e o vínculo departamental do perfil
-// do módulo (rh_user_profile).
-if (Core\Auth::check()) {
-    $_SESSION['user_role'] = $GLOBALS['MODULE_ROLE'] ?? 'none';
-    try {
-        $profile = Core\DB::queryOne(
-            'SELECT employee_id, department_id FROM rh_user_profile WHERE user_id = ?',
-            [Core\Auth::id()]
-        );
-        $_SESSION['user_department_id'] = $profile['department_id'] ?? null;
-    } catch (\Throwable $e) {
-        $_SESSION['user_department_id'] = null;
-    }
 }
 
 // ---- Roteamento (query string legada: page/action/id) --------------------
@@ -56,66 +40,75 @@ if ($page === 'profile') {
     core_redirect('index.php?m=auth&a=profile');
 }
 
-// Funcionário comum só pode acessar rotas essenciais (Minha Área,
-// solicitações, comunicados, notificações e arquivos que lhe pertençam).
-// profile/logout/two_factor saíram da lista — agora são rotas do núcleo.
-$employeeAllowed = ['my', 'files', 'notifications', 'requests', 'announcements'];
-if (($GLOBALS['MODULE_ROLE'] ?? '') === 'funcionario' && !in_array($page, $employeeAllowed, true)) {
+// Raiz do módulo (?m=rh sem page): quem não enxerga o dashboard mas tem o
+// portal do funcionário (my.view) vai direto para a Minha Área.
+if (!isset($_GET['page']) && !core_can('dashboard.view') && core_can('my.view')) {
     header('Location: index.php?m=rh&page=my');
     exit;
 }
 
-// Mapa de rotas para controllers (login/password_reset/two_factor/profile
-// e settings — personalização visual — removidos: núcleo cuida).
+// ---- MAPA CENTRAL rota → [controller, permissão mínima] ------------------
+// A permissão mínima é exigida ANTES do despacho (403 via core_require).
+// null = sem gate de rota: rota pública (is_public no manifesto) ou rota em
+// que cada ação valida a própria micropermissão dentro do controller
+// (ex.: files valida a .view do recurso dono do arquivo; requests separa
+// view/create/respond; search filtra os resultados por core_can()).
 $routes = [
-    'dashboard'          => 'DashboardController',
-    'employees'          => 'EmployeeController',
-    'documents'          => 'DocumentController',
-    'certificates'       => 'CertificateController',
-    'expirations'        => 'ExpirationController',
-    'schedules'          => 'ScheduleController',
-    'birthdays'          => 'BirthdayController',
-    'recruitment'        => 'RecruitmentController',
-    'talent_pool'        => 'TalentPoolController',
-    'notifications'      => 'NotificationController',
-    'users'              => 'UserController',
-    'departments'        => 'DepartmentController',
-    'positions'          => 'PositionController',
-    'public_recruitment' => 'PublicRecruitmentController',
-    'privacy'            => 'PrivacyController',
-    'search'             => 'SearchController',
-    'scores'             => 'ScoreController',
-    'compliments'        => 'ComplimentController',
-    'my'                 => 'MyController',
-    'vacations'          => 'VacationController',
-    'shifts'             => 'ShiftController',
-    'onboarding'         => 'OnboardingController',
-    'announcements'      => 'AnnouncementController',
-    'surveys'            => 'SurveyController',
-    'trainings'          => 'TrainingController',
-    'salary_history'     => 'SalaryHistoryController',
-    'dependents'         => 'DependentController',
-    'requests'           => 'RequestController',
-    'warnings'           => 'WarningController',
-    'signatures'         => 'SignatureController',
-    'files'              => 'DownloadController',
+    'dashboard'          => ['DashboardController',         'dashboard.view'],
+    'employees'          => ['EmployeeController',          'employees.view'],
+    'documents'          => ['DocumentController',          'employee_documents.view'],
+    'certificates'       => ['CertificateController',       'certificates.create'],
+    'expirations'        => ['ExpirationController',        'expirations.view'],
+    'schedules'          => ['ScheduleController',          'schedules.view'],
+    'birthdays'          => ['BirthdayController',          'birthdays.view'],
+    'recruitment'        => ['RecruitmentController',       'recruitment.view'],
+    'talent_pool'        => ['TalentPoolController',        'talent_pool.view'],
+    'notifications'      => ['NotificationController',      null], // notificações do próprio usuário (núcleo)
+    'users'              => ['UserController',              'user_links.view'],
+    'departments'        => ['DepartmentController',        'departments.view'],
+    'positions'          => ['PositionController',          'positions.view'],
+    'public_recruitment' => ['PublicRecruitmentController', null], // pública (is_public)
+    'privacy'            => ['PrivacyController',           null], // pública (is_public)
+    'search'             => ['SearchController',            null], // resultados filtrados por core_can()
+    'scores'             => ['ScoreController',             null], // gates por ação (scores.create/.delete)
+    'compliments'        => ['ComplimentController',        null], // gates por ação (compliments.create/.delete)
+    'my'                 => ['MyController',                'my.view'],
+    'vacations'          => ['VacationController',          'vacations.view'],
+    'shifts'             => ['ShiftController',             'shifts.view'],
+    'onboarding'         => ['OnboardingController',        'onboarding.view'],
+    'announcements'      => ['AnnouncementController',      'announcements.view'],
+    'surveys'            => ['SurveyController',            'surveys.view'],
+    'trainings'          => ['TrainingController',          'trainings.view'],
+    'salary_history'     => ['SalaryHistoryController',     null], // gates por ação (salary_history.create/.delete)
+    'dependents'         => ['DependentController',         null], // gates por ação (dependents.create/.delete)
+    'requests'           => ['RequestController',           null], // gates por ação (requests.view/.create/.respond)
+    'warnings'           => ['WarningController',           null], // gates por ação (warnings.create/.delete)
+    'signatures'         => ['SignatureController',         null], // gates por ação (signatures.create/.view)
+    'files'              => ['DownloadController',          null], // valida a .view do recurso dono do arquivo
 ];
 
-if (isset($routes[$page])) {
-    $controllerName = $routes[$page];
-    if (class_exists($controllerName)) {
-        $controller = new $controllerName();
-        if (method_exists($controller, $action)) {
-            $controller->$action();
-        } else {
-            $controller->index();
-        }
+if (!isset($routes[$page])) {
+    // Rota desconhecida → raiz do módulo (que decide entre dashboard e my).
+    header('Location: index.php?m=rh');
+    exit;
+}
+
+[$controllerName, $minPerm] = $routes[$page];
+
+// Gate de rota: usuário sem a permissão mínima recebe 403.
+if ($minPerm !== null) {
+    core_require($minPerm);
+}
+
+if (class_exists($controllerName)) {
+    $controller = new $controllerName();
+    if (method_exists($controller, $action)) {
+        $controller->$action();
     } else {
-        Session::flash('error', 'Página não encontrada.');
-        header('Location: index.php?m=rh&page=dashboard');
-        exit;
+        $controller->index();
     }
 } else {
-    header('Location: index.php?m=rh&page=dashboard');
+    Session::flash('error', 'Página não encontrada.');
+    header('Location: index.php?m=rh');
     exit;
 }

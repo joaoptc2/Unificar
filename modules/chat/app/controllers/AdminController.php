@@ -1,11 +1,15 @@
 <?php
 /**
- * AdminController — Painel administrativo do módulo (managers e admins).
+ * AdminController — Painel administrativo do módulo.
  *
  * A gestão de USUÁRIOS saiu do módulo: usuários são globais e são
  * administrados no núcleo (?m=admin&a=users). Aqui ficam apenas as telas
  * de domínio do chat: dashboard, configurações, emojis, categorias,
  * exportação e o log de auditoria (global, filtrado por module='chat').
+ *
+ * Gates por MICROPERMISSÃO em cada ação (não mais por nível):
+ *   dashboard/auditoria → admin.view; configurações → admin.settings;
+ *   exportação → admin.export; emojis → emojis.*; categorias → categories.*.
  */
 class AdminController
 {
@@ -16,12 +20,6 @@ class AdminController
         $this->db = Database::getInstance();
 
         Auth::requireLogin();
-
-        if (!Auth::isAdmin() && !Auth::isManager()) {
-            http_response_code(403);
-            echo 'Acesso negado.';
-            exit;
-        }
     }
 
     /* ------------------------------------------------------------------
@@ -30,6 +28,8 @@ class AdminController
      * ----------------------------------------------------------------*/
     public function index(): void
     {
+        core_require('admin.view');
+
         // Usuários ativos (tabela global)
         $totalUsers = User::count('active = 1');
 
@@ -60,6 +60,8 @@ class AdminController
      * ----------------------------------------------------------------*/
     public function settings(): void
     {
+        core_require('admin.settings');
+
         $stmt = $this->db->query('SELECT `key`, `value` FROM chat_settings ORDER BY `key` ASC');
         $rows = $stmt->fetchAll();
 
@@ -76,6 +78,7 @@ class AdminController
 
     public function updateSettings(): void
     {
+        core_require('admin.settings');
         Csrf::check();
 
         $allowedKeys = ['app_name','allow_registration','primary_color','sidebar_bg','sidebar_text'];
@@ -105,6 +108,8 @@ class AdminController
      * ----------------------------------------------------------------*/
     public function audit(): void
     {
+        core_require('admin.view');
+
         $search = [
             'user'        => Sanitize::get('user'),
             'action_type' => Sanitize::get('action_type'),
@@ -158,6 +163,7 @@ class AdminController
     // ---- CUSTOM EMOJIS (#29) ----
     public function emojis(): void
     {
+        core_require('emojis.view');
         $emojis = $this->db->query('SELECT ce.*, u.name AS creator_name FROM chat_custom_emojis ce LEFT JOIN users u ON u.id = ce.created_by ORDER BY ce.name ASC')->fetchAll();
         View::render('admin/emojis', [
             'pageTitle' => 'Emojis Personalizados',
@@ -168,6 +174,7 @@ class AdminController
 
     public function addEmoji(): void
     {
+        core_require('emojis.create');
         Csrf::check();
         $name = Sanitize::slug(Sanitize::post('name'));
         if (!$name) {
@@ -196,6 +203,7 @@ class AdminController
 
     public function deleteEmoji(): void
     {
+        core_require('emojis.delete');
         Csrf::check();
         $id = Sanitize::int($_POST['id'] ?? 0);
         if ($id > 0) {
@@ -214,6 +222,7 @@ class AdminController
     // ---- EXPORT (#11) ----
     public function export(): void
     {
+        core_require('admin.export');
         $channels = $this->db->query('SELECT id, name FROM chat_channels WHERE is_archived = 0 ORDER BY name ASC')->fetchAll();
         $exports = $this->db->query('SELECT el.*, u.name AS user_name FROM chat_export_logs el LEFT JOIN users u ON u.id = el.user_id ORDER BY el.created_at DESC LIMIT 20')->fetchAll();
 
@@ -227,6 +236,7 @@ class AdminController
 
     public function doExport(): void
     {
+        core_require('admin.export');
         Csrf::check();
         $type      = Sanitize::post('type');
         $channelId = Sanitize::int($_POST['channel_id'] ?? 0);
@@ -300,6 +310,7 @@ class AdminController
     // ---- CHANNEL CATEGORIES (#30) ----
     public function categories(): void
     {
+        core_require('categories.view');
         $categories = $this->db->query('SELECT * FROM chat_channel_categories ORDER BY order_num ASC')->fetchAll();
         $channels = $this->db->query('SELECT id, name, category_id FROM chat_channels WHERE is_archived = 0 ORDER BY name ASC')->fetchAll();
 
@@ -313,10 +324,11 @@ class AdminController
 
     public function saveCategory(): void
     {
+        $id = Sanitize::int($_POST['id'] ?? 0);
+        core_require($id > 0 ? 'categories.edit' : 'categories.create');
         Csrf::check();
         $name  = Sanitize::post('name');
         $order = Sanitize::int($_POST['order_num'] ?? 0);
-        $id    = Sanitize::int($_POST['id'] ?? 0);
 
         if (!$name) { Session::flash('error', 'Nome obrigatório.'); header('Location: index.php?m=chat&page=admin&action=categories'); exit; }
 
@@ -342,6 +354,7 @@ class AdminController
 
     public function deleteCategory(): void
     {
+        core_require('categories.delete');
         Csrf::check();
         $id = Sanitize::int($_POST['id'] ?? 0);
         if ($id > 0) {

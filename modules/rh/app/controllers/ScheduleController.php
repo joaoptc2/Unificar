@@ -13,7 +13,7 @@ class ScheduleController
 
     public function index(): void
     {
-        Auth::requirePermission('schedules', 'view');
+        core_require('schedules.view');
 
         $employees = $this->db->query(
             "SELECT id, full_name FROM rh_employees WHERE status = 'ativo' ORDER BY full_name"
@@ -32,7 +32,7 @@ class ScheduleController
      */
     public function events(): void
     {
-        Auth::requirePermission('schedules', 'view');
+        core_require('schedules.view');
 
         $start = Sanitize::date(substr((string)($_GET['start'] ?? ''), 0, 10)) ?? date('Y-m-01');
         $end   = Sanitize::date(substr((string)($_GET['end']   ?? ''), 0, 10)) ?? date('Y-m-t');
@@ -75,7 +75,7 @@ class ScheduleController
 
     public function create(): void
     {
-        Auth::requirePermission('schedules', 'create');
+        core_require('schedules.create');
 
         $employees = $this->db->query("SELECT id, full_name FROM rh_employees WHERE status = 'ativo' ORDER BY full_name")->fetchAll();
         $defaultDate = Sanitize::date($_GET['date'] ?? '') ?: date('Y-m-d');
@@ -92,7 +92,7 @@ class ScheduleController
 
     public function store(): void
     {
-        Auth::requirePermission('schedules', 'create');
+        core_require('schedules.create');
         Csrf::check();
 
         $data = $this->getFormData();
@@ -122,7 +122,7 @@ class ScheduleController
 
     public function edit(): void
     {
-        Auth::requirePermission('schedules', 'edit');
+        core_require('schedules.edit');
 
         $id = Sanitize::int($_GET['id'] ?? 0);
         $stmt = $this->db->prepare('SELECT * FROM rh_schedules WHERE id = ?');
@@ -148,7 +148,7 @@ class ScheduleController
 
     public function update(): void
     {
-        Auth::requirePermission('schedules', 'edit');
+        core_require('schedules.edit');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -173,7 +173,7 @@ class ScheduleController
 
     public function delete(): void
     {
-        Auth::requirePermission('schedules', 'delete');
+        core_require('schedules.delete');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);

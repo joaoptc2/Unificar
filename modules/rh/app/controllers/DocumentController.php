@@ -13,14 +13,14 @@ class DocumentController
 
     public function index(): void
     {
-        Auth::requirePermission('documents', 'view');
+        core_require('employee_documents.view');
         header('Location: index.php?m=rh&page=employees');
         exit;
     }
 
     public function create(): void
     {
-        Auth::requirePermission('documents', 'create');
+        core_require('employee_documents.create');
         $employeeId = Sanitize::int($_GET['employee_id'] ?? 0);
 
         $stmt = $this->db->prepare('SELECT id, full_name FROM rh_employees WHERE id = ?');
@@ -42,7 +42,7 @@ class DocumentController
 
     public function store(): void
     {
-        Auth::requirePermission('documents', 'create');
+        core_require('employee_documents.create');
         Csrf::check();
 
         $employeeId = Sanitize::int($_POST['employee_id'] ?? 0);
@@ -78,7 +78,7 @@ class DocumentController
 
     public function delete(): void
     {
-        Auth::requirePermission('documents', 'delete');
+        core_require('employee_documents.delete');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);

@@ -11,10 +11,10 @@ $action = $_GET['action'] ?? 'list';
 // PROCESSAR POST
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-    requireWrite();
     $act = $_POST['action'] ?? '';
 
     if ($act === 'add' || $act === 'edit') {
+        core_require($act === 'add' ? 'equipment.create' : 'equipment.edit');
         $id          = (int)($_POST['id'] ?? 0);
         $name        = trim($_POST['name'] ?? '');
         $code        = trim($_POST['code'] ?? '') ?: null;
@@ -51,6 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         redirect(url('equipment'));
     }
     if ($act === 'delete') {
+        core_require('equipment.delete');
         $id = (int)($_POST['id'] ?? 0);
         $deactivationReason = trim($_POST['deactivation_reason'] ?? '');
         try {
@@ -62,17 +63,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         redirect(url('equipment'));
     }
     if ($act === 'add_category') {
+        core_require('equipment.create');
         $catName = trim($_POST['cat_name'] ?? '');
         if ($catName !== '') { db()->prepare("INSERT INTO man_equipment_categories (hospital_id, name) VALUES (?, ?)")->execute([$hid, $catName]); flash('success', 'Categoria adicionada.'); }
         redirect(url('equipment', ['action' => 'categories']));
     }
     if ($act === 'delete_category') {
+        core_require('equipment.delete');
         $catId = (int)($_POST['cat_id'] ?? 0);
         db()->prepare("DELETE FROM man_equipment_categories WHERE id = ? AND hospital_id = ?")->execute([$catId, $hid]);
         flash('success', 'Categoria removida.');
         redirect(url('equipment', ['action' => 'categories']));
     }
     if ($act === 'edit_category') {
+        core_require('equipment.edit');
         $catId = (int)($_POST['cat_id'] ?? 0);
         $catName = trim($_POST['cat_name'] ?? '');
         if ($catName !== '') { db()->prepare("UPDATE man_equipment_categories SET name = ? WHERE id = ? AND hospital_id = ?")->execute([$catName, $catId, $hid]); flash('success', 'Categoria atualizada.'); }
@@ -103,6 +107,7 @@ if ($action === 'categories'):
 </div>
 
 <div class="card border-0 shadow-sm">
+    <?php if (core_can('equipment.create')): ?>
     <div class="card-header bg-white">
         <form method="POST" action="<?php echo url('equipment', ['action'=>'categories']); ?>" class="row g-2 align-items-end">
             <?php echo csrfField(); ?>
@@ -115,6 +120,7 @@ if ($action === 'categories'):
             </div>
         </form>
     </div>
+    <?php endif; ?>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-sm table-hover mb-0">
@@ -123,6 +129,7 @@ if ($action === 'categories'):
                 <?php foreach ($categories as $cat): ?>
                 <tr>
                     <td>
+                        <?php if (core_can('equipment.edit')): ?>
                         <form method="POST" action="<?php echo url('equipment', ['action'=>'categories']); ?>" class="d-flex gap-2 align-items-center">
                             <?php echo csrfField(); ?>
                             <input type="hidden" name="action" value="edit_category">
@@ -130,14 +137,19 @@ if ($action === 'categories'):
                             <input type="text" class="form-control form-control-sm" name="cat_name" value="<?php echo e($cat['name']); ?>" required>
                             <button type="submit" class="btn btn-outline-primary btn-action"><i class="bi bi-check-lg"></i></button>
                         </form>
+                        <?php else: ?>
+                            <?php echo e($cat['name']); ?>
+                        <?php endif; ?>
                     </td>
                     <td class="text-end">
+                        <?php if (core_can('equipment.delete')): ?>
                         <form method="POST" action="<?php echo url('equipment', ['action'=>'categories']); ?>" class="d-inline">
                             <?php echo csrfField(); ?>
                             <input type="hidden" name="action" value="delete_category">
                             <input type="hidden" name="cat_id" value="<?php echo $cat['id']; ?>">
                             <button type="submit" class="btn btn-outline-danger btn-action" data-confirm="Excluir esta categoria?"><i class="bi bi-trash"></i></button>
                         </form>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -408,7 +420,7 @@ else:
     <h1><i class="bi bi-hdd-rack me-2"></i>Equipamentos</h1>
     <div class="d-flex gap-2">
         <a href="<?php echo url('equipment', ['action'=>'categories']); ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-tag me-1"></i> Categorias</a>
-        <?php if (canWrite()): ?>
+        <?php if (core_can('equipment.create')): ?>
             <button onclick="openModal('modalAdd')" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Novo Equipamento</button>
         <?php endif; ?>
     </div>
@@ -465,7 +477,7 @@ else:
                             <div class="d-inline-flex gap-1">
                                 <a href="<?php echo url('equipment', ['action'=>'detail','id'=>$eq['id']]); ?>" class="btn btn-outline-primary btn-action" title="Ver detalhes"><i class="bi bi-eye"></i></a>
                                 <a href="<?php echo url('equipment', ['action'=>'edit','id'=>$eq['id']]); ?>" class="btn btn-outline-warning btn-action" title="Editar"><i class="bi bi-pencil"></i></a>
-                                <?php if (canWrite()): ?>
+                                <?php if (core_can('equipment.delete')): ?>
                                 <button type="button" class="btn btn-outline-danger btn-action" title="Desativar" onclick="openModal('modalDeactivate<?php echo $eq['id']; ?>')"><i class="bi bi-x-circle"></i></button>
                                 <?php endif; ?>
                             </div>
@@ -484,7 +496,7 @@ else:
     <?php endif; ?>
 </div>
 
-<?php if (canWrite()): ?>
+<?php if (core_can('equipment.create')): ?>
 <!-- MODAL NOVO EQUIPAMENTO -->
 <div class="modal fade" id="modalAdd" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -540,6 +552,9 @@ else:
     </div>
 </div>
 
+<?php endif; ?>
+
+<?php if (core_can('equipment.delete')): ?>
 <?php foreach ($pg['rows'] as $eq): ?>
 <!-- Modal Desativar Equipamento #<?php echo $eq['id']; ?> -->
 <div class="modal fade" id="modalDeactivate<?php echo $eq['id']; ?>" tabindex="-1">
