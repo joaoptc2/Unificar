@@ -14,3 +14,7 @@
 .DS_Store
 Thumbs.db
 *.swp
+
+# Cache de runtime dos módulos
+modules/*/storage/cache/*
+!modules/*/storage/cache/.gitkeep

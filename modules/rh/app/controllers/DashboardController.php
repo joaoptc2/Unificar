@@ -80,6 +80,7 @@ class DashboardController
         $chartsData = self::buildCharts($cached);
 
         $viewData = array_merge($cached, [
+            'currentMonth'        => $currentMonth,
             'unreadNotifications' => $unreadNotifications,
             'chartsData'          => $chartsData,
             'pageTitle'           => 'Dashboard',
