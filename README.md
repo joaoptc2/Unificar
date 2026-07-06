@@ -67,21 +67,28 @@ módulo, que mantém seu roteamento interno:
 | `?m=admin` | administração central (admins globais) |
 | `?m=auth&a=login/profile/security` | login, perfil, senha/2FA |
 
-## Permissões
+## Permissões (micropermissões + grupos)
 
-Cada módulo declara seus próprios níveis no manifesto
-(`modules/<slug>/module.php`):
+Cada função de cada módulo é uma **micropermissão** no formato
+`recurso.ação` (ex.: `documents.edit`, `service_orders.create`), declarada
+no manifesto do módulo (`modules/<slug>/module.php`, chave `permissions`).
 
-| Módulo | Níveis |
-|---|---|
-| Documentos | Administrador, Gestor, Operador |
-| Comunicação | Administrador, Gestor, Membro |
-| RH | Administrador, RH, Gestor, Visualizador, Funcionário |
-| Manutenção | Administrador, Gestor, Manutenção, Limpeza, Visualizador |
+Como gerenciar (em **Administração**):
 
-A matriz usuário × módulo é gerenciada em **Administração → Usuários e
-permissões**. "— sem acesso —" oculta o módulo do menu superior do usuário.
-**Administradores globais** têm acesso total automático.
+- **Grupos de permissões** — crie um grupo (ex.: "Gestores de RH"), marque
+  as permissões na árvore (módulo → recurso → Visualizar/Criar/Editar/
+  Excluir/...) e adicione os membros: todos herdam as permissões do grupo.
+- **Usuários → Permissões** — a mesma árvore por usuário, mostrando o que
+  vem herdado dos grupos (ícone <i>grupo</i>). Marcar algo não herdado cria
+  uma concessão individual; **desmarcar algo herdado cria uma exceção
+  (negação) individual**, que prevalece sobre o grupo.
+- **Modelos** — botões de atalho em cada módulo (ex.: "Gestor", "Membro")
+  preenchem a árvore com o conjunto típico; ajuste depois caixa a caixa.
+
+Regras de resolução: admin global tem tudo; senão, união dos grupos do
+usuário, sobreposta pelas exceções individuais. Um usuário só vê no menu
+superior os módulos em que possui **alguma** permissão; dentro do módulo,
+menus, botões e ações são filtrados permissão a permissão.
 
 ## Integração com o Moodle
 
@@ -117,8 +124,12 @@ para o banco unificado (tabelas prefixadas: `doc_`, `chat_`, `rh_`,
 2. Execute os scripts de `sql/legacy-migration/` **depois** da instalação.
 3. Usuários são unificados **por e-mail**: quem existia em mais de um
    sistema vira uma conta única com os acessos correspondentes em cada
-   módulo (os papéis antigos são convertidos em `user_module_access`).
-4. Senhas migradas continuam válidas (bcrypt preservado). Contas
+   módulo (os papéis antigos são gravados em `user_module_access`).
+4. Converta os papéis antigos em micropermissões:
+   `php scripts/migrate_role_grants.php` (use `--dry-run` para simular).
+   Cada nível legado vira o conjunto de permissões do modelo homônimo do
+   módulo; depois organize os usuários em grupos pela administração.
+5. Senhas migradas continuam válidas (bcrypt preservado). Contas
    duplicadas com senhas diferentes mantêm a senha do primeiro sistema
    migrado — os demais acessos ficam sob o mesmo login.
 
