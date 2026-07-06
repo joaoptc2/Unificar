@@ -15,6 +15,14 @@
     e departamento cada usuário representa.
 </div>
 
+<?php // Formulários fora da tabela (HTML válido) — campos associados via atributo form="..." ?>
+<?php foreach ($users as $u): ?>
+    <form method="POST" action="index.php?m=rh&page=users&action=link" id="linkForm<?= (int)$u['id'] ?>">
+        <?= Csrf::field() ?>
+        <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
+    </form>
+<?php endforeach; ?>
+
 <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -48,35 +56,31 @@
                             <?php $role = $u['rh_role'] ?: (!empty($u['is_admin']) ? 'admin' : '—'); ?>
                             <span class="badge text-bg-light border"><?= Sanitize::e(ucfirst((string)$role)) ?></span>
                         </td>
-                        <form method="POST" action="index.php?m=rh&page=users&action=link">
-                            <?= Csrf::field() ?>
-                            <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
-                            <td>
-                                <select name="employee_id" class="form-select form-select-sm">
-                                    <option value="">— sem vínculo —</option>
-                                    <?php foreach ($employees as $emp): ?>
-                                        <option value="<?= (int)$emp['id'] ?>" <?= (int)($u['employee_id'] ?? 0) === (int)$emp['id'] ? 'selected' : '' ?>>
-                                            <?= Sanitize::e($emp['full_name']) ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </td>
-                            <td>
-                                <select name="department_id" class="form-select form-select-sm">
-                                    <option value="">—</option>
-                                    <?php foreach ($departments as $dep): ?>
-                                        <option value="<?= (int)$dep['id'] ?>" <?= (int)($u['department_id'] ?? 0) === (int)$dep['id'] ? 'selected' : '' ?>>
-                                            <?= Sanitize::e($dep['name']) ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </td>
-                            <td class="text-end">
-                                <button type="submit" class="btn btn-sm btn-primary">
-                                    <i class="bi bi-check-lg"></i> Salvar
-                                </button>
-                            </td>
-                        </form>
+                        <td>
+                            <select name="employee_id" form="linkForm<?= (int)$u['id'] ?>" class="form-select form-select-sm">
+                                <option value="">— sem vínculo —</option>
+                                <?php foreach ($employees as $emp): ?>
+                                    <option value="<?= (int)$emp['id'] ?>" <?= (int)($u['employee_id'] ?? 0) === (int)$emp['id'] ? 'selected' : '' ?>>
+                                        <?= Sanitize::e($emp['full_name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </td>
+                        <td>
+                            <select name="department_id" form="linkForm<?= (int)$u['id'] ?>" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                <?php foreach ($departments as $dep): ?>
+                                    <option value="<?= (int)$dep['id'] ?>" <?= (int)($u['department_id'] ?? 0) === (int)$dep['id'] ? 'selected' : '' ?>>
+                                        <?= Sanitize::e($dep['name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </td>
+                        <td class="text-end">
+                            <button type="submit" form="linkForm<?= (int)$u['id'] ?>" class="btn btn-sm btn-primary">
+                                <i class="bi bi-check-lg"></i> Salvar
+                            </button>
+                        </td>
                     </tr>
                 <?php endforeach; endif; ?>
                 </tbody>

@@ -72,7 +72,7 @@ class DashboardController
         });
 
         // --- Dados por-usuário (fora do cache compartilhado) ---------------
-        $stmt = $this->db->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND module = 'rh' AND read_at IS NULL');
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND module = 'rh' AND read_at IS NULL");
         $stmt->execute([Session::userId()]);
         $unreadNotifications = (int)$stmt->fetchColumn();
 
