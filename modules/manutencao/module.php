@@ -102,8 +102,8 @@ return [
 
     /**
      * MODELOS (presets): atalhos na UI de permissões + base do conversor de
-     * níveis legados (a chave É o nível legado). Reproduzem o acesso do
-     * canAccessModule()/canWrite() antigos, com curingas '*' e 'recurso.*'.
+     * níveis legados (a chave É o nível legado). Reproduzem o mapa de acesso
+     * por página do ManuHosp v4, com curingas '*' e 'recurso.*'.
      */
     'presets' => [
         'admin' => [

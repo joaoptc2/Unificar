@@ -54,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
     // --- SETORES ---
     if ($act === 'add_sector') {
+        core_require('sectors.create');
         $name = trim($_POST['sector_name'] ?? '');
         $desc = trim($_POST['sector_desc'] ?? '') ?: null;
         if ($name !== '') {
@@ -64,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         redirect(url('admin', ['tab' => 'sectors']));
     }
     if ($act === 'edit_sector') {
+        core_require('sectors.edit');
         $id   = (int)($_POST['sector_id'] ?? 0);
         $name = trim($_POST['sector_name'] ?? '');
         $desc = trim($_POST['sector_desc'] ?? '') ?: null;
@@ -76,6 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         redirect(url('admin', ['tab' => 'sectors']));
     }
     if ($act === 'delete_sector') {
+        core_require('sectors.delete');
         $id = (int)($_POST['sector_id'] ?? 0);
         db()->prepare("UPDATE man_equipment SET sector_id = NULL WHERE sector_id = ? AND hospital_id = ?")->execute([$id, $hid]);
         db()->prepare("DELETE FROM man_sectors WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
@@ -105,16 +108,20 @@ ob_start();
 </div>
 
 <ul class="nav nav-tabs mb-4">
+    <?php if (core_can('sectors.view')): ?>
     <li class="nav-item">
         <a class="nav-link <?php echo $tab==='sectors'?'active':''; ?>" href="<?php echo url('admin', ['tab'=>'sectors']); ?>">
             <i class="bi bi-diagram-3 me-1"></i>Setores
         </a>
     </li>
+    <?php endif; ?>
+    <?php if (core_can('org_settings.edit')): ?>
     <li class="nav-item">
         <a class="nav-link <?php echo $tab==='hospital'?'active':''; ?>" href="<?php echo url('admin', ['tab'=>'hospital']); ?>">
             <i class="bi bi-building me-1"></i>Hospital
         </a>
     </li>
+    <?php endif; ?>
     <li class="nav-item">
         <a class="nav-link" href="<?php echo core_url('index.php?m=admin&a=users'); ?>">
             <i class="bi bi-people me-1"></i>Usuários <i class="bi bi-box-arrow-up-right small"></i>
@@ -161,6 +168,7 @@ else:
     <a href="<?php echo core_url('index.php?m=admin&a=users'); ?>" class="alert-link">administração central da plataforma</a>.
 </div>
 
+<?php if (core_can('sectors.create')): ?>
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-header bg-white fw-semibold"><i class="bi bi-plus-lg me-1"></i> Adicionar Setor</div>
     <div class="card-body">
@@ -173,6 +181,7 @@ else:
         </form>
     </div>
 </div>
+<?php endif; ?>
 
 <div class="card border-0 shadow-sm">
     <div class="card-header bg-white fw-semibold"><i class="bi bi-diagram-3 me-1"></i> Setores (<?php echo count($sectorsList); ?>)</div>
@@ -191,16 +200,21 @@ else:
                         <td><span class="badge badge-<?php echo $s['status']; ?>"><?php echo $s['status'] === 'active' ? 'Ativo' : 'Inativo'; ?></span></td>
                         <td class="text-end">
                             <div class="d-inline-flex gap-1">
+                                <?php if (core_can('sectors.edit')): ?>
                                 <button type="button" onclick="toggleSectorEdit(<?php echo $s['id']; ?>)" class="btn btn-outline-warning btn-action" title="Editar"><i class="bi bi-pencil"></i></button>
+                                <?php endif; ?>
+                                <?php if (core_can('sectors.delete')): ?>
                                 <form method="POST" action="<?php echo url('admin', ['tab'=>'sectors']); ?>" class="d-inline">
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="delete_sector">
                                     <input type="hidden" name="sector_id" value="<?php echo $s['id']; ?>">
                                     <button type="submit" class="btn btn-outline-danger btn-action" data-confirm="Excluir setor '<?php echo e($s['name']); ?>'?"><i class="bi bi-trash"></i></button>
                                 </form>
+                                <?php endif; ?>
                             </div>
                         </td>
                     </tr>
+                    <?php if (core_can('sectors.edit')): ?>
                     <tr id="sector-edit-<?php echo $s['id']; ?>" class="table-info" style="display:none">
                         <td>
                             <form id="sector-form-<?php echo $s['id']; ?>" method="POST" action="<?php echo url('admin', ['tab'=>'sectors']); ?>">
@@ -219,6 +233,7 @@ else:
                             </div>
                         </td>
                     </tr>
+                    <?php endif; ?>
                     <?php endforeach; ?>
                     </tbody>
                 </table>
