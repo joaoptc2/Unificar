@@ -4,9 +4,8 @@
  * Aqui só se gerencia a associação de setores; criação/edição/senha/papel
  * ficam na administração central da plataforma.
  */
-$role_names  = ['admin' => 'Administrador', 'gestor' => 'Gestor', 'operador' => 'Operador'];
-$role_colors = ['admin' => 'danger', 'gestor' => 'warning', 'operador' => 'info'];
-$central_url = core_url('index.php?m=admin&a=users');
+$central_url     = core_url('index.php?m=admin&a=users');
+$is_global_admin = !empty(core_user()['is_admin']);
 
 // Pré-carrega setores de cada usuário para exibir na tabela
 $user_sector_map = [];
@@ -21,7 +20,7 @@ foreach ($users as $u) {
 <div class="page-header">
     <h1><i class="bi bi-people me-2"></i>Usuários &amp; Setores</h1>
     <div class="d-flex gap-2">
-        <?php if (is_admin()): ?>
+        <?php if ($is_global_admin): ?>
         <a href="<?php echo e($central_url); ?>" class="btn btn-primary btn-sm">
             <i class="bi bi-people-fill me-1"></i>Administração central de usuários
         </a>
@@ -34,8 +33,8 @@ foreach ($users as $u) {
 
 <div class="alert alert-info small">
     <i class="bi bi-info-circle me-1"></i>
-    Usuários agora são <strong>globais da plataforma</strong>. Criação, edição, senha e nível de
-    acesso ao módulo são gerenciados na administração central<?php if (is_admin()): ?>
+    Usuários agora são <strong>globais da plataforma</strong>. Criação, edição, senha e
+    permissões no módulo são gerenciados na administração central<?php if ($is_global_admin): ?>
     (<a href="<?php echo e($central_url); ?>">abrir</a>)<?php endif; ?>.
     Aqui você define apenas <strong>quais setores</strong> cada usuário acessa neste módulo.
 </div>
@@ -71,7 +70,6 @@ foreach ($users as $u) {
                     <thead>
                         <tr>
                             <th>Usuário</th>
-                            <th>Papel no módulo</th>
                             <th>Setores</th>
                             <th>Último acesso</th>
                             <th>Status</th>
@@ -80,20 +78,17 @@ foreach ($users as $u) {
                     </thead>
                     <tbody>
                     <?php foreach ($users as $u):
-                        $role_name  = $role_names[$u['module_role']]  ?? '—';
-                        $role_color = $role_colors[$u['module_role']] ?? 'secondary';
-                        $u_sectors  = $user_sector_map[$u['id']]  ?? [];
+                        $u_sectors = $user_sector_map[$u['id']] ?? [];
                     ?>
                         <tr>
                             <td>
-                                <div class="fw-semibold"><?php echo e($u['name']); ?></div>
+                                <div class="fw-semibold">
+                                    <?php echo e($u['name']); ?>
+                                    <?php if (!empty($u['is_admin'])): ?>
+                                        <span class="badge bg-dark" title="Administrador global da plataforma">Global</span>
+                                    <?php endif; ?>
+                                </div>
                                 <small class="text-muted"><?php echo e($u['email']); ?></small>
-                            </td>
-                            <td>
-                                <span class="badge bg-<?php echo $role_color; ?>"><?php echo e($role_name); ?></span>
-                                <?php if (!empty($u['is_admin'])): ?>
-                                    <span class="badge bg-dark" title="Administrador global da plataforma">Global</span>
-                                <?php endif; ?>
                             </td>
                             <td>
                                 <?php if (empty($u_sectors)): ?>

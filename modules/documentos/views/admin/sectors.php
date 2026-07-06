@@ -1,9 +1,11 @@
 <div class="page-header">
     <h1><i class="bi bi-diagram-3 me-2"></i>Gerenciar Setores</h1>
     <div class="d-flex gap-2">
+        <?php if (core_can('sectors.create')): ?>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalSector" onclick="clearSectorForm()">
             <i class="bi bi-plus-lg me-1"></i>Novo Setor
         </button>
+        <?php endif; ?>
         <a href="<?php echo url('admin'); ?>" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>Voltar
         </a>
@@ -44,17 +46,21 @@
                                 </span>
                             </td>
                             <td class="text-end">
+                                <?php if (core_can('sectors.edit')): ?>
                                 <button class="btn btn-outline-warning btn-action"
                                         onclick="editSector(<?php echo e(json_encode($s)); ?>)"
                                         data-bs-toggle="tooltip" title="Editar">
                                     <i class="bi bi-pencil"></i>
                                 </button>
+                                <?php endif; ?>
+                                <?php if (core_can('sectors.delete')): ?>
                                 <form method="POST" action="<?php echo url('admin/sector_delete'); ?>" class="d-inline"
                                       data-confirm="Remover este setor?">
                                     <?php echo csrf_field(); ?>
                                     <input type="hidden" name="id" value="<?php echo (int) $s['id']; ?>">
                                     <button type="submit" class="btn btn-outline-danger btn-action"><i class="bi bi-trash"></i></button>
                                 </form>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>

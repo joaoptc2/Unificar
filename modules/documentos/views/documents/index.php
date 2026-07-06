@@ -13,11 +13,15 @@ $status_labels = [
 <div class="page-header">
     <h1><i class="bi bi-folder2-open me-2"></i>Documentos</h1>
     <div class="d-flex gap-2">
+        <?php if (core_can('documents.export')): ?>
         <a href="<?php echo url('documents/export' . ($export_qs ? '?' . $export_qs : '')); ?>"
            class="btn btn-outline-primary btn-sm"><i class="bi bi-download me-1"></i>CSV</a>
+        <?php endif; ?>
+        <?php if (core_can('documents.create')): ?>
         <a href="<?php echo url('documents/create'); ?>" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i>Novo Documento
         </a>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -76,9 +80,11 @@ $status_labels = [
             <div class="text-center py-5">
                 <i class="bi bi-folder2-open display-1 text-muted"></i>
                 <p class="text-muted mt-2">Nenhum documento encontrado.</p>
+                <?php if (core_can('documents.create')): ?>
                 <a href="<?php echo url('documents/create'); ?>" class="btn btn-sm btn-primary">
                     <i class="bi bi-plus-lg me-1"></i>Cadastrar
                 </a>
+                <?php endif; ?>
             </div>
         <?php else: ?>
             <div class="table-responsive">
@@ -119,8 +125,10 @@ $status_labels = [
                             <td class="text-end">
                                 <a href="<?php echo url('documents/view?id=' . $doc['id']); ?>"
                                    class="btn btn-outline-primary btn-action"><i class="bi bi-eye"></i></a>
+                                <?php if (core_can('documents.edit')): ?>
                                 <a href="<?php echo url('documents/edit?id=' . $doc['id']); ?>"
                                    class="btn btn-outline-warning btn-action"><i class="bi bi-pencil"></i></a>
+                                <?php endif; ?>
                                 <?php if (!empty($doc['file_path'])): ?>
                                 <a href="<?php echo url('documents/download?id=' . $doc['id']); ?>"
                                    class="btn btn-outline-success btn-action"><i class="bi bi-download"></i></a>

@@ -1,9 +1,11 @@
 <div class="page-header">
     <h1><i class="bi bi-hospital me-2"></i>Gerenciar Hospitais</h1>
     <div class="d-flex gap-2">
+        <?php if (core_can('hospitals.edit')): ?>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalHospital" onclick="clearForm()">
             <i class="bi bi-plus-lg me-1"></i>Novo Hospital
         </button>
+        <?php endif; ?>
         <a href="<?php echo url('admin'); ?>" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>Voltar
         </a>
@@ -46,6 +48,7 @@
                                 </span>
                             </td>
                             <td class="text-end">
+                                <?php if (core_can('hospitals.edit')): ?>
                                 <button class="btn btn-outline-warning btn-action"
                                         onclick="editHospital(<?php echo e(json_encode($h)); ?>)"
                                         data-bs-toggle="tooltip" title="Editar">
@@ -60,6 +63,7 @@
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </form>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>

@@ -4,7 +4,7 @@
  */
 
 function reports_index($param = null) {
-    require_login();
+    core_require('reports.view');
     $hospital_id = get_hospital_id();
 
     $doc_stats = ['total'=>0, 'expired'=>0, 'expiring'=>0, 'valid'=>0,

@@ -4,7 +4,7 @@
  */
 
 function dashboard_index($param = null) {
-    require_login();
+    core_require('dashboard.view');
 
     $hospital_id = get_hospital_id();
 

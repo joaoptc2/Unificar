@@ -5,7 +5,7 @@
  */
 
 function documents_index($param = null) {
-    require_login();
+    core_require('documents.view');
     $hospital_id = get_hospital_id();
 
     $filter   = (string) query('filter', 'all');
@@ -44,7 +44,7 @@ function documents_index($param = null) {
 }
 
 function documents_create($param = null) {
-    require_login();
+    core_require('documents.create');
     $predefined = document_categories_list();
     view('documents/form', [
         'page_title' => 'Novo Documento',
@@ -55,7 +55,7 @@ function documents_create($param = null) {
 }
 
 function documents_store($param = null) {
-    require_login();
+    core_require('documents.create');
     if (!is_post()) redirect('documents');
     csrf_validate();
 
@@ -98,7 +98,7 @@ function documents_store($param = null) {
 }
 
 function documents_view($param = null) {
-    require_login();
+    core_require('documents.view');
     $id = sanitize_int($param ?: query('id'));
     $hospital_id = get_hospital_id();
 
@@ -133,7 +133,7 @@ function documents_view($param = null) {
 }
 
 function documents_edit($param = null) {
-    require_login();
+    core_require('documents.edit');
     $id = sanitize_int($param ?: query('id'));
     $hospital_id = get_hospital_id();
 
@@ -154,7 +154,7 @@ function documents_edit($param = null) {
 }
 
 function documents_update($param = null) {
-    require_login();
+    core_require('documents.edit');
     if (!is_post()) redirect('documents');
     csrf_validate();
 
@@ -214,7 +214,7 @@ function documents_update($param = null) {
 }
 
 function documents_delete($param = null) {
-    require_login();
+    core_require('documents.delete');
     if (!is_post()) redirect('documents');
     csrf_validate();
     $id = sanitize_int(input('id'));
@@ -230,7 +230,7 @@ function documents_delete($param = null) {
 }
 
 function documents_download($param = null) {
-    require_login();
+    core_require('documents.view');
     $id = sanitize_int($param ?: query('id'));
     $hospital_id = get_hospital_id();
     try { $document = document_find($id, $hospital_id); }
@@ -246,7 +246,7 @@ function documents_download($param = null) {
 }
 
 function documents_download_version($param = null) {
-    require_login();
+    core_require('documents.view');
     $version_id = sanitize_int(query('version_id'));
     $doc_id     = sanitize_int(query('id'));
     $hospital_id = get_hospital_id();
@@ -265,7 +265,7 @@ function documents_download_version($param = null) {
 // ─── Workflow: aprovar, rejeitar, submeter ──────────────────────────────────
 
 function documents_submit($param = null) {
-    require_login();
+    core_require('documents.create');
     if (!is_post()) redirect('documents');
     csrf_validate();
     $id = sanitize_int(input('id'));
@@ -281,8 +281,7 @@ function documents_submit($param = null) {
 }
 
 function documents_approve($param = null) {
-    require_login();
-    require_manager();
+    core_require('documents.approve');
     if (!is_post()) redirect('documents');
     csrf_validate();
     $id = sanitize_int(input('id'));
@@ -299,8 +298,7 @@ function documents_approve($param = null) {
 }
 
 function documents_reject($param = null) {
-    require_login();
-    require_manager();
+    core_require('documents.approve');
     if (!is_post()) redirect('documents');
     csrf_validate();
     $id = sanitize_int(input('id'));
@@ -316,7 +314,7 @@ function documents_reject($param = null) {
 }
 
 function documents_acknowledge($param = null) {
-    require_login();
+    core_require('documents.acknowledge');
     if (!is_post()) redirect('documents');
     csrf_validate();
     $id = sanitize_int(input('id'));
@@ -332,8 +330,7 @@ function documents_acknowledge($param = null) {
 }
 
 function documents_mark_reviewed($param = null) {
-    require_login();
-    require_manager();
+    core_require('documents.approve');
     if (!is_post()) redirect('documents');
     csrf_validate();
     $id = sanitize_int(input('id'));
@@ -351,7 +348,7 @@ function documents_mark_reviewed($param = null) {
 }
 
 function documents_export($param = null) {
-    require_login();
+    core_require('documents.export');
     $hospital_id = get_hospital_id();
     $filter   = (string) query('filter', 'all');
     $search   = clean(query('search', ''));

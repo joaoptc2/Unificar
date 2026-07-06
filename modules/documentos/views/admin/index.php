@@ -3,6 +3,7 @@
 </div>
 
 <div class="row g-3">
+    <?php if (core_can('user_sectors.view')): ?>
     <div class="col-md-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body text-center py-5">
@@ -16,6 +17,8 @@
             </div>
         </div>
     </div>
+    <?php endif; ?>
+    <?php if (core_can('sectors.view')): ?>
     <div class="col-md-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body text-center py-5">
@@ -29,6 +32,8 @@
             </div>
         </div>
     </div>
+    <?php endif; ?>
+    <?php if (core_can('categories.view')): ?>
     <div class="col-md-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body text-center py-5">
@@ -42,7 +47,8 @@
             </div>
         </div>
     </div>
-    <?php if (is_admin()): ?>
+    <?php endif; ?>
+    <?php if (core_can('hospitals.view')): ?>
     <div class="col-md-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body text-center py-5">
@@ -55,6 +61,8 @@
             </div>
         </div>
     </div>
+    <?php endif; ?>
+    <?php if (!empty(core_user()['is_admin'])): // administração central: admin global ?>
     <div class="col-md-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body text-center py-5">

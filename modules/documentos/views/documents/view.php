@@ -21,9 +21,11 @@ $conf_icons  = ['public'=>'bi-globe','internal'=>'bi-building','restricted'=>'bi
         <i class="bi bi-file-earmark-text me-2"></i><?php echo e($document['title']); ?>
     </h1>
     <div class="d-flex gap-2 flex-wrap">
+        <?php if (core_can('documents.edit')): ?>
         <a href="<?php echo url('documents/edit?id=' . $document['id']); ?>" class="btn btn-warning btn-sm">
             <i class="bi bi-pencil me-1"></i>Editar
         </a>
+        <?php endif; ?>
         <a href="<?php echo url('documents'); ?>" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>Voltar
         </a>
@@ -92,7 +94,7 @@ $conf_icons  = ['public'=>'bi-globe','internal'=>'bi-building','restricted'=>'bi
                 <span class="badge bg-primary"><?php echo count($ack_status['acknowledged']); ?> leitura(s)</span>
             </div>
             <div class="card-body">
-                <?php if (!$user_acked): ?>
+                <?php if (!$user_acked && core_can('documents.acknowledge')): ?>
                     <form method="POST" action="<?php echo url('documents/acknowledge'); ?>" class="mb-3">
                         <?php echo csrf_field(); ?>
                         <input type="hidden" name="id" value="<?php echo (int) $document['id']; ?>">
@@ -100,7 +102,7 @@ $conf_icons  = ['public'=>'bi-globe','internal'=>'bi-building','restricted'=>'bi
                             <i class="bi bi-check2-circle me-1"></i>Confirmar que li este documento
                         </button>
                     </form>
-                <?php else: ?>
+                <?php elseif ($user_acked): ?>
                     <div class="alert alert-success py-2 mb-3 small">
                         <i class="bi bi-check-circle me-1"></i>Você já confirmou ciência deste documento.
                     </div>
@@ -149,7 +151,7 @@ $conf_icons  = ['public'=>'bi-globe','internal'=>'bi-building','restricted'=>'bi
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-header bg-white fw-semibold"><i class="bi bi-gear me-1"></i>Ações</div>
             <div class="card-body d-flex flex-column gap-2">
-                <?php if ($status === 'draft'): ?>
+                <?php if ($status === 'draft' && core_can('documents.create')): ?>
                     <form method="POST" action="<?php echo url('documents/submit'); ?>">
                         <?php echo csrf_field(); ?>
                         <input type="hidden" name="id" value="<?php echo (int) $document['id']; ?>">
@@ -159,7 +161,7 @@ $conf_icons  = ['public'=>'bi-globe','internal'=>'bi-building','restricted'=>'bi
                     </form>
                 <?php endif; ?>
 
-                <?php if ($status === 'pending_review' && is_manager()): ?>
+                <?php if ($status === 'pending_review' && core_can('documents.approve')): ?>
                     <form method="POST" action="<?php echo url('documents/approve'); ?>">
                         <?php echo csrf_field(); ?>
                         <input type="hidden" name="id" value="<?php echo (int) $document['id']; ?>">
@@ -176,7 +178,7 @@ $conf_icons  = ['public'=>'bi-globe','internal'=>'bi-building','restricted'=>'bi
                     </form>
                 <?php endif; ?>
 
-                <?php if (($document['next_review_date'] ?? null) && strtotime($document['next_review_date']) <= time() && is_manager()): ?>
+                <?php if (($document['next_review_date'] ?? null) && strtotime($document['next_review_date']) <= time() && core_can('documents.approve')): ?>
                     <form method="POST" action="<?php echo url('documents/mark-reviewed'); ?>">
                         <?php echo csrf_field(); ?>
                         <input type="hidden" name="id" value="<?php echo (int) $document['id']; ?>">
@@ -186,10 +188,13 @@ $conf_icons  = ['public'=>'bi-globe','internal'=>'bi-building','restricted'=>'bi
                     </form>
                 <?php endif; ?>
 
+                <?php if (core_can('documents.edit')): ?>
                 <a href="<?php echo url('documents/edit?id=' . $document['id']); ?>" class="btn btn-warning btn-sm w-100">
                     <i class="bi bi-pencil me-1"></i>Editar
                 </a>
+                <?php endif; ?>
 
+                <?php if (core_can('documents.delete')): ?>
                 <form method="POST" action="<?php echo url('documents/delete'); ?>"
                       data-confirm="Remover este documento?">
                     <?php echo csrf_field(); ?>
@@ -198,6 +203,7 @@ $conf_icons  = ['public'=>'bi-globe','internal'=>'bi-building','restricted'=>'bi
                         <i class="bi bi-trash me-1"></i>Remover
                     </button>
                 </form>
+                <?php endif; ?>
             </div>
         </div>
 

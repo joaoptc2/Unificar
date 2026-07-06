@@ -7,9 +7,11 @@ $st_colors    = ['pending'=>'bg-secondary','in_progress'=>'bg-primary','done'=>'
 <div class="page-header">
     <h1><i class="bi bi-list-check me-2"></i>Planos de Ação</h1>
     <div class="d-flex gap-2">
+        <?php if (core_can('actions.create')): ?>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAction">
             <i class="bi bi-plus-lg me-1"></i>Nova Ação
         </button>
+        <?php endif; ?>
         <?php if ($indicator): ?>
         <a href="<?php echo url('indicators/view?id=' . $indicator['id']); ?>" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>Voltar ao indicador
@@ -95,7 +97,8 @@ $overdue = count(array_filter($actions, fn($a) => $a['due_date'] && $a['status']
                             </td>
                             <td><span class="badge <?php echo $st_colors[$a['status']] ?? 'bg-secondary'; ?>"><?php echo $st_labels[$a['status']] ?? $a['status']; ?></span></td>
                             <td class="text-end">
-                                <?php if ($a['status'] === 'pending'): ?>
+                                <?php if (!core_can('actions.edit')): ?>
+                                <?php elseif ($a['status'] === 'pending'): ?>
                                 <form method="POST" action="<?php echo url('indicators/action_update_status'); ?>" class="d-inline">
                                     <?php echo csrf_field(); ?>
                                     <input type="hidden" name="action_id" value="<?php echo (int) $a['id']; ?>">

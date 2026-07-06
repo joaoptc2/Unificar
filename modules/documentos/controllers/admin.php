@@ -13,7 +13,11 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 function admin_index($param = null) {
-    require_manager();
+    // Painel: acessível a quem enxerga QUALQUER recurso administrativo
+    if (!core_can('sectors.view') && !core_can('user_sectors.view')
+        && !core_can('categories.view') && !core_can('hospitals.view')) {
+        core_require('sectors.view'); // interrompe com 403 do núcleo
+    }
 
     $stats = ['total_users' => 0, 'total_sectors' => 0, 'total_categories' => 0];
     try {
@@ -36,7 +40,7 @@ function admin_index($param = null) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function admin_sectors($param = null) {
-    require_manager();
+    core_require('sectors.view');
     $sectors = [];
     try {
         $sectors = sector_list_all(get_hospital_id());
@@ -51,7 +55,7 @@ function admin_sectors($param = null) {
 }
 
 function admin_sector_store($param = null) {
-    require_manager();
+    core_require('sectors.create');
     if (!is_post()) redirect('admin/sectors');
     csrf_validate();
 
@@ -76,7 +80,7 @@ function admin_sector_store($param = null) {
 }
 
 function admin_sector_update($param = null) {
-    require_manager();
+    core_require('sectors.edit');
     if (!is_post()) redirect('admin/sectors');
     csrf_validate();
 
@@ -98,7 +102,7 @@ function admin_sector_update($param = null) {
 }
 
 function admin_sector_delete($param = null) {
-    require_manager();
+    core_require('sectors.delete');
     if (!is_post()) redirect('admin/sectors');
     csrf_validate();
 
@@ -119,7 +123,7 @@ function admin_sector_delete($param = null) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function admin_hospitals($param = null) {
-    require_admin();
+    core_require('hospitals.view');
     $hospitals = [];
     try {
         $hospitals = hospital_list_all();
@@ -134,7 +138,7 @@ function admin_hospitals($param = null) {
 }
 
 function admin_hospital_store($param = null) {
-    require_admin();
+    core_require('hospitals.edit');
     if (!is_post()) redirect('admin/hospitals');
     csrf_validate();
 
@@ -164,7 +168,7 @@ function admin_hospital_store($param = null) {
 }
 
 function admin_hospital_update($param = null) {
-    require_admin();
+    core_require('hospitals.edit');
     if (!is_post()) redirect('admin/hospitals');
     csrf_validate();
 
@@ -190,7 +194,7 @@ function admin_hospital_update($param = null) {
 }
 
 function admin_hospital_delete($param = null) {
-    require_admin();
+    core_require('hospitals.edit');
     if (!is_post()) redirect('admin/hospitals');
     csrf_validate();
 
@@ -214,7 +218,7 @@ function admin_hospital_delete($param = null) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function admin_users($param = null) {
-    require_manager();
+    core_require('user_sectors.view');
 
     $search = clean(query('search', ''));
 
@@ -246,7 +250,7 @@ function admin_users($param = null) {
  * Atualiza APENAS os setores de um usuário com acesso ao módulo.
  */
 function admin_user_sectors($param = null) {
-    require_manager();
+    core_require('user_sectors.edit');
     if (!is_post()) redirect('admin/users');
     csrf_validate();
 
@@ -282,7 +286,7 @@ function admin_user_sectors($param = null) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function admin_categories($param = null) {
-    require_manager();
+    core_require('categories.view');
     $categories = [];
     try {
         $categories = document_categories_all();
@@ -297,7 +301,7 @@ function admin_categories($param = null) {
 }
 
 function admin_category_store($param = null) {
-    require_manager();
+    core_require('categories.create');
     if (!is_post()) redirect('admin/categories');
     csrf_validate();
 
@@ -324,7 +328,7 @@ function admin_category_store($param = null) {
 }
 
 function admin_category_update($param = null) {
-    require_manager();
+    core_require('categories.edit');
     if (!is_post()) redirect('admin/categories');
     csrf_validate();
 
@@ -353,7 +357,7 @@ function admin_category_update($param = null) {
 }
 
 function admin_category_delete($param = null) {
-    require_manager();
+    core_require('categories.delete');
     if (!is_post()) redirect('admin/categories');
     csrf_validate();
 

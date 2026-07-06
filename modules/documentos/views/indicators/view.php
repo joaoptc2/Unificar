@@ -32,17 +32,21 @@ $dir_labels = [
 <div class="page-header">
     <h1><i class="bi bi-bar-chart me-2"></i><?php echo e($indicator['name']); ?></h1>
     <div class="d-flex gap-2 flex-wrap">
+        <?php if (core_can('indicators.record')): ?>
         <a href="<?php echo url('indicators/data?id=' . $indicator['id']); ?>" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i>Lançar Dados
         </a>
-        <?php if (!empty($data_entries)): ?>
+        <?php endif; ?>
+        <?php if (!empty($data_entries) && core_can('indicators.export')): ?>
         <a href="<?php echo url('indicators/export?id=' . $indicator['id'] . '&format=csv'); ?>" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-download me-1"></i>CSV
         </a>
         <?php endif; ?>
+        <?php if (core_can('indicators.edit')): ?>
         <a href="<?php echo url('indicators/edit?id=' . $indicator['id']); ?>" class="btn btn-warning btn-sm">
             <i class="bi bi-pencil me-1"></i>Editar
         </a>
+        <?php endif; ?>
         <a href="<?php echo url('indicators'); ?>" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>Voltar
         </a>
@@ -214,6 +218,7 @@ $dir_labels = [
         </div>
         <?php endif; ?>
 
+        <?php if (core_can('indicators.delete')): ?>
         <div class="card border-0 shadow-sm">
             <div class="card-body">
                 <form method="POST" action="<?php echo url('indicators/delete'); ?>"
@@ -226,6 +231,7 @@ $dir_labels = [
                 </form>
             </div>
         </div>
+        <?php endif; ?>
     </div>
 
     <!-- Direita: gráfico + tabela -->
@@ -302,6 +308,7 @@ $dir_labels = [
                                     </td>
                                     <td class="small"><?php echo e($entry['recorded_by_name'] ?? '—'); ?></td>
                                     <td class="text-end">
+                                        <?php if (core_can('indicators.record')): ?>
                                         <a href="<?php echo url('indicators/data?id=' . $indicator['id'] . '&data_id=' . $entry['id']); ?>"
                                            class="btn btn-outline-warning btn-action" data-bs-toggle="tooltip" title="Editar">
                                             <i class="bi bi-pencil"></i>
@@ -315,6 +322,7 @@ $dir_labels = [
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </form>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

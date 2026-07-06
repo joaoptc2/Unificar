@@ -8,12 +8,14 @@ $trend_colors = ['up'=>'success','down'=>'danger','stable'=>'secondary'];
 <div class="page-header">
     <h1><i class="bi bi-speedometer me-2"></i>Painel de Indicadores</h1>
     <div class="d-flex gap-2">
+        <?php if (core_can('indicators.create')): ?>
         <a href="<?php echo url('indicators/templates'); ?>" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-collection me-1"></i>Templates
         </a>
         <a href="<?php echo url('indicators/create'); ?>" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i>Novo
         </a>
+        <?php endif; ?>
         <a href="<?php echo url('indicators'); ?>" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-list me-1"></i>Lista
         </a>

@@ -37,8 +37,8 @@ function profile_switch_sector($param = null) {
             break;
         }
     }
-    // Admin pode trocar para qualquer setor
-    if (!$allowed && is_admin()) {
+    // Quem gerencia associações usuário↔setor pode trocar para qualquer setor
+    if (!$allowed && core_can('user_sectors.edit')) {
         $s = sector_find($sector_id);
         if ($s) { $allowed = true; $sector_name = $s['name']; }
     }

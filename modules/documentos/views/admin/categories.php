@@ -1,9 +1,11 @@
 <div class="page-header">
     <h1><i class="bi bi-tags me-2"></i>Categorias de Documentos</h1>
     <div class="d-flex gap-2">
+        <?php if (core_can('categories.create')): ?>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCategory" onclick="clearCategoryForm()">
             <i class="bi bi-plus-lg me-1"></i>Nova Categoria
         </button>
+        <?php endif; ?>
         <a href="<?php echo url('admin'); ?>" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>Voltar
         </a>
@@ -43,17 +45,21 @@
                                 </span>
                             </td>
                             <td class="text-end">
+                                <?php if (core_can('categories.edit')): ?>
                                 <button class="btn btn-outline-warning btn-action"
                                         onclick="editCategory(<?php echo e(json_encode($c)); ?>)"
                                         data-bs-toggle="tooltip" title="Editar">
                                     <i class="bi bi-pencil"></i>
                                 </button>
+                                <?php endif; ?>
+                                <?php if (core_can('categories.delete')): ?>
                                 <form method="POST" action="<?php echo url('admin/category_delete'); ?>" class="d-inline"
                                       data-confirm="Remover esta categoria? Documentos existentes mantêm o nome da categoria.">
                                     <?php echo csrf_field(); ?>
                                     <input type="hidden" name="id" value="<?php echo (int) $c['id']; ?>">
                                     <button type="submit" class="btn btn-outline-danger btn-action"><i class="bi bi-trash"></i></button>
                                 </form>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>

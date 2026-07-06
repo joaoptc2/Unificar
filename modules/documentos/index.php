@@ -5,7 +5,8 @@
  * ║  Executado pelo front controller da plataforma:                      ║
  * ║  /index.php?m=documentos&url=pagina/acao                             ║
  * ║  O núcleo já resolveu: sessão, login, acesso ao módulo e             ║
- * ║  $GLOBALS['MODULE_ROLE']; headers de segurança também são dele.      ║
+ * ║  $GLOBALS['MODULE_PERMS'] (micropermissões, via core_can/            ║
+ * ║  core_require); headers de segurança também são dele.                ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 

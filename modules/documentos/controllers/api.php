@@ -4,6 +4,7 @@
  */
 
 function api_hospitals($param = null) {
+    if (!core_can('hospitals.view')) json_response(['error' => 'Sem permissão'], 403);
     $hospitals = [];
     try {
         $hospitals = hospital_list_active();
@@ -30,6 +31,7 @@ function api_notifications_count($param = null) {
 
 function api_indicator_data($param = null) {
     if (!is_logged_in()) json_response(['error' => 'Não autenticado'], 401);
+    if (!core_can('indicators.view')) json_response(['error' => 'Sem permissão'], 403);
 
     $id = sanitize_int(query('id'));
     $hospital_id = get_hospital_id();

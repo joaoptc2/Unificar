@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 function indicators_index($param = null) {
-    require_login();
+    core_require('indicators.view');
     $hospital_id = get_hospital_id();
 
     $type     = (string) query('type', '');
@@ -60,7 +60,7 @@ function indicators_index($param = null) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function indicators_create($param = null) {
-    require_login();
+    core_require('indicators.create');
 
     // Pré-popula com template, se veio ?template=slug
     $template_slug = query('template', '');
@@ -103,7 +103,7 @@ function indicators_create($param = null) {
  * Galeria de templates para criar indicadores pré-configurados.
  */
 function indicators_templates($param = null) {
-    require_login();
+    core_require('indicators.create');
 
     $category_filter = (string) query('category', '');
     $search = clean(query('search', ''));
@@ -134,7 +134,7 @@ function indicators_templates($param = null) {
  * Dashboard executivo consolidado — todos os indicadores com semáforos.
  */
 function indicators_dashboard($param = null) {
-    require_login();
+    core_require('indicators.view');
     $hospital_id = get_hospital_id();
 
     $category = clean(query('category', ''));
@@ -201,7 +201,7 @@ function indicators_dashboard($param = null) {
 }
 
 function indicators_edit($param = null) {
-    require_login();
+    core_require('indicators.edit');
     $id = sanitize_int($param ?: query('id'));
     $hospital_id = get_hospital_id();
 
@@ -227,7 +227,7 @@ function indicators_edit($param = null) {
 }
 
 function indicators_store($param = null) {
-    require_login();
+    core_require('indicators.create');
     if (!is_post()) redirect('indicators');
     csrf_validate();
 
@@ -252,7 +252,7 @@ function indicators_store($param = null) {
 }
 
 function indicators_update($param = null) {
-    require_login();
+    core_require('indicators.edit');
     if (!is_post()) redirect('indicators');
     csrf_validate();
 
@@ -291,7 +291,7 @@ function indicators_update($param = null) {
 }
 
 function indicators_delete($param = null) {
-    require_login();
+    core_require('indicators.delete');
     if (!is_post()) redirect('indicators');
     csrf_validate();
     $id = sanitize_int(input('id'));
@@ -311,7 +311,7 @@ function indicators_delete($param = null) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function indicators_view($param = null) {
-    require_login();
+    core_require('indicators.view');
     $id = sanitize_int($param ?: query('id'));
     $hospital_id = get_hospital_id();
 
@@ -365,7 +365,7 @@ function indicators_view($param = null) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function indicators_data($param = null) {
-    require_login();
+    core_require('indicators.record');
     $id = sanitize_int($param ?: query('id'));
     $hospital_id = get_hospital_id();
     $data_id = sanitize_int(query('data_id'));
@@ -403,7 +403,7 @@ function indicators_data($param = null) {
 }
 
 function indicators_store_data($param = null) {
-    require_login();
+    core_require('indicators.record');
     if (!is_post()) redirect('indicators');
     csrf_validate();
 
@@ -484,7 +484,7 @@ function indicators_store_data($param = null) {
 }
 
 function indicators_delete_data($param = null) {
-    require_login();
+    core_require('indicators.record');
     if (!is_post()) redirect('indicators');
     csrf_validate();
 
@@ -510,7 +510,7 @@ function indicators_delete_data($param = null) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function indicators_export($param = null) {
-    require_login();
+    core_require('indicators.export');
     $id = sanitize_int($param ?: query('id'));
     $hospital_id = get_hospital_id();
     $format = (string) query('format', 'json');
@@ -679,7 +679,7 @@ function _indicators_format_error($prefix, Throwable $ex) {
     }
 
     // Para admins ou em debug, mostra mensagem técnica
-    if (APP_DEBUG || is_admin()) {
+    if (APP_DEBUG || !empty(core_user()['is_admin'])) {
         return $prefix . '. Detalhe: ' . e(substr($msg, 0, 300));
     }
     return $prefix . '. Verifique os logs em logs/app_errors.log.';
@@ -690,7 +690,7 @@ function _indicators_format_error($prefix, Throwable $ex) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function indicators_actions($param = null) {
-    require_login();
+    core_require('actions.view');
     $indicator_id = sanitize_int(query('indicator_id'));
     $hospital_id  = get_hospital_id();
     $indicator = null; $actions = [];
@@ -710,7 +710,7 @@ function indicators_actions($param = null) {
 }
 
 function indicators_action_store($param = null) {
-    require_login();
+    core_require('actions.create');
     if (!is_post()) redirect('indicators/actions');
     csrf_validate();
 
@@ -741,7 +741,7 @@ function indicators_action_store($param = null) {
 }
 
 function indicators_action_update_status($param = null) {
-    require_login();
+    core_require('actions.edit');
     if (!is_post()) redirect('indicators/actions');
     csrf_validate();
 
@@ -772,7 +772,7 @@ function indicators_action_update_status($param = null) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function indicators_import($param = null) {
-    require_login();
+    core_require('indicators.import');
     $id = sanitize_int(query('id'));
     $hospital_id = get_hospital_id();
 

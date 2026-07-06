@@ -1,9 +1,11 @@
 <div class="page-header">
     <h1><i class="bi bi-graph-up me-2"></i>Indicadores de Enfermagem</h1>
     <div class="d-flex gap-2">
+        <?php if (core_can('indicators.create')): ?>
         <a href="<?php echo url('indicators/create'); ?>" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i>Novo Indicador
         </a>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -51,9 +53,11 @@
         <div class="card-body text-center py-5">
             <i class="bi bi-graph-up display-1 text-muted"></i>
             <p class="text-muted mt-2">Nenhum indicador cadastrado.</p>
+            <?php if (core_can('indicators.create')): ?>
             <a href="<?php echo url('indicators/create'); ?>" class="btn btn-sm btn-primary">
                 <i class="bi bi-plus-lg me-1"></i>Cadastrar primeiro indicador
             </a>
+            <?php endif; ?>
         </div>
     </div>
 <?php else:
@@ -113,14 +117,18 @@
                            class="btn btn-sm btn-outline-primary flex-fill">
                             <i class="bi bi-bar-chart me-1"></i>Ver
                         </a>
+                        <?php if (core_can('indicators.record')): ?>
                         <a href="<?php echo url('indicators/data?id=' . $ind['id']); ?>"
                            class="btn btn-sm btn-outline-success flex-fill">
                             <i class="bi bi-plus-lg me-1"></i>Lançar
                         </a>
+                        <?php endif; ?>
+                        <?php if (core_can('indicators.edit')): ?>
                         <a href="<?php echo url('indicators/edit?id=' . $ind['id']); ?>"
                            class="btn btn-sm btn-outline-warning">
                             <i class="bi bi-pencil"></i>
                         </a>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>

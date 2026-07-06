@@ -4,9 +4,12 @@
  *
  * O módulo não cria/edita/exclui usuários nem senhas (administração central
  * em ?m=admin&a=users). Aqui ficam apenas consultas de leitura e a listagem
- * de quem tem acesso ao módulo (user_module_access, slug 'documentos').
- * O papel no módulo vem do RBAC do núcleo; admins globais (users.is_admin)
- * têm acesso implícito com papel 'admin'.
+ * de quem tem acesso ao módulo.
+ *
+ * Acesso ao módulo = ter QUALQUER micropermissão nele (permission_grants,
+ * direta ou via grupo). Admins globais (users.is_admin) têm acesso implícito
+ * com todas as permissões. A antiga tabela de papéis por módulo é legado
+ * e NÃO é mais lida aqui.
  */
 
 function user_find($id) {
@@ -29,17 +32,28 @@ function user_find_by_email($email) {
 }
 
 /**
- * Usuários com acesso ao módulo documentos: vínculo em user_module_access
- * (module_slug = 'documentos') OU admin global (acesso implícito).
- * Retorna module_role ('admin' | 'gestor' | 'operador').
+ * Fragmento SQL: usuário `u` tem alguma micropermissão neste módulo
+ * (grant individual allow, grant de grupo, ou admin global).
+ */
+function _doc_access_condition() {
+    return "(u.is_admin = 1
+             OR EXISTS (SELECT 1 FROM permission_grants pg
+                        WHERE pg.subject_type = 'user' AND pg.subject_id = u.id
+                          AND pg.module_slug = 'documentos' AND pg.allowed = 1)
+             OR EXISTS (SELECT 1 FROM permission_grants pg
+                        JOIN user_group_members ugm ON ugm.group_id = pg.subject_id
+                        WHERE pg.subject_type = 'group' AND ugm.user_id = u.id
+                          AND pg.module_slug = 'documentos' AND pg.allowed = 1))";
+}
+
+/**
+ * Usuários com acesso ao módulo documentos (qualquer micropermissão
+ * concedida, direta ou por grupo) ou admins globais (acesso implícito).
  */
 function doc_users_with_access($search = '', $limit = 20, $offset = 0) {
-    $sql = "SELECT u.id, u.name, u.email, u.active, u.last_login_at, u.is_admin,
-                   COALESCE(uma.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE NULL END) AS module_role
+    $sql = "SELECT u.id, u.name, u.email, u.active, u.last_login_at, u.is_admin
             FROM users u
-            LEFT JOIN user_module_access uma
-                   ON uma.user_id = u.id AND uma.module_slug = 'documentos'
-            WHERE (uma.id IS NOT NULL OR u.is_admin = 1)";
+            WHERE " . _doc_access_condition();
     $params = [];
     if ($search !== '') {
         $sql .= " AND (u.name LIKE ? OR u.email LIKE ?)";
@@ -55,9 +69,7 @@ function doc_users_with_access($search = '', $limit = 20, $offset = 0) {
 function doc_users_with_access_count($search = '') {
     $sql = "SELECT COUNT(*) AS total
             FROM users u
-            LEFT JOIN user_module_access uma
-                   ON uma.user_id = u.id AND uma.module_slug = 'documentos'
-            WHERE (uma.id IS NOT NULL OR u.is_admin = 1)";
+            WHERE " . _doc_access_condition();
     $params = [];
     if ($search !== '') {
         $sql .= " AND (u.name LIKE ? OR u.email LIKE ?)";
@@ -69,30 +81,31 @@ function doc_users_with_access_count($search = '') {
 }
 
 /**
- * Um usuário tem acesso a este módulo? (vínculo RBAC ou admin global)
+ * Um usuário tem acesso a este módulo? (alguma micropermissão ou admin global)
  */
 function doc_user_has_module_access($user_id) {
     $row = db_query_one(
-        "SELECT u.id
-         FROM users u
-         LEFT JOIN user_module_access uma
-                ON uma.user_id = u.id AND uma.module_slug = 'documentos'
-         WHERE u.id = ? AND (uma.id IS NOT NULL OR u.is_admin = 1)",
+        "SELECT u.id FROM users u
+         WHERE u.id = ? AND " . _doc_access_condition(),
         [(int) $user_id]
     );
     return !empty($row);
 }
 
 /**
- * Gestores + admins do módulo (ativos) — para envio de notificações do cron.
+ * Responsáveis pelos documentos (ativos) — para as notificações do cron.
+ * "Gestores" agora = quem tem a micropermissão documents.approve
+ * (inclui admins globais), via Core\Perms::usersWith().
  */
 function user_managers_of() {
+    $ids = Core\Perms::usersWith('documentos', 'documents.approve');
+    if (empty($ids)) return [];
+    $in = implode(',', array_fill(0, count($ids), '?'));
     return db_query(
-        "SELECT DISTINCT u.id, u.name, u.email
+        "SELECT u.id, u.name, u.email
          FROM users u
-         LEFT JOIN user_module_access uma
-                ON uma.user_id = u.id AND uma.module_slug = 'documentos'
-         WHERE u.active = 1
-           AND (u.is_admin = 1 OR uma.role IN ('admin', 'gestor'))"
+         WHERE u.active = 1 AND u.id IN ($in)
+         ORDER BY u.name",
+        array_map('intval', $ids)
     );
 }
