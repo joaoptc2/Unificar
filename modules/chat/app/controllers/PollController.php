@@ -20,6 +20,7 @@ class PollController
     public function create(): void
     {
         Auth::requireLogin();
+        core_require('polls.create');
 
         $channelId = Sanitize::int($_GET['channel_id'] ?? 0);
         $channels  = Channel::userChannels(Session::userId());
@@ -39,6 +40,7 @@ class PollController
     public function store(): void
     {
         Auth::requireLogin();
+        core_require('polls.create');
         Csrf::check();
 
         $userId    = Session::userId();
@@ -147,6 +149,10 @@ class PollController
     public function vote(): void
     {
         Auth::requireLogin();
+        if (!core_can('polls.view')) {
+            $this->jsonResponse(false, 'Sem permissão para votar.', 403);
+            return;
+        }
 
         if (!Csrf::checkAjax()) {
             $this->jsonResponse(false, 'Token CSRF inválido.', 403);
@@ -195,6 +201,10 @@ class PollController
     public function removeVote(): void
     {
         Auth::requireLogin();
+        if (!core_can('polls.view')) {
+            $this->jsonResponse(false, 'Sem permissão para votar.', 403);
+            return;
+        }
 
         if (!Csrf::checkAjax()) {
             $this->jsonResponse(false, 'Token CSRF inválido.', 403);
@@ -232,6 +242,10 @@ class PollController
     public function results(): void
     {
         Auth::requireLogin();
+        if (!core_can('polls.view')) {
+            $this->jsonResponse(false, 'Sem permissão.', 403);
+            return;
+        }
 
         $pollId = Sanitize::int($_GET['poll_id'] ?? 0);
 
@@ -287,8 +301,8 @@ class PollController
             return;
         }
 
-        // Only the creator or an admin can close
-        if ((int) $poll['user_id'] !== $userId && !Auth::isAdmin()) {
+        // Criador encerra a própria enquete; polls.edit encerra as demais
+        if ((int) $poll['user_id'] !== $userId && !core_can('polls.edit')) {
             if ($isAjax) {
                 $this->jsonResponse(false, 'Sem permissão para encerrar esta enquete.', 403);
             } else {

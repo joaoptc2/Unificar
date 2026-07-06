@@ -20,6 +20,7 @@ class ProcessController
     public function index(): void
     {
         Auth::requireLogin();
+        core_require('processes.view');
 
         $processes = Process::active();
 
@@ -36,6 +37,7 @@ class ProcessController
     public function show(): void
     {
         Auth::requireLogin();
+        core_require('processes.view');
 
         $id = isset($_GET['id']) ? Sanitize::int($_GET['id']) : 0;
         if ($id <= 0) {
@@ -65,6 +67,7 @@ class ProcessController
     public function create(): void
     {
         Auth::requireLogin();
+        core_require('processes.create');
 
         $users    = User::active();
         $channels = Channel::userChannels(Session::userId());
@@ -84,6 +87,7 @@ class ProcessController
     public function store(): void
     {
         Auth::requireLogin();
+        core_require('processes.create');
         Csrf::check();
 
         $userId = Session::userId();
@@ -146,6 +150,7 @@ class ProcessController
     public function edit(): void
     {
         Auth::requireLogin();
+        core_require('processes.edit');
 
         $id = isset($_GET['id']) ? Sanitize::int($_GET['id']) : 0;
 
@@ -174,6 +179,7 @@ class ProcessController
     public function update(): void
     {
         Auth::requireLogin();
+        core_require('processes.edit');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -243,6 +249,12 @@ class ProcessController
     public function updateStep(): void
     {
         Auth::requireLogin();
+        if (!core_can('processes.edit')) {
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'Sem permissão para alterar processos.']);
+            return;
+        }
         Csrf::check();
 
         header('Content-Type: application/json; charset=utf-8');
@@ -289,6 +301,7 @@ class ProcessController
     public function pause(): void
     {
         Auth::requireLogin();
+        core_require('processes.edit');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -316,6 +329,7 @@ class ProcessController
     public function resume(): void
     {
         Auth::requireLogin();
+        core_require('processes.edit');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -343,6 +357,7 @@ class ProcessController
     public function complete(): void
     {
         Auth::requireLogin();
+        core_require('processes.edit');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);
@@ -370,6 +385,7 @@ class ProcessController
     public function delete(): void
     {
         Auth::requireLogin();
+        core_require('processes.delete');
         Csrf::check();
 
         $id = Sanitize::int($_POST['id'] ?? 0);

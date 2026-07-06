@@ -6,7 +6,7 @@
         <?= Sanitize::e($team['name']) ?>
     </h1>
     <div class="d-flex gap-2">
-        <?php if (Auth::can('teams', 'edit')): ?>
+        <?php if (core_can('teams.edit')): ?>
         <a href="index.php?m=chat&page=teams&action=edit&id=<?= $team['id'] ?>" class="btn btn-outline-warning btn-sm">
             <i class="bi bi-pencil me-1"></i> Editar
         </a>

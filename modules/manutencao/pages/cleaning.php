@@ -23,11 +23,11 @@ $action = $_GET['action'] ?? 'list';
 // PROCESSAR POST
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-    requireWrite();
     $act = $_POST['action'] ?? '';
 
     /* ----- Templates/agendamentos ---------------------------- */
     if ($act === 'plan_add' || $act === 'plan_edit') {
+        core_require($act === 'plan_add' ? 'cleaning.create' : 'cleaning.edit');
         $id       = (int)($_POST['id'] ?? 0);
         $title    = trim($_POST['title'] ?? '');
         $sector   = ((int)($_POST['sector_id'] ?? 0)) ?: null;
@@ -71,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'plan_delete') {
+        core_require('cleaning.delete');
         $id = (int)($_POST['id'] ?? 0);
         db()->prepare("DELETE FROM man_cleaning_schedules WHERE id = ? AND hospital_id = ?")
             ->execute([$id, $hid]);
@@ -81,6 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
     /* ----- Registro de execução ------------------------------ */
     if ($act === 'record') {
+        core_require('cleaning.create'); // execução de limpeza = create
         $scheduleId = ((int)($_POST['schedule_id'] ?? 0)) ?: null;
         $sectorId   = ((int)($_POST['sector_id'] ?? 0)) ?: null;
         $type       = $_POST['type'] ?? 'concurrent';
@@ -181,7 +183,7 @@ if ($action === 'plans') {
         <h1><i class="bi bi-card-checklist me-2"></i>Checklists de Limpeza</h1>
         <div class="d-flex gap-2">
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo url('cleaning'); ?>"><i class="bi bi-arrow-left me-1"></i> Execuções</a>
-            <?php if (canWrite()): ?>
+            <?php if (core_can('cleaning.create')): ?>
                 <button onclick="openModal('modalPlanAdd')" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Novo checklist</button>
             <?php endif; ?>
         </div>
@@ -210,9 +212,13 @@ if ($action === 'plans') {
                             <td><span class="badge badge-<?php echo $p['status']; ?>"><?php echo $p['status']; ?></span></td>
                             <td class="text-end">
                                 <div class="d-inline-flex gap-1">
-                                    <a class="btn btn-outline-success btn-action" href="<?php echo url('cleaning', ['action' => 'record', 'schedule_id' => $p['id']]); ?>" title="Executar"><i class="bi bi-play-fill"></i></a>
-                                    <?php if (canWrite()): ?>
+                                    <?php if (core_can('cleaning.create')): // execução = create ?>
+                                        <a class="btn btn-outline-success btn-action" href="<?php echo url('cleaning', ['action' => 'record', 'schedule_id' => $p['id']]); ?>" title="Executar"><i class="bi bi-play-fill"></i></a>
+                                    <?php endif; ?>
+                                    <?php if (core_can('cleaning.edit')): ?>
                                         <button class="btn btn-outline-warning btn-action" onclick="openModal('planEdit<?php echo $p['id']; ?>')" title="Editar"><i class="bi bi-pencil"></i></button>
+                                    <?php endif; ?>
+                                    <?php if (core_can('cleaning.delete')): ?>
                                         <form method="POST" class="d-inline">
                                             <?php echo csrfField(); ?>
                                             <input type="hidden" name="action" value="plan_delete">
@@ -231,7 +237,7 @@ if ($action === 'plans') {
         </div>
     </div>
 
-    <?php if (canWrite()): ?>
+    <?php if (core_can('cleaning.create')): ?>
     <div class="modal fade" id="modalPlanAdd" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -276,6 +282,9 @@ if ($action === 'plans') {
         </div>
     </div>
 
+    <?php endif; ?>
+
+    <?php if (core_can('cleaning.edit')): ?>
     <?php foreach ($plans as $p):
         $items = json_decode($p['checklist_items'] ?? '[]', true) ?: [];
     ?>
@@ -518,7 +527,7 @@ if ($action === 'plans') {
             <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=cleaning&format=csv"><i class="bi bi-download me-1"></i> CSV</a>
             <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=cleaning&format=print" target="_blank"><i class="bi bi-printer me-1"></i> Imprimir</a>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo url('cleaning', ['action' => 'plans']); ?>"><i class="bi bi-card-checklist me-1"></i> Checklists</a>
-            <?php if (canWrite()): ?>
+            <?php if (core_can('cleaning.create')): ?>
                 <a class="btn btn-primary btn-sm" href="<?php echo url('cleaning', ['action' => 'record']); ?>"><i class="bi bi-plus-lg me-1"></i> Registrar</a>
             <?php endif; ?>
         </div>

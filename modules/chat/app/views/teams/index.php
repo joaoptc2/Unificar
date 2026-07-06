@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-people me-2"></i>Equipes</h1>
-    <?php if (Auth::can('teams', 'create')): ?>
+    <?php if (core_can('teams.create')): ?>
     <a href="index.php?m=chat&page=teams&action=create" class="btn btn-primary btn-sm">
         <i class="bi bi-plus-lg me-1"></i> Nova Equipe
     </a>

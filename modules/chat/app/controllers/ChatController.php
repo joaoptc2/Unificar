@@ -22,6 +22,7 @@ class ChatController
     public function index(): void
     {
         Auth::requireLogin();
+        core_require('chat.view');
 
         $userId  = Session::userId();
         $user    = Auth::user();
@@ -91,6 +92,10 @@ class ChatController
     public function channel(): void
     {
         Auth::requireLogin();
+        if (!core_can('chat.view')) {
+            $this->errorResponse(403, 'Você não tem permissão para visualizar o chat.');
+            return;
+        }
 
         $userId    = Session::userId();
         $channelId = isset($_GET['id']) ? Sanitize::int($_GET['id']) : 0;

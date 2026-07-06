@@ -20,6 +20,7 @@ class MeetingController
     public function index(): void
     {
         Auth::requireLogin();
+        core_require('meetings.view');
 
         $userId   = Session::userId();
         $meetings = Meeting::upcoming($userId, 50);
@@ -37,6 +38,7 @@ class MeetingController
     public function show(): void
     {
         Auth::requireLogin();
+        core_require('meetings.view');
 
         $id = isset($_GET['id']) ? Sanitize::int($_GET['id']) : 0;
         if ($id <= 0) {
@@ -66,6 +68,7 @@ class MeetingController
     public function create(): void
     {
         Auth::requireLogin();
+        core_require('meetings.create');
 
         $users    = User::active();
         $channels = Channel::userChannels(Session::userId());
@@ -85,6 +88,7 @@ class MeetingController
     public function store(): void
     {
         Auth::requireLogin();
+        core_require('meetings.create');
         Csrf::check();
 
         $userId = Session::userId();
@@ -175,8 +179,8 @@ class MeetingController
             exit;
         }
 
-        // Only the creator or an admin may edit
-        if ((int) $meeting['created_by'] !== Session::userId() && !Auth::isAdmin()) {
+        // Criador edita a própria reunião; meetings.edit permite editar as demais
+        if ((int) $meeting['created_by'] !== Session::userId() && !core_can('meetings.edit')) {
             Session::flash('error', 'Sem permissão para editar esta reunião.');
             header('Location: index.php?m=chat&page=meetings&action=show&id=' . $id);
             exit;
@@ -210,7 +214,7 @@ class MeetingController
             exit;
         }
 
-        if ((int) $meeting['created_by'] !== Session::userId() && !Auth::isAdmin()) {
+        if ((int) $meeting['created_by'] !== Session::userId() && !core_can('meetings.edit')) {
             Session::flash('error', 'Sem permissão para editar esta reunião.');
             header('Location: index.php?m=chat&page=meetings&action=show&id=' . $id);
             exit;
@@ -270,6 +274,7 @@ class MeetingController
     public function respond(): void
     {
         Auth::requireLogin();
+        core_require('meetings.view');
         Csrf::check();
 
         $meetingId = Sanitize::int($_POST['meeting_id'] ?? 0);
@@ -312,7 +317,8 @@ class MeetingController
             exit;
         }
 
-        if ((int) $meeting['created_by'] !== Session::userId() && !Auth::isAdmin()) {
+        // Criador cancela a própria reunião; meetings.delete cancela as demais
+        if ((int) $meeting['created_by'] !== Session::userId() && !core_can('meetings.delete')) {
             Session::flash('error', 'Sem permissão para cancelar esta reunião.');
             header('Location: index.php?m=chat&page=meetings&action=show&id=' . $id);
             exit;
@@ -348,6 +354,7 @@ class MeetingController
     public function calendar(): void
     {
         Auth::requireLogin();
+        core_require('calendar.view');
 
         $userId = Session::userId();
 

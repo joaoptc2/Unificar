@@ -4,9 +4,11 @@
         <a href="index.php?m=chat&page=tasks&action=my" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-person me-1"></i> Minhas Tarefas
         </a>
+        <?php if (core_can('tasks.create')): ?>
         <a href="index.php?m=chat&page=tasks&action=create" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i> Nova Tarefa
         </a>
+        <?php endif; ?>
     </div>
 </div>
 

@@ -1,9 +1,11 @@
 <div class="page-header">
     <h1><i class="bi bi-kanban me-2"></i>Tarefa #<?= $task['id'] ?></h1>
     <div class="d-flex gap-2">
+        <?php if (core_can('tasks.edit')): ?>
         <a href="index.php?m=chat&page=tasks&action=edit&id=<?= $task['id'] ?>" class="btn btn-outline-warning btn-sm">
             <i class="bi bi-pencil me-1"></i> Editar
         </a>
+        <?php endif; ?>
         <a href="index.php?m=chat&page=tasks" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i> Voltar
         </a>

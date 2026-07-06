@@ -12,10 +12,10 @@ $action = $_GET['action'] ?? 'list';
 // PROCESSAR POST
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-    requireWrite();
     $act = $_POST['action'] ?? '';
 
     if ($act === 'add') {
+        core_require('stock.create');
         $name     = trim($_POST['name'] ?? '');
         $code     = trim($_POST['code'] ?? '') ?: null;
         $unit     = trim($_POST['unit'] ?? 'un');
@@ -53,6 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'edit') {
+        core_require('stock.edit');
         $id       = (int)($_POST['id'] ?? 0);
         $name     = trim($_POST['name'] ?? '');
         $code     = trim($_POST['code'] ?? '') ?: null;
@@ -82,6 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'movement') {
+        core_require('stock.create'); // movimentações de estoque = create
         $partId   = (int)($_POST['part_id'] ?? 0);
         $type     = $_POST['movement_type'] ?? 'entry';
         $qty      = max(1, (int)($_POST['movement_qty'] ?? 1));
@@ -118,6 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'delete') {
+        core_require('stock.delete');
         $id = (int)($_POST['id'] ?? 0);
         try {
             db()->prepare("DELETE FROM man_stock_movements WHERE part_id = ? AND hospital_id = ?")->execute([$id, $hid]);
@@ -216,6 +219,7 @@ if ($action === 'edit'):
 </div>
 
 <!-- LANÇAMENTO -->
+<?php if (core_can('stock.create')): // movimentações de estoque = create ?>
 <div class="card border-0 shadow-sm mt-3">
     <div class="card-header bg-white fw-semibold"><i class="bi bi-arrow-left-right me-1"></i> Lançar Movimentação (Qtd. atual: <strong><?php echo $part['quantity']; ?></strong>)</div>
     <div class="card-body">
@@ -245,6 +249,7 @@ if ($action === 'edit'):
         </form>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- HISTÓRICO -->
 <div class="card border-0 shadow-sm mt-3">
@@ -306,7 +311,7 @@ else:
 <div class="page-header">
     <h1><i class="bi bi-box-seam me-2"></i>Estoque de Peças</h1>
     <div class="d-flex gap-2">
-        <?php if (canWrite()): ?>
+        <?php if (core_can('stock.create')): ?>
             <button onclick="openModal('modalAdd')" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nova Peça</button>
         <?php endif; ?>
     </div>
@@ -374,7 +379,7 @@ else:
                         <td class="text-end">
                             <div class="d-inline-flex gap-1">
                                 <a href="<?php echo url('stock', ['action'=>'edit','id'=>$p['id']]); ?>" class="btn btn-outline-warning btn-action" title="Editar"><i class="bi bi-pencil"></i></a>
-                                <?php if (canWrite()): ?>
+                                <?php if (core_can('stock.delete')): ?>
                                 <form method="POST" class="d-inline">
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="delete">

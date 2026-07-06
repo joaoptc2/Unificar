@@ -1,7 +1,7 @@
 <div class="page-header">
     <h1><i class="bi bi-calendar-event me-2"></i><?= Sanitize::e($meeting['title']) ?></h1>
     <div class="d-flex gap-2">
-        <?php if ((int)$meeting['created_by'] === Session::userId() || Auth::isAdmin()): ?>
+        <?php if ((int)$meeting['created_by'] === Session::userId() || core_can('meetings.edit')): ?>
         <a href="index.php?m=chat&page=meetings&action=edit&id=<?= $meeting['id'] ?>" class="btn btn-outline-warning btn-sm">
             <i class="bi bi-pencil me-1"></i> Editar
         </a>

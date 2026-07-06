@@ -20,6 +20,7 @@ class SearchController
     public function index(): void
     {
         Auth::requireLogin();
+        core_require('search.view');
 
         $query   = Sanitize::get('query');
         $userId  = Session::userId();
@@ -76,6 +77,12 @@ class SearchController
         Auth::requireLogin();
 
         header('Content-Type: application/json; charset=utf-8');
+
+        if (!core_can('search.view')) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Sem permissão para buscar.']);
+            return;
+        }
 
         $query  = Sanitize::get('query');
         $userId = Session::userId();

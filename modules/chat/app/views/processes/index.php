@@ -1,6 +1,6 @@
 <div class="page-header">
     <h1><i class="bi bi-diagram-3 me-2"></i>Processos</h1>
-    <?php if (Auth::can('processes', 'create')): ?>
+    <?php if (core_can('processes.create')): ?>
     <a href="index.php?m=chat&page=processes&action=create" class="btn btn-primary btn-sm">
         <i class="bi bi-plus-lg me-1"></i> Novo Processo
     </a>

@@ -10,10 +10,10 @@ $hid = hospitalId();
 // PROCESSAR POST
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-    requireWrite();
     $act = $_POST['action'] ?? '';
 
     if ($act === 'add') {
+        core_require('technicians.create');
         $name       = trim($_POST['name'] ?? '');
         $specialty  = trim($_POST['specialty'] ?? '') ?: null;
         $phone      = trim($_POST['phone'] ?? '') ?: null;
@@ -31,6 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         redirect(url('technicians'));
     }
     if ($act === 'edit') {
+        core_require('technicians.edit');
         $id         = (int)($_POST['id'] ?? 0);
         $name       = trim($_POST['name'] ?? '');
         $specialty  = trim($_POST['specialty'] ?? '') ?: null;
@@ -49,6 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         redirect(url('technicians'));
     }
     if ($act === 'delete') {
+        core_require('technicians.delete');
         $id = (int)($_POST['id'] ?? 0);
         db()->prepare("DELETE FROM man_technicians WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
         auditLog('delete', 'technicians', $id);
@@ -73,7 +75,7 @@ ob_start();
 <div class="page-header">
     <h1><i class="bi bi-person-badge me-2"></i>Equipe Técnica</h1>
     <div class="d-flex gap-2">
-        <?php if (canWrite()): ?>
+        <?php if (core_can('technicians.create')): ?>
             <button onclick="openModal('modalAdd')" class="btn btn-primary btn-sm">
                 <i class="bi bi-plus-lg me-1"></i> Novo Técnico
             </button>
@@ -104,11 +106,13 @@ ob_start();
                         <td><?php echo e($t['crea'] ?? '—'); ?></td>
                         <td><span class="badge badge-<?php echo e($t['status']); ?>"><?php echo e($statusLabels[$t['status']] ?? $t['status']); ?></span></td>
                         <td class="text-end">
-                            <?php if (canWrite()): ?>
                             <div class="d-inline-flex gap-1">
+                                <?php if (core_can('technicians.edit')): ?>
                                 <button onclick="openModal('editTech<?php echo $t['id']; ?>')" class="btn btn-outline-warning btn-action" title="Editar">
                                     <i class="bi bi-pencil"></i>
                                 </button>
+                                <?php endif; ?>
+                                <?php if (core_can('technicians.delete')): ?>
                                 <form method="POST" class="d-inline">
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="delete">
@@ -117,8 +121,8 @@ ob_start();
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </form>
+                                <?php endif; ?>
                             </div>
-                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -129,7 +133,7 @@ ob_start();
     </div>
 </div>
 
-<?php if (canWrite()): ?>
+<?php if (core_can('technicians.create')): ?>
 <!-- MODAL NOVO TÉCNICO -->
 <div class="modal fade" id="modalAdd" tabindex="-1">
     <div class="modal-dialog">
@@ -174,6 +178,9 @@ ob_start();
     </div>
 </div>
 
+<?php endif; ?>
+
+<?php if (core_can('technicians.edit')): ?>
 <!-- MODAIS DE EDIÇÃO -->
 <?php foreach ($techs as $t): ?>
 <div class="modal fade" id="editTech<?php echo $t['id']; ?>" tabindex="-1">

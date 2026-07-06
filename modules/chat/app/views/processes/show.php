@@ -1,7 +1,7 @@
 <div class="page-header">
     <h1><i class="bi bi-diagram-3 me-2"></i><?= Sanitize::e($process['title']) ?></h1>
     <div class="d-flex gap-2">
-        <?php if (Auth::can('processes', 'edit')): ?>
+        <?php if (core_can('processes.edit')): ?>
         <a href="index.php?m=chat&page=processes&action=edit&id=<?= $process['id'] ?>" class="btn btn-outline-warning btn-sm">
             <i class="bi bi-pencil me-1"></i> Editar
         </a>
@@ -113,7 +113,7 @@
             </div>
         </div>
 
-        <?php if ($process['status'] === 'active' && Auth::can('processes', 'edit')): ?>
+        <?php if ($process['status'] === 'active' && core_can('processes.edit')): ?>
         <div class="card border-0 shadow-sm mt-3">
             <div class="card-body d-grid gap-2">
                 <form method="POST" action="index.php?m=chat&page=processes&action=pause">
@@ -128,7 +128,7 @@
                 </form>
             </div>
         </div>
-        <?php elseif ($process['status'] === 'paused' && Auth::can('processes', 'edit')): ?>
+        <?php elseif ($process['status'] === 'paused' && core_can('processes.edit')): ?>
         <div class="card border-0 shadow-sm mt-3">
             <div class="card-body">
                 <form method="POST" action="index.php?m=chat&page=processes&action=resume">

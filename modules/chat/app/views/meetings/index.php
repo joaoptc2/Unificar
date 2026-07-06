@@ -4,9 +4,11 @@
         <a href="index.php?m=chat&page=meetings&action=calendar" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-calendar3 me-1"></i> Calendário
         </a>
+        <?php if (core_can('meetings.create')): ?>
         <a href="index.php?m=chat&page=meetings&action=create" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i> Agendar Reunião
         </a>
+        <?php endif; ?>
     </div>
 </div>
 

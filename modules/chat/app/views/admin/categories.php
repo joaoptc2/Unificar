@@ -6,6 +6,7 @@
 </div>
 
 <div class="row g-4">
+    <?php if (core_can('categories.create')): ?>
     <div class="col-md-5">
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white fw-semibold">Nova Categoria</div>
@@ -40,6 +41,7 @@
             </div>
         </div>
     </div>
+    <?php endif; ?>
 
     <div class="col-md-7">
         <?php if (empty($categories)): ?>
@@ -67,6 +69,7 @@
                         </div>
                         <?php endif; ?>
                     </div>
+                    <?php if (core_can('categories.delete')): ?>
                     <form method="POST" action="index.php?m=chat&page=admin&action=deleteCategory" class="d-inline">
                         <?= Csrf::field() ?>
                         <input type="hidden" name="id" value="<?= $cat['id'] ?>">
@@ -74,6 +77,7 @@
                             <i class="bi bi-trash"></i>
                         </button>
                     </form>
+                    <?php endif; ?>
                 </div>
             </div>
             <?php endforeach; ?>

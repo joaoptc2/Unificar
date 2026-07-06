@@ -62,9 +62,11 @@
                             <?php endif; ?>
                         </td>
                         <td class="text-end">
+                            <?php if (core_can('tasks.edit')): ?>
                             <a href="index.php?m=chat&page=tasks&action=edit&id=<?= $task['id'] ?>" class="btn btn-outline-warning btn-action">
                                 <i class="bi bi-pencil"></i>
                             </a>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>

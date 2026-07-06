@@ -12,10 +12,10 @@ $action = $_GET['action'] ?? 'list';
 // PROCESSAR POST
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-    requireWrite();
     $act = $_POST['action'] ?? '';
 
     if ($act === 'add') {
+        core_require('maintenance.create');
         $equipmentId = (int)($_POST['equipment_id'] ?? 0);
         $title       = trim($_POST['title'] ?? '');
         $description = trim($_POST['description'] ?? '') ?: null;
@@ -40,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'edit') {
+        core_require('maintenance.edit');
         $id          = (int)($_POST['id'] ?? 0);
         $title       = trim($_POST['title'] ?? '');
         $description = trim($_POST['description'] ?? '') ?: null;
@@ -61,6 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'execute') {
+        // Executar plano = atualizar o plano (edit) + gerar OS derivada
+        core_require('maintenance.edit');
         $id = (int)($_POST['id'] ?? 0);
         try {
             // Buscar plano
@@ -90,6 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'delete') {
+        core_require('maintenance.delete');
         $id = (int)($_POST['id'] ?? 0);
         db()->prepare("DELETE FROM man_maintenance_plans WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
         auditLog('delete', 'maintenance_plans', $id);
@@ -126,7 +130,7 @@ ob_start();
 <!-- PAGE HEADER -->
 <div class="page-header">
     <h1><i class="bi bi-tools me-2"></i>Manutenção Preventiva</h1>
-    <?php if (canWrite()): ?>
+    <?php if (core_can('maintenance.create')): ?>
     <div class="d-flex gap-2">
         <button onclick="openModal('modalAdd')" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Novo Plano</button>
     </div>
@@ -169,7 +173,7 @@ ob_start();
                         <td>
                             <div class="d-flex gap-1 justify-content-end">
                                 <button onclick="openModal('histPlan<?php echo $p['id']; ?>')" class="btn btn-outline-info btn-action" title="Histórico"><i class="bi bi-clock-history"></i></button>
-                                <?php if (canWrite()): ?>
+                                <?php if (core_can('maintenance.edit')): ?>
                                 <form method="POST" style="display:inline">
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="execute">
@@ -177,6 +181,8 @@ ob_start();
                                     <button type="submit" class="btn btn-outline-success btn-action" title="Gerar OS" data-confirm="Gerar OS preventiva para '<?php echo e($p['title']); ?>'?"><i class="bi bi-play-fill"></i></button>
                                 </form>
                                 <button onclick="openModal('editPlan<?php echo $p['id']; ?>')" class="btn btn-outline-warning btn-action" title="Editar"><i class="bi bi-pencil"></i></button>
+                                <?php endif; ?>
+                                <?php if (core_can('maintenance.delete')): ?>
                                 <form method="POST" style="display:inline">
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="delete">
@@ -233,7 +239,7 @@ ob_start();
 </div>
 <?php endforeach; ?>
 
-<?php if (canWrite()): ?>
+<?php if (core_can('maintenance.create')): ?>
 <!-- MODAL NOVO PLANO -->
 <div class="modal fade" id="modalAdd" tabindex="-1" aria-labelledby="modalAddLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -287,6 +293,9 @@ ob_start();
     </div>
 </div>
 
+<?php endif; ?>
+
+<?php if (core_can('maintenance.edit')): ?>
 <!-- MODAIS EDIÇÃO -->
 <?php foreach ($plans as $p): ?>
 <div class="modal fade" id="editPlan<?php echo $p['id']; ?>" tabindex="-1" aria-labelledby="editPlanLabel<?php echo $p['id']; ?>" aria-hidden="true">

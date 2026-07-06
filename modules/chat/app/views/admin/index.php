@@ -46,6 +46,7 @@
             </div>
         </div>
     </div>
+    <?php if (core_can('admin.settings')): ?>
     <div class="col-md-6">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body text-center">
@@ -58,6 +59,7 @@
             </div>
         </div>
     </div>
+    <?php endif; ?>
     <div class="col-md-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body text-center">
@@ -68,6 +70,7 @@
             </div>
         </div>
     </div>
+    <?php if (core_can('emojis.view')): ?>
     <div class="col-md-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body text-center">
@@ -78,6 +81,8 @@
             </div>
         </div>
     </div>
+    <?php endif; ?>
+    <?php if (core_can('admin.export')): ?>
     <div class="col-md-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body text-center">
@@ -88,6 +93,8 @@
             </div>
         </div>
     </div>
+    <?php endif; ?>
+    <?php if (core_can('categories.view')): ?>
     <div class="col-md-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body text-center">
@@ -98,4 +105,5 @@
             </div>
         </div>
     </div>
+    <?php endif; ?>
 </div>

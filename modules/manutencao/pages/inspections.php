@@ -16,11 +16,11 @@ $action = $_GET['action'] ?? 'list';
 // PROCESSAR POST
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-    requireWrite();
     $act = $_POST['action'] ?? '';
 
     /* ----- Rotas ------------------------------------------------ */
     if ($act === 'add_route' || $act === 'edit_route') {
+        core_require($act === 'add_route' ? 'inspections.create' : 'inspections.edit');
         $id          = (int)($_POST['id'] ?? 0);
         $title       = trim($_POST['title'] ?? '');
         $description = trim($_POST['description'] ?? '') ?: null;
@@ -66,6 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'delete_route') {
+        core_require('inspections.delete');
         $id = (int)($_POST['id'] ?? 0);
         try {
             db()->prepare("DELETE FROM man_inspection_routes WHERE id = ? AND hospital_id = ?")
@@ -80,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
     /* ----- Execução --------------------------------------------- */
     if ($act === 'execute') {
+        core_require('inspections.create'); // execução de inspeção = create
         $routeId     = (int)($_POST['route_id'] ?? 0);
         $executedBy  = trim($_POST['executed_by_name'] ?? '');
         $observation = trim($_POST['observation'] ?? '') ?: null;
@@ -164,7 +166,7 @@ if ($action === 'routes') {
         <h1><i class="bi bi-signpost-2 me-2"></i>Rotas de Inspeção</h1>
         <div class="d-flex gap-2">
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo url('inspections'); ?>"><i class="bi bi-arrow-left me-1"></i> Execuções</a>
-            <?php if (canWrite()): ?>
+            <?php if (core_can('inspections.create')): ?>
                 <button onclick="openModal('modalRouteAdd')" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nova rota</button>
             <?php endif; ?>
         </div>
@@ -191,9 +193,13 @@ if ($action === 'routes') {
                             <td><span class="badge badge-<?php echo e($r['status']); ?>"><?php echo e($r['status']); ?></span></td>
                             <td class="text-end">
                                 <div class="d-inline-flex gap-1">
-                                    <a class="btn btn-outline-success btn-action" href="<?php echo url('inspections', ['action' => 'execute', 'route_id' => $r['id']]); ?>" title="Executar"><i class="bi bi-play-fill"></i></a>
-                                    <?php if (canWrite()): ?>
+                                    <?php if (core_can('inspections.create')): // execução = create ?>
+                                        <a class="btn btn-outline-success btn-action" href="<?php echo url('inspections', ['action' => 'execute', 'route_id' => $r['id']]); ?>" title="Executar"><i class="bi bi-play-fill"></i></a>
+                                    <?php endif; ?>
+                                    <?php if (core_can('inspections.edit')): ?>
                                         <button class="btn btn-outline-warning btn-action" onclick="openModal('routeEdit<?php echo $r['id']; ?>')" title="Editar"><i class="bi bi-pencil"></i></button>
+                                    <?php endif; ?>
+                                    <?php if (core_can('inspections.delete')): ?>
                                         <form method="POST" class="d-inline">
                                             <?php echo csrfField(); ?>
                                             <input type="hidden" name="action" value="delete_route">
@@ -212,7 +218,7 @@ if ($action === 'routes') {
         </div>
     </div>
 
-    <?php if (canWrite()): ?>
+    <?php if (core_can('inspections.create')): ?>
     <!-- Modal: Nova rota -->
     <div class="modal fade" id="modalRouteAdd" tabindex="-1">
         <div class="modal-dialog modal-lg">
@@ -241,6 +247,9 @@ if ($action === 'routes') {
     </div>
 
     <!-- Modais: Editar rotas -->
+    <?php endif; ?>
+
+    <?php if (core_can('inspections.edit')): ?>
     <?php foreach ($routes as $r):
         $locs = json_decode($r['locations'] ?? '[]', true) ?: [];
     ?>
@@ -433,7 +442,7 @@ if ($action === 'routes') {
         <h1><i class="bi bi-clipboard2-pulse me-2"></i>Inspeções</h1>
         <div class="d-flex gap-2">
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo url('inspections', ['action' => 'routes']); ?>"><i class="bi bi-signpost-2 me-1"></i> Rotas</a>
-            <?php if (canWrite()): ?>
+            <?php if (core_can('inspections.create')): ?>
                 <a class="btn btn-primary btn-sm" href="<?php echo url('inspections', ['action' => 'execute']); ?>"><i class="bi bi-plus-lg me-1"></i> Nova inspeção</a>
             <?php endif; ?>
         </div>

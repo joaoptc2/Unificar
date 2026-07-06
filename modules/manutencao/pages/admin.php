@@ -6,12 +6,19 @@
  * O CRUD de usuários foi REMOVIDO — usuários e permissões agora são
  * geridos na administração central da plataforma (?m=admin&a=users).
  */
-requireModule('admin');
+requireModule('admin'); // sectors.view OU org_settings.edit
 
 $hid = hospitalId();
 $tab = $_GET['tab'] ?? 'sectors';
 if (!in_array($tab, ['hospital', 'sectors'], true)) {
     $tab = 'sectors';
+}
+// Ajusta a aba ao conjunto de micropermissões do usuário
+if ($tab === 'hospital' && !core_can('org_settings.edit')) {
+    $tab = 'sectors';
+}
+if ($tab === 'sectors' && !core_can('sectors.view')) {
+    $tab = 'hospital';
 }
 
 // ============================================================
@@ -20,8 +27,9 @@ if (!in_array($tab, ['hospital', 'sectors'], true)) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     $act = $_POST['action'] ?? '';
 
-    // --- HOSPITAL ---
+    // --- HOSPITAL ("Dados da unidade") ---
     if ($act === 'edit_hospital') {
+        core_require('org_settings.edit');
         $name    = trim($_POST['name'] ?? '');
         $cnpj    = trim($_POST['cnpj'] ?? '') ?: null;
         $address = trim($_POST['address'] ?? '') ?: null;

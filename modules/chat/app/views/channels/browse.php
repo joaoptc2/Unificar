@@ -10,9 +10,11 @@
         <div class="card-body text-center py-5">
             <i class="bi bi-hash display-4 text-muted"></i>
             <p class="mt-2 text-muted">Nenhum canal público disponível.</p>
+            <?php if (core_can('channels.create')): ?>
             <a href="index.php?m=chat&page=channels&action=create" class="btn btn-primary btn-sm">
                 <i class="bi bi-plus-lg me-1"></i> Criar Canal
             </a>
+            <?php endif; ?>
         </div>
     </div>
 <?php else: ?>

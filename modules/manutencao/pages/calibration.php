@@ -20,10 +20,10 @@ $hid = hospitalId();
 // PROCESSAR POST
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-    requireWrite();
     $act = $_POST['action'] ?? '';
 
     if ($act === 'add' || $act === 'edit') {
+        core_require($act === 'add' ? 'calibration.create' : 'calibration.edit');
         $id               = (int)($_POST['id'] ?? 0);
         $equipmentId      = (int)($_POST['equipment_id'] ?? 0);
         $calibrationDate  = trim($_POST['calibration_date'] ?? '');
@@ -111,6 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
     }
 
     if ($act === 'delete') {
+        core_require('calibration.delete');
         $id = (int)($_POST['id'] ?? 0);
         db()->prepare("DELETE FROM man_equipment_calibrations WHERE id = ? AND hospital_id = ?")
             ->execute([$id, $hid]);
@@ -255,7 +256,7 @@ if ($action === 'execute'):
     <div class="d-flex gap-2">
         <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=calibrations&format=csv<?php echo $filterStatus!=='all' ? '&status=' . e($filterStatus) : ''; ?>"><i class="bi bi-download me-1"></i> CSV</a>
         <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=calibrations&format=print<?php echo $filterStatus!=='all' ? '&status=' . e($filterStatus) : ''; ?>" target="_blank" rel="noopener"><i class="bi bi-printer me-1"></i> Imprimir/PDF</a>
-        <?php if (canWrite()): ?>
+        <?php if (core_can('calibration.create')): ?>
             <button onclick="openModal('modalAdd')" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nova calibração</button>
         <?php endif; ?>
     </div>
@@ -375,9 +376,13 @@ if ($action === 'execute'):
                         <td>
                             <div class="d-flex gap-1 justify-content-end">
                                 <button onclick="openModal('histCalib<?php echo $r['equipment_id']; ?>')" class="btn btn-outline-info btn-action" title="Histórico"><i class="bi bi-clock-history"></i></button>
-                                <?php if (canWrite()): ?>
+                                <?php if (core_can('calibration.create')): ?>
                                     <a href="<?php echo url('calibration', ['action'=>'execute','equipment_id'=>$r['equipment_id']]); ?>" class="btn btn-outline-success btn-action" title="Executar calibração"><i class="bi bi-check-circle"></i></a>
+                                <?php endif; ?>
+                                <?php if (core_can('calibration.edit')): ?>
                                     <button onclick="openModal('edit<?php echo $r['id']; ?>')" class="btn btn-outline-warning btn-action" title="Editar"><i class="bi bi-pencil"></i></button>
+                                <?php endif; ?>
+                                <?php if (core_can('calibration.delete')): ?>
                                     <form method="POST" style="display:inline">
                                         <?php echo csrfField(); ?>
                                         <input type="hidden" name="action" value="delete">
@@ -436,7 +441,7 @@ foreach ($rows as $r):
 </div>
 <?php endforeach; ?>
 
-<?php if (canWrite()): ?>
+<?php if (core_can('calibration.create')): ?>
 <!-- MODAL NOVA CALIBRAÇÃO -->
 <div class="modal fade" id="modalAdd" tabindex="-1" aria-labelledby="modalAddLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -508,6 +513,9 @@ foreach ($rows as $r):
     </div>
 </div>
 
+<?php endif; ?>
+
+<?php if (core_can('calibration.edit')): ?>
 <!-- MODAIS EDIÇÃO -->
 <?php foreach ($rows as $r): ?>
 <div class="modal fade" id="edit<?php echo $r['id']; ?>" tabindex="-1" aria-labelledby="editLabel<?php echo $r['id']; ?>" aria-hidden="true">

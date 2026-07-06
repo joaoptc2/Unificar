@@ -7,10 +7,10 @@ requireModule('qr-locations');
 $hid = hospitalId();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-    requireWrite();
     $act = $_POST['action'] ?? '';
 
     if ($act === 'add') {
+        core_require('qr_locations.create');
         $name     = trim($_POST['name'] ?? '');
         $sectorId = ((int)($_POST['sector_id'] ?? 0)) ?: null;
         $desc     = trim($_POST['description'] ?? '') ?: null;
@@ -26,6 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         redirect(url('qr-locations'));
     }
     if ($act === 'edit') {
+        core_require('qr_locations.edit');
         $id       = (int)($_POST['id'] ?? 0);
         $name     = trim($_POST['name'] ?? '');
         $sectorId = ((int)($_POST['sector_id'] ?? 0)) ?: null;
@@ -40,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
         redirect(url('qr-locations'));
     }
     if ($act === 'delete') {
+        core_require('qr_locations.delete');
         $id = (int)($_POST['id'] ?? 0);
         db()->prepare("DELETE FROM man_qr_locations WHERE id=? AND hospital_id=?")->execute([$id, $hid]);
         auditLog('delete', 'qr_locations', $id);
@@ -71,7 +73,9 @@ ob_start();
 
 <div class="page-header">
     <h1><i class="bi bi-qr-code me-2"></i>Locais com QR Code</h1>
+    <?php if (core_can('qr_locations.create')): ?>
     <button onclick="openModal('modalAdd')" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Novo local</button>
+    <?php endif; ?>
 </div>
 
 <div class="alert alert-info">
@@ -105,13 +109,17 @@ ob_start();
                         </td>
                         <td class="text-end">
                             <div class="d-inline-flex gap-1">
+                                <?php if (core_can('qr_locations.edit')): ?>
                                 <button onclick="openModal('editLoc<?php echo $l['id']; ?>')" class="btn btn-outline-warning btn-action"><i class="bi bi-pencil"></i></button>
+                                <?php endif; ?>
+                                <?php if (core_can('qr_locations.delete')): ?>
                                 <form method="POST" class="d-inline">
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="id" value="<?php echo $l['id']; ?>">
                                     <button class="btn btn-outline-danger btn-action" data-confirm="Excluir '<?php echo e($l['name']); ?>'?"><i class="bi bi-trash"></i></button>
                                 </form>
+                                <?php endif; ?>
                             </div>
                         </td>
                     </tr>
@@ -124,6 +132,7 @@ ob_start();
 </div>
 
 <!-- MODAL NOVO -->
+<?php if (core_can('qr_locations.create')): ?>
 <div class="modal fade" id="modalAdd" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -144,7 +153,10 @@ ob_start();
     </div>
 </div>
 
+<?php endif; ?>
+
 <!-- MODAIS EDIÇÃO -->
+<?php if (core_can('qr_locations.edit')): ?>
 <?php foreach ($locs as $l): ?>
 <div class="modal fade" id="editLoc<?php echo $l['id']; ?>" tabindex="-1">
     <div class="modal-dialog">
@@ -168,6 +180,7 @@ ob_start();
     </div>
 </div>
 <?php endforeach; ?>
+<?php endif; ?>
 
 <?php
 $content = ob_get_clean();

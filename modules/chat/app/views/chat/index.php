@@ -65,9 +65,11 @@
                     <button class="btn btn-sm section-toggle" data-bs-toggle="collapse" data-bs-target="#channelsList">
                         <i class="bi bi-chevron-down"></i> Canais
                     </button>
+                    <?php if (core_can('channels.create')): ?>
                     <a href="index.php?m=chat&page=channels&action=create" class="btn btn-sm btn-icon" title="Criar canal">
                         <i class="bi bi-plus-lg"></i>
                     </a>
+                    <?php endif; ?>
                 </div>
                 <div class="collapse show" id="channelsList">
                     <?php
@@ -194,7 +196,7 @@
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="index.php?m=chat&page=channels&action=edit&id=<?= $currentChannel['id'] ?>"><i class="bi bi-pencil me-2"></i>Editar canal</a></li>
-                        <?php if (Auth::isAdmin()): ?>
+                        <?php if (core_can('channels.edit')): ?>
                         <li><a class="dropdown-item" href="index.php?m=chat&page=channels&action=settings&id=<?= $currentChannel['id'] ?>"><i class="bi bi-gear me-2"></i>Configurações do canal</a></li>
                         <?php endif; ?>
                         <li><a class="dropdown-item" href="#" data-action="invite-member"><i class="bi bi-person-plus me-2"></i>Convidar pessoas</a></li>
@@ -316,21 +318,24 @@
                                     <button class="btn-action-sm" data-action="thread" data-message-id="<?= $msg['id'] ?>" title="Responder em thread">
                                         <i class="bi bi-chat-right-text"></i>
                                     </button>
-                                    <?php if (Auth::isAdmin()): ?>
+                                    <?php $canModerate = core_can('chat.moderate'); ?>
+                                    <?php if ($canModerate): ?>
                                     <button class="btn-action-sm" data-action="pin" data-message-id="<?= $msg['id'] ?>" title="Fixar">
                                         <i class="bi bi-pin-angle"></i>
                                     </button>
                                     <?php endif; ?>
                                     <?php
-                                    $canDelete = Auth::isAdmin() || ($isMine && (time() - strtotime($msg['created_at'])) <= 60);
-                                    if ($isMine || Auth::isAdmin()):
+                                    $canEdit   = $isMine && core_can('chat.edit');
+                                    $canDelete = $canModerate
+                                        || ($isMine && core_can('chat.delete') && (time() - strtotime($msg['created_at'])) <= 60);
+                                    if ($canEdit || $canDelete):
                                     ?>
                                     <div class="dropdown d-inline">
                                         <button class="btn-action-sm" data-bs-toggle="dropdown">
                                             <i class="bi bi-three-dots"></i>
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-end">
-                                            <?php if ($isMine): ?>
+                                            <?php if ($canEdit): ?>
                                             <li><a class="dropdown-item" href="#" data-action="edit-msg" data-message-id="<?= $msg['id'] ?>"><i class="bi bi-pencil me-2"></i>Editar</a></li>
                                             <?php endif; ?>
                                             <?php if ($canDelete): ?>
@@ -358,12 +363,14 @@
 
         <!-- Message Input -->
         <?php
-        $isReadonly = (int)($currentChannel['is_readonly'] ?? 0) === 1 && !Auth::isAdmin();
+        // Sem chat.create não há envio; canal somente leitura exige chat.moderate.
+        $isReadonly = !core_can('chat.create')
+            || ((int)($currentChannel['is_readonly'] ?? 0) === 1 && !core_can('chat.moderate'));
         ?>
         <div class="message-input-area">
             <?php if ($isReadonly): ?>
             <div class="readonly-notice">
-                <i class="bi bi-lock-fill me-2"></i>Este canal está em modo somente leitura. Apenas administradores podem enviar mensagens.
+                <i class="bi bi-lock-fill me-2"></i>Este canal está em modo somente leitura ou você não tem permissão para enviar mensagens.
             </div>
             <?php else: ?>
             <form id="messageForm" enctype="multipart/form-data">

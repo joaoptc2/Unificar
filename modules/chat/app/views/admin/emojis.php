@@ -1,15 +1,18 @@
 <div class="page-header">
     <h1><i class="bi bi-emoji-smile me-2"></i>Emojis Personalizados</h1>
     <div>
+        <?php if (core_can('emojis.create')): ?>
         <button class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#addEmojiForm">
             <i class="bi bi-plus-lg me-1"></i> Adicionar Emoji
         </button>
+        <?php endif; ?>
         <a href="index.php?m=chat&page=admin" class="btn btn-outline-secondary btn-sm ms-1">
             <i class="bi bi-arrow-left me-1"></i> Voltar
         </a>
     </div>
 </div>
 
+<?php if (core_can('emojis.create')): ?>
 <div class="collapse mb-4" id="addEmojiForm">
     <div class="card border-0 shadow-sm">
         <div class="card-body">
@@ -38,6 +41,7 @@
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <?php if (empty($emojis)): ?>
     <div class="card border-0 shadow-sm">
@@ -55,6 +59,7 @@
                 <img src="<?= Sanitize::e($emoji['image_path']) ?>" alt="<?= Sanitize::e($emoji['name']) ?>"
                      width="48" height="48" class="mb-2" style="object-fit: contain;">
                 <div class="small fw-semibold mb-2"><?= Sanitize::e($emoji['name']) ?></div>
+                <?php if (core_can('emojis.delete')): ?>
                 <form method="POST" action="index.php?m=chat&page=admin&action=deleteEmoji"
                       onsubmit="return confirm('Excluir este emoji?')">
                     <?= Csrf::field() ?>
@@ -63,6 +68,7 @@
                         <i class="bi bi-trash"></i>
                     </button>
                 </form>
+                <?php endif; ?>
             </div>
         </div>
     </div>
