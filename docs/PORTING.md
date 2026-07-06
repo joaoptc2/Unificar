@@ -36,16 +36,32 @@ return [
     'name'        => 'Comunicação',
     'icon'        => 'bi-chat-dots',
     'description' => 'Chat, tarefas, reuniões e equipes.',
-    // níveis de acesso do módulo, do maior para o menor privilégio
-    'roles'       => ['admin' => 'Administrador', 'manager' => 'Gestor', 'member' => 'Membro'],
-    'admin_role'  => 'admin',           // papel dado a admins globais
     'entry'       => 'index.php',
-    // menu lateral — recebe o papel do usuário e retorna seções
-    'menu'        => function (string $role): array {
-        $items = [
-            ['label' => 'Chat', 'url' => MODULE_URL . '&page=chat', 'icon' => 'bi-chat', 'key' => 'chat'],
-            // ...
-        ];
+
+    // CATÁLOGO DE MICROPERMISSÕES: cada função do módulo, agrupada por
+    // recurso. A chave efetiva é "<recurso>.<ação>" (ex.: tasks.create).
+    'permissions' => [
+        'chat'  => ['label' => 'Chat',    'actions' => ['view' => 'Visualizar', 'create' => 'Criar', 'edit' => 'Editar', 'delete' => 'Excluir']],
+        'tasks' => ['label' => 'Tarefas', 'actions' => ['view' => 'Visualizar', 'create' => 'Criar', 'edit' => 'Editar', 'delete' => 'Excluir']],
+        // ... TODAS as funções do módulo
+    ],
+
+    // MODELOS (presets): atalhos na UI de permissões + base do conversor
+    // de níveis legados (scripts/migrate_role_grants.php). A chave DEVE
+    // ser o nível legado correspondente. Suporta curingas: '*' e 'rec.*'.
+    'presets' => [
+        'admin'   => ['label' => 'Administrador', 'keys' => ['*']],
+        'manager' => ['label' => 'Gestor',        'keys' => ['chat.*', 'tasks.*']],
+        'member'  => ['label' => 'Membro',        'keys' => ['chat.view', 'chat.create', 'tasks.view']],
+    ],
+
+    // menu lateral — recebe um verificador de micropermissões
+    'menu'        => function (callable $can): array {
+        $items = [];
+        if ($can('chat.view')) {
+            $items[] = ['label' => 'Chat', 'url' => core_module_url('chat', ['page' => 'chat']), 'icon' => 'bi-chat', 'key' => 'chat'];
+        }
+        // ...
         return [['heading' => 'Comunicação', 'items' => $items]];
     },
     // rotas públicas (sem login) — opcional
@@ -54,6 +70,19 @@ return [
     'cron'        => function (): void { require __DIR__ . '/cron/check.php'; },
 ];
 ```
+
+### Micropermissões dentro do código do módulo
+
+- O núcleo define `$GLOBALS['MODULE_PERMS']` (conjunto efetivo) por request
+  e expõe os helpers globais:
+  - `core_can('documents.edit')` → bool (módulo atual);
+  - `core_require('documents.edit')` → interrompe com 403.
+- Acesso ao módulo = ter QUALQUER permissão nele (o front controller já
+  bloqueia; o menu superior só mostra módulos com alguma permissão).
+- Admin global (`users.is_admin`) tem todas as permissões automaticamente.
+- "Notificar gestores" → `Core\Perms::usersWith('<slug>', '<perm>')`.
+- Os antigos papéis (`$GLOBALS['MODULE_ROLE']`, `user_module_access`) são
+  LEGADO: nenhum código de módulo deve lê-los.
 
 Atenção: o manifesto é carregado também FORA do módulo (topbar, admin),
 quando `MODULE_URL` não existe. No closure `menu` use

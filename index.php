@@ -56,7 +56,12 @@ if (!$isPublic) {
         core_redirect('index.php?m=auth&a=security&force=1');
     }
 
-    Access::requireModule($module);
+    // Acesso ao módulo = ter ao menos UMA micropermissão nele
+    if (!Core\Perms::hasAny((int) Auth::id(), $module)) {
+        http_response_code(403);
+        Layout::renderError(403, 'Você não tem acesso a este módulo. Solicite ao administrador.');
+        exit;
+    }
 }
 
 define('MODULE_SLUG', $module);
@@ -64,13 +69,12 @@ define('MODULE_PATH', $manifest['path']);
 define('MODULE_URL', BASE_URL . '/index.php?m=' . $module);
 
 /**
- * Papel do usuário neste módulo, disponível para o código legado.
- * Definido por request (cada request de módulo redefine o valor),
- * portanto seguro mesmo com módulos abertos em abas diferentes.
+ * Permissões efetivas do usuário neste módulo, disponíveis para o código
+ * do módulo via core_can()/core_require(). Definidas por request.
  */
-$GLOBALS['MODULE_ROLE'] = Auth::check()
-    ? Access::roleFor((int) Auth::id(), $module)
-    : 'none';
+$GLOBALS['MODULE_PERMS'] = Auth::check()
+    ? Core\Perms::effective((int) Auth::id(), $module)
+    : [];
 
 chdir(MODULE_PATH);
 require MODULE_PATH . '/' . ($manifest['entry'] ?? 'index.php');

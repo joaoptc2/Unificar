@@ -56,9 +56,33 @@ function core_user_id(): ?int
     return Core\Auth::id();
 }
 
-/** Nível de acesso do usuário logado no módulo (ou 'none'). */
+/** LEGADO: nível de acesso do usuário logado no módulo (ou 'none'). */
 function core_module_role(string $module): string
 {
     $id = Core\Auth::id();
     return $id ? Core\Access::roleFor($id, $module) : 'none';
+}
+
+/**
+ * O usuário logado tem a micropermissão? core_can('documents.edit')
+ * usa o módulo atual; core_can('documents.edit', 'documentos') é explícito.
+ */
+function core_can(string $permKey, ?string $module = null): bool
+{
+    $id = Core\Auth::id();
+    if ($id === null) {
+        return false;
+    }
+    $module ??= defined('MODULE_SLUG') ? MODULE_SLUG : null;
+    if ($module === null) {
+        return false;
+    }
+    return Core\Perms::can($id, $module, $permKey);
+}
+
+/** Interrompe com 403 se o usuário logado não tem a micropermissão. */
+function core_require(string $permKey, ?string $module = null): void
+{
+    $module ??= defined('MODULE_SLUG') ? MODULE_SLUG : '';
+    Core\Perms::require($module, $permKey);
 }

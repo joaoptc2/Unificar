@@ -43,9 +43,48 @@ CREATE TABLE IF NOT EXISTS modules (
     active      TINYINT(1)   NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Nível de acesso de cada usuário em cada módulo.
--- Os níveis válidos são declarados pelo manifesto de cada módulo
--- (modules/<slug>/module.php); 'none' significa sem acesso.
+-- Grupos de usuários (as permissões atribuídas a um grupo valem para
+-- todos os seus membros).
+CREATE TABLE IF NOT EXISTS user_groups (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL,
+    description VARCHAR(255) NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_group_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS user_group_members (
+    group_id INT UNSIGNED NOT NULL,
+    user_id  INT UNSIGNED NOT NULL,
+    added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (group_id, user_id),
+    KEY idx_ugm_user (user_id),
+    CONSTRAINT fk_ugm_group FOREIGN KEY (group_id) REFERENCES user_groups(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ugm_user  FOREIGN KEY (user_id)  REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Micropermissões (recurso.ação) por usuário ou por grupo.
+--   user  → allowed=1 concede, allowed=0 NEGA (sobrepõe grupos)
+--   group → allowed=1 concede
+-- O catálogo de permissões de cada módulo é declarado no manifesto
+-- (modules/<slug>/module.php, chave 'permissions').
+CREATE TABLE IF NOT EXISTS permission_grants (
+    id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    subject_type ENUM('user','group') NOT NULL,
+    subject_id   INT UNSIGNED NOT NULL,
+    module_slug  VARCHAR(40) NOT NULL,
+    perm_key     VARCHAR(80) NOT NULL,
+    allowed      TINYINT(1) NOT NULL DEFAULT 1,
+    granted_by   INT UNSIGNED NULL,
+    granted_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_grant (subject_type, subject_id, module_slug, perm_key),
+    KEY idx_grant_module (module_slug, perm_key),
+    KEY idx_grant_subject (subject_type, subject_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- LEGADO: nível de acesso por módulo (substituído pelas micropermissões;
+-- mantido para importação de dados dos sistemas antigos — o script
+-- scripts/migrate_role_grants.php converte estes registros em grants).
 CREATE TABLE IF NOT EXISTS user_module_access (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id     INT UNSIGNED NOT NULL,

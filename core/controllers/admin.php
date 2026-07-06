@@ -1,15 +1,14 @@
 <?php
 /**
  * Administração central da plataforma (somente admins globais):
- *  - usuários (CRUD) com matriz de permissões por módulo;
- *  - configurações gerais;
- *  - log de auditoria unificado.
+ *  - usuários (CRUD) e suas micropermissões;
+ *  - grupos de usuários (permissões replicadas aos membros);
+ *  - configurações gerais e log de auditoria unificado.
  * Rotas: index.php?m=admin&a=<ação>
  */
 
 declare(strict_types=1);
 
-use Core\Access;
 use Core\Audit;
 use Core\Auth;
 use Core\Csrf;
@@ -17,6 +16,7 @@ use Core\DB;
 use Core\Flash;
 use Core\Layout;
 use Core\Modules;
+use Core\Perms;
 use Core\Settings;
 
 Auth::requireGlobalAdmin();
@@ -29,7 +29,8 @@ function admin_sidebar(): array
         'heading' => 'Administração',
         'items'   => [
             ['label' => 'Visão geral', 'url' => core_module_url('admin'), 'icon' => 'bi-speedometer2', 'key' => 'index'],
-            ['label' => 'Usuários e permissões', 'url' => core_module_url('admin', ['a' => 'users']), 'icon' => 'bi-people', 'key' => 'users'],
+            ['label' => 'Usuários', 'url' => core_module_url('admin', ['a' => 'users']), 'icon' => 'bi-people', 'key' => 'users'],
+            ['label' => 'Grupos de permissões', 'url' => core_module_url('admin', ['a' => 'groups']), 'icon' => 'bi-diagram-3', 'key' => 'groups'],
             ['label' => 'Módulos', 'url' => core_module_url('admin', ['a' => 'modules']), 'icon' => 'bi-grid', 'key' => 'modules'],
             ['label' => 'Configurações', 'url' => core_module_url('admin', ['a' => 'settings']), 'icon' => 'bi-sliders', 'key' => 'settings'],
             ['label' => 'Auditoria', 'url' => core_module_url('admin', ['a' => 'audit']), 'icon' => 'bi-journal-text', 'key' => 'audit'],
@@ -48,14 +49,116 @@ function admin_render(string $title, string $content, string $active): void
     ]);
 }
 
+/**
+ * Árvore de micropermissões (todos os módulos) com checkboxes.
+ *
+ * @param array $checked   chaves efetivamente marcadas: [module => [key => true]]
+ * @param array $inherited chaves herdadas de grupos (editor de usuário): [module => [key => true]]
+ * @param bool  $showInheritance exibe badges de herança (editor de usuário)
+ */
+function admin_perm_tree(array $checked, array $inherited = [], bool $showInheritance = false): string
+{
+    ob_start(); ?>
+    <?php foreach (Modules::all() as $slug => $manifest):
+        $catalog = Perms::catalog($slug);
+        if (!$catalog) {
+            continue;
+        }
+        $presets = (array) ($manifest['presets'] ?? []); ?>
+        <div class="card mb-3 perm-module" data-module="<?= core_e($slug) ?>">
+            <div class="card-header d-flex flex-wrap align-items-center gap-2">
+                <strong class="me-auto"><i class="bi <?= core_e($manifest['icon'] ?? 'bi-app') ?> me-1"></i><?= core_e($manifest['name']) ?></strong>
+                <?php foreach ($presets as $presetKey => $preset):
+                    $keys = Perms::expand($slug, (array) ($preset['keys'] ?? [])); ?>
+                    <button type="button" class="btn btn-sm btn-outline-secondary preset-btn"
+                            data-keys='<?= core_e(json_encode($keys)) ?>'>
+                        <i class="bi bi-magic me-1"></i><?= core_e($preset['label'] ?? $presetKey) ?>
+                    </button>
+                <?php endforeach; ?>
+                <button type="button" class="btn btn-sm btn-outline-primary check-all">Marcar tudo</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary uncheck-all">Limpar</button>
+            </div>
+            <div class="card-body py-2">
+                <div class="row">
+                <?php foreach ($catalog as $resource => $def): ?>
+                    <div class="col-12 col-md-6 col-xl-4 py-2 perm-resource">
+                        <div class="fw-semibold small text-uppercase text-muted mb-1 d-flex align-items-center">
+                            <?= core_e($def['label'] ?? $resource) ?>
+                            <a href="#" class="ms-2 small fw-normal text-decoration-none res-all">todas</a>
+                        </div>
+                        <?php foreach (($def['actions'] ?? []) as $act => $actLabel):
+                            $key   = $resource . '.' . $act;
+                            $isChk = isset($checked[$slug][$key]);
+                            $isInh = isset($inherited[$slug][$key]); ?>
+                            <div class="form-check form-check-inline me-3">
+                                <input class="form-check-input" type="checkbox" id="p_<?= core_e($slug . '_' . $resource . '_' . $act) ?>"
+                                       name="perms[<?= core_e($slug) ?>][]" value="<?= core_e($key) ?>"
+                                       <?= $isChk ? 'checked' : '' ?> <?= $isInh ? 'data-inherited="1"' : '' ?>>
+                                <label class="form-check-label" for="p_<?= core_e($slug . '_' . $resource . '_' . $act) ?>">
+                                    <?= core_e($actLabel) ?>
+                                    <?php if ($showInheritance && $isInh): ?>
+                                        <i class="bi bi-diagram-3 text-info" title="Herdada de grupo"></i>
+                                    <?php endif; ?>
+                                </label>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endforeach; ?>
+                </div>
+            </div>
+            <!-- garante que o módulo apareça no POST mesmo sem nenhuma caixa marcada -->
+            <input type="hidden" name="perms[<?= core_e($slug) ?>][]" value="">
+        </div>
+    <?php endforeach; ?>
+    <?php if ($showInheritance): ?>
+        <p class="small text-muted"><i class="bi bi-diagram-3 text-info"></i> = herdada de grupo.
+            Desmarcar uma permissão herdada cria uma exceção individual (negação) para este usuário;
+            marcar uma não herdada cria uma concessão individual.</p>
+    <?php endif; ?>
+    <script>
+    document.addEventListener('click', function (e) {
+        var mod = e.target.closest('.perm-module');
+        if (e.target.closest('.check-all')) {
+            mod.querySelectorAll('input[type=checkbox]').forEach(function (c) { c.checked = true; });
+        } else if (e.target.closest('.uncheck-all')) {
+            mod.querySelectorAll('input[type=checkbox]').forEach(function (c) { c.checked = false; });
+        } else if (e.target.closest('.preset-btn')) {
+            var keys = JSON.parse(e.target.closest('.preset-btn').dataset.keys || '[]');
+            mod.querySelectorAll('input[type=checkbox]').forEach(function (c) {
+                if (c.value) c.checked = keys.indexOf(c.value) !== -1;
+            });
+        } else if (e.target.closest('.res-all')) {
+            e.preventDefault();
+            e.target.closest('.perm-resource').querySelectorAll('input[type=checkbox]').forEach(function (c) { c.checked = true; });
+        }
+    });
+    </script>
+    <?php
+    return (string) ob_get_clean();
+}
+
+/** Lê o POST perms[module][] e devolve [module => keys[]] saneado. */
+function admin_read_perms_post(): array
+{
+    $out = [];
+    foreach ((array) ($_POST['perms'] ?? []) as $slug => $keys) {
+        $slug = (string) $slug;
+        if (!Modules::manifest($slug)) {
+            continue;
+        }
+        $out[$slug] = array_values(array_filter(array_map('strval', (array) $keys), fn ($k) => $k !== ''));
+    }
+    return $out;
+}
+
 switch ($action) {
 
     case 'index':
         $stats = [
             'users'   => (int) (DB::queryOne('SELECT COUNT(*) n FROM users')['n'] ?? 0),
             'active'  => (int) (DB::queryOne('SELECT COUNT(*) n FROM users WHERE active = 1')['n'] ?? 0),
+            'groups'  => (int) (DB::queryOne('SELECT COUNT(*) n FROM user_groups')['n'] ?? 0),
             'moodle'  => (int) (DB::queryOne('SELECT COUNT(*) n FROM users WHERE auth_source = "moodle"')['n'] ?? 0),
-            'modules' => count(Modules::all()),
         ];
         $recent = DB::query('SELECT a.*, u.name AS user_name FROM audit_log a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.id DESC LIMIT 12');
         ob_start(); ?>
@@ -64,8 +167,8 @@ switch ($action) {
             <?php foreach ([
                 ['Usuários', $stats['users'], 'bi-people', 'primary'],
                 ['Ativos', $stats['active'], 'bi-person-check', 'success'],
-                ['Contas Moodle', $stats['moodle'], 'bi-mortarboard', 'info'],
-                ['Módulos', $stats['modules'], 'bi-grid', 'secondary'],
+                ['Grupos', $stats['groups'], 'bi-diagram-3', 'info'],
+                ['Contas Moodle', $stats['moodle'], 'bi-mortarboard', 'secondary'],
             ] as [$label, $value, $icon, $color]): ?>
                 <div class="col-6 col-lg-3">
                     <div class="card h-100">
@@ -102,23 +205,25 @@ switch ($action) {
         admin_render('Administração', (string) ob_get_clean(), 'index');
         break;
 
+    // ================= USUÁRIOS =================
+
     case 'users':
-        $q     = trim((string) ($_GET['q'] ?? ''));
-        $sql   = 'SELECT * FROM users';
-        $par   = [];
+        $q   = trim((string) ($_GET['q'] ?? ''));
+        $sql = 'SELECT * FROM users';
+        $par = [];
         if ($q !== '') {
             $sql .= ' WHERE name LIKE ? OR email LIKE ? OR username LIKE ?';
             $par  = ["%{$q}%", "%{$q}%", "%{$q}%"];
         }
         $users   = DB::query($sql . ' ORDER BY name LIMIT 500', $par);
         $modules = Modules::all();
-        $accessByUser = [];
-        foreach (DB::query('SELECT user_id, module_slug, role FROM user_module_access') as $row) {
-            $accessByUser[(int) $row['user_id']][$row['module_slug']] = $row['role'];
+        $groupsByUser = [];
+        foreach (DB::query('SELECT m.user_id, g.name FROM user_group_members m JOIN user_groups g ON g.id = m.group_id') as $row) {
+            $groupsByUser[(int) $row['user_id']][] = $row['name'];
         }
         ob_start(); ?>
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-            <h1 class="h4 mb-0"><i class="bi bi-people me-2"></i>Usuários e permissões</h1>
+            <h1 class="h4 mb-0"><i class="bi bi-people me-2"></i>Usuários</h1>
             <a class="btn btn-primary" href="<?= core_module_url('admin', ['a' => 'user_form']) ?>"><i class="bi bi-plus-lg me-1"></i>Novo usuário</a>
         </div>
         <form class="mb-3" method="get">
@@ -134,9 +239,9 @@ switch ($action) {
                     <thead>
                         <tr>
                             <th>Usuário</th>
-                            <th class="text-center">Origem</th>
+                            <th>Grupos</th>
                             <?php foreach ($modules as $slug => $m): ?>
-                                <th class="text-center small"><i class="bi <?= core_e($m['icon'] ?? '') ?>"></i> <?= core_e($m['name']) ?></th>
+                                <th class="text-center small" title="<?= core_e($m['name']) ?>"><i class="bi <?= core_e($m['icon'] ?? '') ?>"></i></th>
                             <?php endforeach; ?>
                             <th class="text-center">Status</th>
                             <th></th>
@@ -148,25 +253,22 @@ switch ($action) {
                             <td>
                                 <div class="fw-semibold"><?= core_e($u['name']) ?>
                                     <?php if ($u['is_admin']): ?><span class="badge text-bg-primary">Admin</span><?php endif; ?>
+                                    <?php if ($u['auth_source'] === 'moodle'): ?><span class="badge text-bg-info" title="Autentica via Moodle"><i class="bi bi-mortarboard"></i></span><?php endif; ?>
                                 </div>
                                 <div class="small text-muted"><?= core_e($u['email']) ?></div>
                             </td>
-                            <td class="text-center">
-                                <?php if ($u['auth_source'] === 'moodle'): ?>
-                                    <span class="badge text-bg-info" title="Autentica via Moodle"><i class="bi bi-mortarboard"></i></span>
-                                <?php else: ?>
-                                    <span class="badge text-bg-light border">local</span>
-                                <?php endif; ?>
+                            <td>
+                                <?php foreach ($groupsByUser[(int) $u['id']] ?? [] as $gName): ?>
+                                    <span class="badge text-bg-light border"><?= core_e($gName) ?></span>
+                                <?php endforeach; ?>
                             </td>
                             <?php foreach ($modules as $slug => $m):
-                                $role = $u['is_admin']
-                                    ? ($m['admin_role'] ?? 'admin')
-                                    : ($accessByUser[(int) $u['id']][$slug] ?? 'none'); ?>
+                                $n = $u['is_admin'] ? count(Perms::allKeys($slug)) : count(Perms::effective((int) $u['id'], $slug)); ?>
                                 <td class="text-center">
-                                    <?php if ($role === 'none'): ?>
-                                        <span class="text-muted">—</span>
+                                    <?php if ($n > 0): ?>
+                                        <span class="badge text-bg-success" title="<?= $n ?> permissões"><?= $n ?></span>
                                     <?php else: ?>
-                                        <span class="badge text-bg-secondary"><?= core_e($m['roles'][$role] ?? $role) ?></span>
+                                        <span class="text-muted">—</span>
                                     <?php endif; ?>
                                 </td>
                             <?php endforeach; ?>
@@ -177,10 +279,11 @@ switch ($action) {
                                     <span class="badge text-bg-danger">inativo</span>
                                 <?php endif; ?>
                             </td>
-                            <td class="text-end">
-                                <a class="btn btn-sm btn-outline-primary" href="<?= core_module_url('admin', ['a' => 'user_form', 'id' => $u['id']]) ?>">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
+                            <td class="text-end text-nowrap">
+                                <a class="btn btn-sm btn-outline-secondary" title="Permissões"
+                                   href="<?= core_module_url('admin', ['a' => 'user_perms', 'id' => $u['id']]) ?>"><i class="bi bi-shield-check"></i></a>
+                                <a class="btn btn-sm btn-outline-primary" title="Editar"
+                                   href="<?= core_module_url('admin', ['a' => 'user_form', 'id' => $u['id']]) ?>"><i class="bi bi-pencil"></i></a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -195,8 +298,10 @@ switch ($action) {
     case 'user_form':
         $id     = (int) ($_GET['id'] ?? 0);
         $user   = $id ? DB::queryOne('SELECT * FROM users WHERE id = ?', [$id]) : null;
-        $access = $id ? array_column(DB::query('SELECT module_slug, role FROM user_module_access WHERE user_id = ?', [$id]), 'role', 'module_slug') : [];
-        $modules = Modules::all();
+        $groups = DB::query('SELECT * FROM user_groups ORDER BY name');
+        $memberOf = $id
+            ? array_map('intval', array_column(DB::query('SELECT group_id FROM user_group_members WHERE user_id = ?', [$id]), 'group_id'))
+            : [];
         ob_start(); ?>
         <h1 class="h4 mb-3"><i class="bi bi-person-gear me-2"></i><?= $user ? 'Editar usuário' : 'Novo usuário' ?></h1>
         <form method="post" action="<?= core_module_url('admin', ['a' => 'user_save']) ?>">
@@ -238,33 +343,37 @@ switch ($action) {
                             </div>
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" name="is_admin" id="adm" value="1" <?= !empty($user['is_admin']) ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="adm">Administrador global <span class="text-muted small">(acesso total a todos os módulos e a esta administração)</span></label>
+                                <label class="form-check-label" for="adm">Administrador global <span class="text-muted small">(todas as permissões em todos os módulos)</span></label>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="col-12 col-lg-6">
                     <div class="card h-100">
-                        <div class="card-header">Permissões por módulo</div>
+                        <div class="card-header">Grupos</div>
                         <div class="card-body">
-                            <p class="small text-muted">Defina o nível de acesso do usuário em cada sistema. Administradores globais ignoram esta matriz.</p>
-                            <?php foreach ($modules as $slug => $m): ?>
-                                <div class="row align-items-center mb-2">
-                                    <label class="col-5 col-form-label">
-                                        <i class="bi <?= core_e($m['icon'] ?? '') ?> me-1"></i><?= core_e($m['name']) ?>
+                            <p class="small text-muted">O usuário herda todas as permissões dos grupos marcados.
+                                Ajustes finos são feitos em <strong>Permissões</strong> após salvar.</p>
+                            <?php if (!$groups): ?>
+                                <p class="text-muted small">Nenhum grupo criado ainda —
+                                    <a href="<?= core_module_url('admin', ['a' => 'group_form']) ?>">criar grupo</a>.</p>
+                            <?php endif; ?>
+                            <?php foreach ($groups as $g): ?>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="groups[]" value="<?= (int) $g['id'] ?>"
+                                           id="g<?= (int) $g['id'] ?>" <?= in_array((int) $g['id'], $memberOf, true) ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="g<?= (int) $g['id'] ?>">
+                                        <?= core_e($g['name']) ?>
+                                        <?php if ($g['description']): ?><span class="text-muted small">— <?= core_e($g['description']) ?></span><?php endif; ?>
                                     </label>
-                                    <div class="col-7">
-                                        <select class="form-select" name="access[<?= core_e($slug) ?>]">
-                                            <option value="none">— sem acesso —</option>
-                                            <?php foreach ($m['roles'] ?? [] as $roleKey => $roleLabel): ?>
-                                                <option value="<?= core_e($roleKey) ?>" <?= ($access[$slug] ?? 'none') === $roleKey ? 'selected' : '' ?>>
-                                                    <?= core_e($roleLabel) ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
                                 </div>
                             <?php endforeach; ?>
+                            <?php if ($user): ?>
+                                <hr>
+                                <a class="btn btn-outline-secondary btn-sm" href="<?= core_module_url('admin', ['a' => 'user_perms', 'id' => $user['id']]) ?>">
+                                    <i class="bi bi-shield-check me-1"></i>Editar permissões individuais
+                                </a>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -272,16 +381,16 @@ switch ($action) {
             <div class="mt-3 d-flex gap-2">
                 <button class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar</button>
                 <a class="btn btn-outline-secondary" href="<?= core_module_url('admin', ['a' => 'users']) ?>">Cancelar</a>
-                <?php if ($user && (int) $user['id'] !== (int) Auth::id()): ?>
-                    <form method="post" action="<?= core_module_url('admin', ['a' => 'user_delete']) ?>" class="ms-auto"
-                          onsubmit="return confirm('Desativar este usuário?')">
-                        <?= Csrf::field() ?>
-                        <input type="hidden" name="id" value="<?= (int) $user['id'] ?>">
-                        <button class="btn btn-outline-danger"><i class="bi bi-person-x me-1"></i>Desativar</button>
-                    </form>
-                <?php endif; ?>
             </div>
         </form>
+        <?php if ($user && (int) $user['id'] !== (int) Auth::id()): ?>
+            <form method="post" action="<?= core_module_url('admin', ['a' => 'user_delete']) ?>" class="mt-2"
+                  onsubmit="return confirm('Desativar este usuário?')">
+                <?= Csrf::field() ?>
+                <input type="hidden" name="id" value="<?= (int) $user['id'] ?>">
+                <button class="btn btn-outline-danger btn-sm"><i class="bi bi-person-x me-1"></i>Desativar usuário</button>
+            </form>
+        <?php endif; ?>
         <?php
         admin_render($user ? 'Editar usuário' : 'Novo usuário', (string) ob_get_clean(), 'users');
         break;
@@ -330,20 +439,18 @@ switch ($action) {
             Audit::log('user.create', 'users', (string) $id, null, null, 'admin');
         }
 
-        foreach ((array) ($_POST['access'] ?? []) as $slug => $role) {
-            $manifest = Modules::manifest((string) $slug);
-            if (!$manifest) {
-                continue;
+        // Grupos
+        $wanted = array_map('intval', (array) ($_POST['groups'] ?? []));
+        DB::execute('DELETE FROM user_group_members WHERE user_id = ?', [$id]);
+        foreach (array_unique($wanted) as $gid) {
+            if ($gid > 0 && DB::queryOne('SELECT id FROM user_groups WHERE id = ?', [$gid])) {
+                DB::execute('INSERT INTO user_group_members (group_id, user_id) VALUES (?, ?)', [$gid, $id]);
             }
-            $role = (string) $role;
-            if ($role !== 'none' && !isset($manifest['roles'][$role])) {
-                continue; // nível inválido para o módulo
-            }
-            Access::set($id, (string) $slug, $role, Auth::id());
         }
+        Perms::flush();
 
         Flash::set('success', 'Usuário salvo.');
-        core_redirect('index.php?m=admin&a=users');
+        core_redirect('index.php?m=admin&a=' . ((int) ($_POST['id'] ?? 0) === 0 ? 'user_perms&id=' . $id : 'users'));
         break;
 
     case 'user_delete':
@@ -356,6 +463,240 @@ switch ($action) {
         }
         core_redirect('index.php?m=admin&a=users');
         break;
+
+    case 'user_perms':
+        $id   = (int) ($_GET['id'] ?? 0);
+        $user = DB::queryOne('SELECT * FROM users WHERE id = ?', [$id]);
+        if (!$user) {
+            core_redirect('index.php?m=admin&a=users');
+        }
+        $checked = $inherited = [];
+        foreach (array_keys(Modules::all()) as $slug) {
+            $checked[$slug]   = Perms::effective($id, $slug);
+            $inherited[$slug] = Perms::inheritedFor($id, $slug);
+        }
+        $groupNames = array_column(
+            DB::query('SELECT g.name FROM user_groups g JOIN user_group_members m ON m.group_id = g.id WHERE m.user_id = ?', [$id]),
+            'name'
+        );
+        ob_start(); ?>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h1 class="h4 mb-0"><i class="bi bi-shield-check me-2"></i>Permissões — <?= core_e($user['name']) ?></h1>
+            <a class="btn btn-outline-secondary btn-sm" href="<?= core_module_url('admin', ['a' => 'users']) ?>">Voltar</a>
+        </div>
+        <?php if (!empty($user['is_admin'])): ?>
+            <div class="alert alert-info"><i class="bi bi-info-circle me-1"></i>
+                Este usuário é <strong>administrador global</strong> e possui todas as permissões automaticamente —
+                a matriz abaixo não se aplica enquanto essa opção estiver ativa.</div>
+        <?php endif; ?>
+        <?php if ($groupNames): ?>
+            <p class="small text-muted">Grupos do usuário:
+                <?php foreach ($groupNames as $gn): ?><span class="badge text-bg-light border"><?= core_e($gn) ?></span><?php endforeach; ?>
+            </p>
+        <?php endif; ?>
+        <form method="post" action="<?= core_module_url('admin', ['a' => 'user_perms_save']) ?>">
+            <?= Csrf::field() ?>
+            <input type="hidden" name="id" value="<?= (int) $user['id'] ?>">
+            <?= admin_perm_tree($checked, $inherited, true) ?>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar permissões</button>
+                <a class="btn btn-outline-secondary" href="<?= core_module_url('admin', ['a' => 'users']) ?>">Cancelar</a>
+            </div>
+        </form>
+        <?php
+        admin_render('Permissões do usuário', (string) ob_get_clean(), 'users');
+        break;
+
+    case 'user_perms_save':
+        Csrf::check();
+        $id = (int) ($_POST['id'] ?? 0);
+        if (!DB::queryOne('SELECT id FROM users WHERE id = ?', [$id])) {
+            core_redirect('index.php?m=admin&a=users');
+        }
+        foreach (admin_read_perms_post() as $slug => $keys) {
+            Perms::setUserGrants($id, $slug, $keys, Auth::id());
+        }
+        Audit::log('perms.user_update', 'users', (string) $id, null, null, 'admin');
+        Flash::set('success', 'Permissões do usuário atualizadas.');
+        core_redirect('index.php?m=admin&a=user_perms&id=' . $id);
+        break;
+
+    // ================= GRUPOS =================
+
+    case 'groups':
+        $groups = DB::query(
+            'SELECT g.*, (SELECT COUNT(*) FROM user_group_members m WHERE m.group_id = g.id) AS members,
+                    (SELECT COUNT(*) FROM permission_grants p WHERE p.subject_type = "group" AND p.subject_id = g.id AND p.allowed = 1) AS grants_n
+             FROM user_groups g ORDER BY g.name'
+        );
+        ob_start(); ?>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h1 class="h4 mb-0"><i class="bi bi-diagram-3 me-2"></i>Grupos de permissões</h1>
+            <a class="btn btn-primary" href="<?= core_module_url('admin', ['a' => 'group_form']) ?>"><i class="bi bi-plus-lg me-1"></i>Novo grupo</a>
+        </div>
+        <p class="text-muted small">Defina as permissões uma vez no grupo e todos os membros as herdam.
+            Exceções individuais podem ser feitas na tela de permissões de cada usuário.</p>
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead><tr><th>Grupo</th><th class="text-center">Membros</th><th class="text-center">Permissões</th><th></th></tr></thead>
+                    <tbody>
+                    <?php if (!$groups): ?>
+                        <tr><td colspan="4" class="text-center text-muted py-4">Nenhum grupo criado.</td></tr>
+                    <?php endif; ?>
+                    <?php foreach ($groups as $g): ?>
+                        <tr>
+                            <td>
+                                <div class="fw-semibold"><?= core_e($g['name']) ?></div>
+                                <div class="small text-muted"><?= core_e($g['description'] ?? '') ?></div>
+                            </td>
+                            <td class="text-center"><span class="badge text-bg-secondary"><?= (int) $g['members'] ?></span></td>
+                            <td class="text-center"><span class="badge text-bg-light border"><?= (int) $g['grants_n'] ?></span></td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-primary" href="<?= core_module_url('admin', ['a' => 'group_form', 'id' => $g['id']]) ?>"><i class="bi bi-pencil"></i></a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php
+        admin_render('Grupos', (string) ob_get_clean(), 'groups');
+        break;
+
+    case 'group_form':
+        $id    = (int) ($_GET['id'] ?? 0);
+        $group = $id ? DB::queryOne('SELECT * FROM user_groups WHERE id = ?', [$id]) : null;
+        $checked = [];
+        if ($group) {
+            foreach (Perms::grantsOf('group', $id) as $slug => $keys) {
+                foreach ($keys as $key => $allowed) {
+                    if ($allowed) {
+                        $checked[$slug][$key] = true;
+                    }
+                }
+            }
+        }
+        $allUsers = DB::query('SELECT id, name, email FROM users WHERE active = 1 ORDER BY name');
+        $memberIds = $group
+            ? array_map('intval', array_column(DB::query('SELECT user_id FROM user_group_members WHERE group_id = ?', [$id]), 'user_id'))
+            : [];
+        ob_start(); ?>
+        <h1 class="h4 mb-3"><i class="bi bi-diagram-3 me-2"></i><?= $group ? 'Editar grupo' : 'Novo grupo' ?></h1>
+        <form method="post" action="<?= core_module_url('admin', ['a' => 'group_save']) ?>">
+            <?= Csrf::field() ?>
+            <input type="hidden" name="id" value="<?= (int) ($group['id'] ?? 0) ?>">
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-header">Dados do grupo</div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Nome *</label>
+                                <input class="form-control" name="name" value="<?= core_e($group['name'] ?? '') ?>" required
+                                       placeholder="ex.: Gestores de RH">
+                            </div>
+                            <div class="mb-0">
+                                <label class="form-label">Descrição</label>
+                                <input class="form-control" name="description" value="<?= core_e($group['description'] ?? '') ?>">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-header d-flex align-items-center">
+                            Membros
+                            <input class="form-control form-control-sm ms-auto" style="max-width:220px" placeholder="filtrar..."
+                                   oninput="var f=this.value.toLowerCase();document.querySelectorAll('#memberList .form-check').forEach(function(d){d.style.display=d.textContent.toLowerCase().indexOf(f)!==-1?'':'none';});">
+                        </div>
+                        <div class="card-body" id="memberList" style="max-height: 240px; overflow-y: auto">
+                            <?php foreach ($allUsers as $u): ?>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="members[]" value="<?= (int) $u['id'] ?>"
+                                           id="mu<?= (int) $u['id'] ?>" <?= in_array((int) $u['id'], $memberIds, true) ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="mu<?= (int) $u['id'] ?>">
+                                        <?= core_e($u['name']) ?> <span class="text-muted small"><?= core_e($u['email']) ?></span>
+                                    </label>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <h2 class="h6 text-uppercase text-muted">Permissões do grupo</h2>
+            <?= admin_perm_tree($checked) ?>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar grupo</button>
+                <a class="btn btn-outline-secondary" href="<?= core_module_url('admin', ['a' => 'groups']) ?>">Cancelar</a>
+            </div>
+        </form>
+        <?php if ($group): ?>
+            <form method="post" action="<?= core_module_url('admin', ['a' => 'group_delete']) ?>" class="mt-2"
+                  onsubmit="return confirm('Excluir este grupo? Os membros perdem as permissões herdadas dele.')">
+                <?= Csrf::field() ?>
+                <input type="hidden" name="id" value="<?= (int) $group['id'] ?>">
+                <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Excluir grupo</button>
+            </form>
+        <?php endif; ?>
+        <?php
+        admin_render($group ? 'Editar grupo' : 'Novo grupo', (string) ob_get_clean(), 'groups');
+        break;
+
+    case 'group_save':
+        Csrf::check();
+        $id   = (int) ($_POST['id'] ?? 0);
+        $name = trim((string) ($_POST['name'] ?? ''));
+        $desc = trim((string) ($_POST['description'] ?? ''));
+        if ($name === '') {
+            Flash::set('error', 'Informe o nome do grupo.');
+            core_redirect('index.php?m=admin&a=groups');
+        }
+        $dupe = DB::queryOne('SELECT id FROM user_groups WHERE name = ? AND id <> ?', [$name, $id]);
+        if ($dupe) {
+            Flash::set('error', 'Já existe um grupo com esse nome.');
+            core_redirect('index.php?m=admin&a=groups');
+        }
+        if ($id) {
+            DB::execute('UPDATE user_groups SET name = ?, description = ? WHERE id = ?', [$name, $desc, $id]);
+        } else {
+            DB::execute('INSERT INTO user_groups (name, description) VALUES (?, ?)', [$name, $desc]);
+            $id = DB::lastId();
+        }
+
+        // Membros
+        DB::execute('DELETE FROM user_group_members WHERE group_id = ?', [$id]);
+        foreach (array_unique(array_map('intval', (array) ($_POST['members'] ?? []))) as $uid) {
+            if ($uid > 0 && DB::queryOne('SELECT id FROM users WHERE id = ?', [$uid])) {
+                DB::execute('INSERT INTO user_group_members (group_id, user_id) VALUES (?, ?)', [$id, $uid]);
+            }
+        }
+
+        // Permissões
+        foreach (admin_read_perms_post() as $slug => $keys) {
+            Perms::setGroupGrants($id, $slug, $keys, Auth::id());
+        }
+
+        Audit::log('perms.group_save', 'user_groups', (string) $id, ['name' => $name], null, 'admin');
+        Flash::set('success', 'Grupo salvo.');
+        core_redirect('index.php?m=admin&a=group_form&id=' . $id);
+        break;
+
+    case 'group_delete':
+        Csrf::check();
+        $id = (int) ($_POST['id'] ?? 0);
+        if ($id) {
+            DB::execute("DELETE FROM permission_grants WHERE subject_type = 'group' AND subject_id = ?", [$id]);
+            DB::execute('DELETE FROM user_groups WHERE id = ?', [$id]);
+            Perms::flush();
+            Audit::log('perms.group_delete', 'user_groups', (string) $id, null, null, 'admin');
+            Flash::set('success', 'Grupo excluído.');
+        }
+        core_redirect('index.php?m=admin&a=groups');
+        break;
+
+    // ================= MÓDULOS / CONFIG / AUDITORIA =================
 
     case 'modules':
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {

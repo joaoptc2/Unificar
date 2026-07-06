@@ -31,8 +31,10 @@ final class Layout
         // Sidebar: override explícito > manifesto do módulo > nenhuma
         $sidebar = $opts['sidebar'] ?? null;
         if ($sidebar === null && $manifest && isset($manifest['menu']) && is_callable($manifest['menu']) && $user) {
-            $role    = Access::roleFor((int) $user['id'], $moduleSlug);
-            $sidebar = ($manifest['menu'])($role);
+            // O closure 'menu' recebe um verificador de micropermissões
+            $userId  = (int) $user['id'];
+            $can     = fn (string $permKey): bool => Perms::can($userId, $moduleSlug, $permKey);
+            $sidebar = ($manifest['menu'])($can);
         }
 
         $ctx = [

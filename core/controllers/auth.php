@@ -426,13 +426,23 @@ function core_auth_render_profile(): void
             <div class="card">
                 <div class="card-header">Meus acessos</div>
                 <div class="card-body">
-                    <?php foreach (Core\Access::allFor((int) $user['id']) as $slug => $role):
-                        $m = Core\Modules::manifest($slug); ?>
+                    <?php foreach (Core\Modules::all() as $slug => $m):
+                        $perms = Core\Perms::effective((int) $user['id'], $slug);
+                        if (!$perms) {
+                            continue;
+                        }
+                        $total = count(Core\Perms::allKeys($slug)); ?>
                         <div class="d-flex justify-content-between border-bottom py-2">
                             <span><i class="bi <?= core_e($m['icon'] ?? 'bi-app') ?> me-2"></i><?= core_e($m['name'] ?? $slug) ?></span>
-                            <span class="badge text-bg-secondary"><?= core_e($m['roles'][$role] ?? $role) ?></span>
+                            <span class="badge text-bg-secondary"><?= count($perms) ?>/<?= $total ?> permissões</span>
                         </div>
                     <?php endforeach; ?>
+                    <?php $groups = Core\DB::query('SELECT g.name FROM user_groups g JOIN user_group_members m ON m.group_id = g.id WHERE m.user_id = ?', [$user['id']]); ?>
+                    <?php if ($groups): ?>
+                        <div class="small text-muted mt-2">Grupos:
+                            <?php foreach ($groups as $g): ?><span class="badge text-bg-light border"><?= core_e($g['name']) ?></span><?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

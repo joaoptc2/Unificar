@@ -77,7 +77,7 @@ final class Modules
             if (!($manifest['active'] ?? true)) {
                 continue;
             }
-            if (Access::has($userId, $slug)) {
+            if (Perms::hasAny($userId, $slug)) {
                 $result[$slug] = $manifest;
             }
         }
