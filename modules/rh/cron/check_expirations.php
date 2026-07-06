@@ -41,14 +41,17 @@ try {
 
     echo "Encontrados " . count($expired) . " vencimentos expirados.\n";
 
-    // 3. Buscar todos os admins e RH (RBAC central + admins globais) para notificar
-    $admins = $db->query(
-        "SELECT DISTINCT u.id, u.email, u.name
-         FROM users u
-         LEFT JOIN user_module_access uma
-           ON uma.user_id = u.id AND uma.module_slug = 'rh'
-         WHERE u.active = 1 AND (u.is_admin = 1 OR uma.role IN ('admin', 'rh'))"
-    )->fetchAll();
+    // 3. Buscar quem deve ser notificado: usuários com a micropermissão de
+    //    editar vencimentos (expirations.edit) — Core\Perms::usersWith já
+    //    inclui os administradores globais.
+    $adminIds = Core\Perms::usersWith('rh', 'expirations.edit');
+    $admins = [];
+    if ($adminIds) {
+        $in = implode(',', array_fill(0, count($adminIds), '?'));
+        $stmt = $db->prepare("SELECT id, email, name FROM users WHERE id IN ({$in})");
+        $stmt->execute($adminIds);
+        $admins = $stmt->fetchAll();
+    }
 
     $notify = function (int $userId, string $type, string $title, string $message, string $link) use ($db): void {
         $db->prepare(

@@ -401,7 +401,7 @@
                             </div>
                         </div>
 
-                        <?php if (core_can('employees.edit')): ?>
+                        <?php if (core_can('scores.create')): ?>
                         <form method="POST" action="index.php?m=rh&page=scores&action=store" class="border rounded p-3 mb-3 bg-light">
                             <?= Csrf::field() ?>
                             <input type="hidden" name="employee_id" value="<?= $employee['id'] ?>">
@@ -440,7 +440,7 @@
                                             <td><?= nl2br(Sanitize::e($s['reason'])) ?></td>
                                             <td><?= Sanitize::e($s['created_by_name'] ?: '-') ?></td>
                                             <td>
-                                                <?php if (core_can('employees.edit')): ?>
+                                                <?php if (core_can('scores.delete')): ?>
                                                 <form method="POST" action="index.php?m=rh&page=scores&action=delete" class="d-inline">
                                                     <?= Csrf::field() ?>
                                                     <input type="hidden" name="id" value="<?= $s['id'] ?>">
@@ -463,7 +463,7 @@
             <div class="tab-pane fade" id="tabElogios">
                 <div class="card border-0 shadow-sm border-top-0 rounded-top-0">
                     <div class="card-body">
-                        <?php if (core_can('employees.edit')): ?>
+                        <?php if (core_can('compliments.create')): ?>
                         <form method="POST" action="index.php?m=rh&page=compliments&action=store" class="border rounded p-3 mb-3 bg-light">
                             <?= Csrf::field() ?>
                             <input type="hidden" name="employee_id" value="<?= $employee['id'] ?>">
@@ -494,7 +494,7 @@
                                         <?= Sanitize::formatDateTime($c['created_at']) ?>
                                         <?= $c['created_by_name'] ? ' &middot; registrado por ' . Sanitize::e($c['created_by_name']) : '' ?>
                                     </small>
-                                    <?php if (core_can('employees.edit')): ?>
+                                    <?php if (core_can('compliments.delete')): ?>
                                         <form method="POST" action="index.php?m=rh&page=compliments&action=delete" class="d-inline ms-2">
                                             <?= Csrf::field() ?>
                                             <input type="hidden" name="id" value="<?= $c['id'] ?>">

@@ -34,15 +34,10 @@ try {
         $message = "Hoje fazem aniversário: " . implode(', ', $names) . ".";
         $link = "index.php?m=rh&page=birthdays&month={$month}";
 
-        // Notificar todos os usuários ativos com acesso ao módulo RH
-        // (inclui admins globais).
-        $users = $db->query(
-            "SELECT DISTINCT u.id
-             FROM users u
-             LEFT JOIN user_module_access uma
-               ON uma.user_id = u.id AND uma.module_slug = 'rh'
-             WHERE u.active = 1 AND (u.is_admin = 1 OR uma.id IS NOT NULL)"
-        )->fetchAll(PDO::FETCH_COLUMN);
+        // Notificar todos os usuários ativos que enxergam os aniversariantes
+        // (micropermissão birthdays.view — Core\Perms::usersWith já inclui os
+        // administradores globais).
+        $users = Core\Perms::usersWith('rh', 'birthdays.view');
         foreach ($users as $userId) {
             $check = $db->prepare(
                 "SELECT id FROM notifications WHERE user_id = ? AND module = 'rh' AND title = ? AND DATE(created_at) = ?"
