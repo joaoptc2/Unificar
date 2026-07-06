@@ -55,7 +55,7 @@ Bootstrap 5.3, atualização em tempo real via AJAX polling.
 │   │   ├── Autoloader.php           # spl_autoload_register para helpers/models/controllers
 │   │   ├── Database.php             # PDO singleton
 │   │   ├── Session.php              # Sessão segura + flash messages
-│   │   ├── Auth.php                 # Login, logout, RBAC (can/requirePermission)
+│   │   ├── Auth.php                 # Adaptador do núcleo (micropermissões)
 │   │   ├── Csrf.php                 # Token CSRF (field(), check(), checkAjax())
 │   │   ├── Sanitize.php             # Escape XSS, validação, formatação de datas, slug
 │   │   ├── Upload.php               # Upload com MIME check, paths públicos vs privados
@@ -134,7 +134,7 @@ Bootstrap 5.3, atualização em tempo real via AJAX polling.
    f. Verifica se $page é pública (login, auth); se não → Auth::requireLogin()
    g. Lookup no array $routes → nome do Controller
    h. Instancia o controller → chama $controller->$action()
-   i. O controller faz Auth::requirePermission(), Csrf::check(),
+   i. O controller faz core_require('<recurso>.<ação>'), Csrf::check(),
       consulta DB, e chama View::render() ou retorna JSON
 ```
 
@@ -160,29 +160,36 @@ Todas as rotas usam query string: `index.php?m=chat&page=X&action=Y`
 
 ---
 
-## RBAC (Perfis e Permissões)
+## Micropermissões (RBAC do núcleo)
 
-Três perfis (coluna `users.role`):
+O módulo NÃO tem mais níveis próprios (admin/manager/member). O acesso é
+por MICROPERMISSÕES "<recurso>.<ação>" declaradas no manifesto
+(`module.php`, chave `permissions`) e resolvidas pelo núcleo
+(`Core\Perms`, `$GLOBALS['MODULE_PERMS']`). Os níveis legados viraram
+`presets` no manifesto (atalhos de concessão na UI de permissões).
 
-| Perfil   | Descrição                                                    |
-|----------|--------------------------------------------------------------|
-| admin    | Acesso total (wildcard). Pode fixar msgs, excluir qualquer msg, configurar canais, gerenciar usuários |
-| manager  | CRUD completo em todos os módulos, sem admin de sistema      |
-| member   | Chat, criar canais, criar tarefas, reuniões, visualizar      |
-
-Permissões são definidas em `app/helpers/Auth.php` como array estático:
+Uso no código:
 ```php
-Auth::requirePermission('module', 'action');  // no controller
-Auth::can('module', 'action');                // na view
-Auth::isAdmin();                              // atalho
+core_require('tasks.create');   // no controller — 403 se ausente
+core_can('chat.moderate');      // em views/condições — bool
+Auth::requirePermission('tasks', 'create'); // wrapper legado → core_require()
+Auth::can('tasks', 'create');               // wrapper legado → core_can()
 ```
+
+Recursos do catálogo: chat (view/create/edit/delete/moderate), channels,
+tasks, meetings, calendar, teams, processes, polls, search, categories,
+emojis e admin (view/settings/export).
 
 ### Regras de Negócio Importantes
 
-- **Exclusão de mensagens:** Admin exclui qualquer mensagem; usuário comum exclui apenas suas próprias mensagens e somente até 1 minuto após envio.
-- **Fixar mensagens:** Apenas administradores.
-- **Canais readonly:** Admin pode configurar um canal como somente leitura.
-- **Tarefas:** Cada usuário vê apenas suas tarefas (criadas ou atribuídas). Admin vê todas.
+- **Exclusão de mensagens:** `chat.moderate` exclui qualquer mensagem;
+  quem tem só `chat.delete` exclui as próprias e somente até 1 minuto
+  após o envio.
+- **Fixar mensagens:** requer `chat.moderate`.
+- **Canais readonly:** `chat.moderate` fura o modo somente leitura;
+  configurar o canal requer `channels.edit` (ou ser dono do canal).
+- **Tarefas:** cada usuário vê as suas (criadas ou atribuídas); quem tem
+  `admin.view` vê todas.
 - **Presença automática:** Online quando na página, away ao trocar de aba, offline ao fechar.
 - **Equipes → Canal:** Criar uma equipe automaticamente cria um canal privado associado.
 
@@ -219,10 +226,10 @@ Auth::isAdmin();                              // atalho
 ```php
 Auth::attempt($email, $password)              // bool
 Auth::requireLogin()                          // redireciona se não logado
-Auth::requirePermission($module, $action)     // 403 se sem permissão
-Auth::can($module, $action)                   // bool
-Auth::isAdmin()                               // bool
-Auth::isManager()                             // bool
+Auth::requirePermission($module, $action)     // 403 se sem a micropermissão
+Auth::can($module, $action)                   // bool (wrapper de core_can)
+core_require('recurso.acao')                  // helper do núcleo (preferido)
+core_can('recurso.acao')                      // bool (helper do núcleo)
 Auth::logout()
 Auth::user()                                  // array do usuário logado
 ```
@@ -234,7 +241,7 @@ Session::get($key, $default)
 Session::flash('success', 'Mensagem')         // armazena para próximo request
 Session::flash('success')                     // lê e apaga
 Session::isLoggedIn()                         // bool
-Session::userId() / userRole() / userName() / userAvatar()
+Session::userId() / userName() / userAvatar()
 Session::destroy()
 ```
 
@@ -339,13 +346,14 @@ Em `public/index.php`, adicionar ao `$routes`:
 ```
 
 ### 5. Permissões
-Em `app/helpers/Auth.php`, adicionar nos arrays de cada role.
+No manifesto `module.php`, adicionar o recurso/ações em `permissions`
+(e, se fizer sentido, aos `presets`); usar core_require()/core_can().
 
 ### 6. Views
 Criar `app/views/novo/index.php`, `form.php`, etc.
 
 ### 7. Sidebar
-Em `app/views/layout/header.php`, adicionar nav-item com `Auth::can()`.
+No manifesto `module.php` (closure `menu`), adicionar o item filtrado por `$can('<recurso>.view')`.
 
 ---
 
