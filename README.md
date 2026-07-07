@@ -1,8 +1,8 @@
 # Plataforma Unificada
 
-Unificação dos quatro sistemas internos — **Documentos/Qualidade**,
-**Comunicação (chat)**, **RH** e **Manutenção** — em uma única plataforma
-modular com:
+Unificação dos sistemas internos — **Documentos/Qualidade**,
+**Comunicação (chat)**, **RH**, **Manutenção** e **Intranet** — em uma
+única plataforma modular com:
 
 - **Login único (SSO interno)** — uma conta, uma sessão, todos os módulos;
 - **Integração com Moodle** — o usuário pode entrar com as credenciais do
@@ -64,6 +64,7 @@ módulo, que mantém seu roteamento interno:
 | `?m=chat&page=chat` | módulo Comunicação |
 | `?m=rh&page=employees` | módulo RH |
 | `?m=manutencao&page=service-orders` | módulo Manutenção |
+| `?m=intranet&page=documents` | módulo Intranet |
 | `?m=admin` | administração central (admins globais) |
 | `?m=auth&a=login/profile/security` | login, perfil, senha/2FA |
 
@@ -89,6 +90,23 @@ Regras de resolução: admin global tem tudo; senão, união dos grupos do
 usuário, sobreposta pelas exceções individuais. Um usuário só vê no menu
 superior os módulos em que possui **alguma** permissão; dentro do módulo,
 menus, botões e ações são filtrados permissão a permissão.
+
+## Módulo Intranet (documentos institucionais)
+
+- **Editor de texto** (Quill) com salvamento versionado: cada edição gera
+  uma versão no histórico, com autor, data e nota "o que mudou"; qualquer
+  versão pode ser visualizada e restaurada.
+- **Layouts predefinidos (papel timbrado)**: cadastre os modelos do
+  hospital com tamanho de página (A4, A3, A5, Carta, Ofício), orientação
+  (retrato/paisagem), margens, cabeçalho/rodapé em HTML (com variáveis
+  `{{logo}}`, `{{org}}`, `{{titulo}}`, `{{autor}}`, `{{data}}`,
+  `{{versao}}`), logo e CSS extra. O cabeçalho/rodapé pode se repetir em
+  todas as páginas do PDF (defina a altura em mm).
+- **Exportar PDF**: o botão abre a visão de impressão com CSS `@page` no
+  tamanho exato do layout e dispara a impressão — use "Salvar como PDF"
+  do navegador. O resultado é fiel ao timbrado (WYSIWYG).
+- **Cópia pública opcional**: documentos publicados podem ter um link
+  público (token) acessível sem login; despublicar desativa o link.
 
 ## Integração com o Moodle
 

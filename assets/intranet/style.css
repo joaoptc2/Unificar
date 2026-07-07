@@ -1,0 +1,35 @@
+/* MÓDULO INTRANET — estilos das telas internas */
+
+/* Editor com cara de folha: largura acompanha o layout escolhido */
+.intra-editor-wrap {
+    background: #e9edf1;
+    border: 1px solid #dee2e6;
+    border-radius: .5rem;
+    padding: 1rem;
+    overflow-x: auto;
+}
+
+.intra-editor-wrap .ql-toolbar {
+    background: #fff;
+    border-radius: .4rem .4rem 0 0;
+    position: sticky;
+    top: 56px; /* abaixo da topbar */
+    z-index: 5;
+    max-width: min(var(--sheet-w, 210mm), 100%);
+    margin: 0 auto;
+}
+
+.intra-editor-wrap .ql-container {
+    background: #fff;
+    max-width: min(var(--sheet-w, 210mm), 100%);
+    margin: 0 auto;
+    min-height: 60vh;
+    font-size: 12pt;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .12);
+    border-radius: 0 0 .4rem .4rem;
+}
+
+.intra-editor-wrap .ql-editor {
+    min-height: 60vh;
+    line-height: 1.5;
+}

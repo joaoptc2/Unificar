@@ -157,7 +157,8 @@ INSERT INTO modules (slug, name, icon, sort_order, active) VALUES
     ('documentos', 'Documentos',   'bi-file-earmark-text', 10, 1),
     ('chat',       'Comunicação',  'bi-chat-dots',         20, 1),
     ('rh',         'RH',           'bi-people',            30, 1),
-    ('manutencao', 'Manutenção',   'bi-tools',             40, 1)
+    ('manutencao', 'Manutenção',   'bi-tools',             40, 1),
+    ('intranet',   'Intranet',     'bi-newspaper',         50, 1)
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- Usuário administrador inicial (senha: admin123 — TROQUE após o primeiro login)
