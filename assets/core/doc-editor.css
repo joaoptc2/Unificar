@@ -1,0 +1,24 @@
+/* Editor de documentos compartilhado — folha emulando o papel timbrado */
+.doc-editor-wrap {
+    --sheet-w: 210mm; --sheet-ml: 15mm; --sheet-mr: 15mm;
+    background: #e9edf1; border: 1px solid #dee2e6; border-radius: .5rem;
+    padding: 1rem; overflow-x: auto;
+}
+.doc-editor-wrap .doc-editor-toolbar,
+.doc-editor-wrap .ql-toolbar {
+    background: #fff; border-radius: .4rem .4rem 0 0; position: sticky; top: 56px; z-index: 5;
+    max-width: min(var(--sheet-w), 100%); margin: 0 auto;
+}
+.doc-editor-wrap .ql-container {
+    background: #fff; max-width: min(var(--sheet-w), 100%); margin: 0 auto; min-height: 60vh;
+    font-size: 12pt; box-shadow: 0 2px 10px rgba(0, 0, 0, .12); border-radius: 0 0 .4rem .4rem;
+}
+.doc-editor-wrap .ql-editor {
+    min-height: 60vh; line-height: 1.5;
+    padding: 12mm var(--sheet-mr) 12mm var(--sheet-ml);
+}
+.doc-editor-wrap .ql-editor img { max-width: 100%; }
+.doc-editor-toolbar select.ql-font { width: 140px; }
+.doc-editor-toolbar select.ql-size { width: 70px; }
+.ql-snow .ql-picker.ql-font { width: 140px; }
+.ql-snow .ql-picker.ql-size { width: 70px; }

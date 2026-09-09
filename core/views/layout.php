@@ -3,7 +3,8 @@
  * Template do layout unificado.
  * Variáveis disponíveis (ver Core\Layout::render):
  * $title, $content, $head, $scripts, $fluid, $body_class, $active,
- * $user, $module_slug, $manifest, $sidebar, $modules_nav, $unread, $flash
+ * $user, $module_slug, $topbar_active, $manifest, $sidebar, $modules_nav,
+ * $unread, $flash, $admin_link, $migrations_pending
  */
 $appName = Core\Settings::get('org_name', core_config('app.name', 'Portal Corporativo'));
 $moodleLink = core_config('moodle.enabled') ? core_config('moodle.url') : null;
@@ -49,7 +50,7 @@ $hasSidebar = !empty($sidebar);
             <ul class="navbar-nav portal-module-nav me-auto">
                 <?php foreach ($modules_nav as $slug => $m): ?>
                     <li class="nav-item">
-                        <a class="nav-link <?= $slug === $module_slug ? 'active' : '' ?>"
+                        <a class="nav-link <?= $slug === $topbar_active ? 'active' : '' ?>"
                            href="<?= core_module_url($slug) ?>">
                             <i class="bi <?= core_e($m['icon'] ?? 'bi-app') ?> me-1"></i><?= core_e($m['name']) ?>
                         </a>
@@ -109,7 +110,7 @@ $hasSidebar = !empty($sidebar);
                         </li>
                         <li><a class="dropdown-item" href="<?= core_module_url('auth', ['a' => 'profile']) ?>"><i class="bi bi-person me-2"></i>Meu perfil</a></li>
                         <li><a class="dropdown-item" href="<?= core_module_url('auth', ['a' => 'security']) ?>"><i class="bi bi-shield-lock me-2"></i>Senha e 2FA</a></li>
-                        <?php if (!empty($user['is_admin'])): ?>
+                        <?php if (!empty($admin_link)): ?>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="<?= core_module_url('admin') ?>"><i class="bi bi-gear me-2"></i>Administração</a></li>
                         <?php endif; ?>
@@ -165,6 +166,16 @@ $hasSidebar = !empty($sidebar);
 
     <!-- ===================== CONTEÚDO ===================== -->
     <main class="portal-main">
+        <?php if (!empty($migrations_pending)): ?>
+            <div class="alert alert-warning d-flex align-items-center gap-2" role="alert" data-no-auto-dismiss="1">
+                <i class="bi bi-database-exclamation fs-5"></i>
+                <div class="flex-grow-1">
+                    <strong>Atualizações de banco pendentes.</strong> Há alterações de estrutura desta versão do sistema
+                    que ainda não foram aplicadas — algumas funções podem falhar até que sejam executadas.
+                </div>
+                <a class="btn btn-sm btn-warning text-nowrap" href="<?= core_module_url('admin', ['a' => 'migrations']) ?>">Aplicar agora</a>
+            </div>
+        <?php endif; ?>
         <?php foreach ($flash as $type => $messages): ?>
             <?php foreach ((array) $messages as $msg):
                 $cls = ['success' => 'success', 'error' => 'danger', 'warning' => 'warning'][$type] ?? 'info'; ?>

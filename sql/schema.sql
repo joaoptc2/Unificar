@@ -152,13 +152,76 @@ CREATE TABLE IF NOT EXISTS notifications (
     CONSTRAINT fk_notif_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Controle das migrações aplicadas (sql/migrations/*.sql) — ver Core\Migrations
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    filename   VARCHAR(150) PRIMARY KEY,
+    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    notes      TEXT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Fila de e-mails (envios em massa dos módulos; processada pelo cron) — ver Core\MailQueue
+CREATE TABLE IF NOT EXISTS mail_queue (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    to_email   VARCHAR(190) NOT NULL,
+    to_name    VARCHAR(150) NULL,
+    subject    VARCHAR(250) NOT NULL,
+    body_html  MEDIUMTEXT NOT NULL,
+    module     VARCHAR(40) NULL,
+    ref_type   VARCHAR(60) NULL,
+    ref_id     INT UNSIGNED NULL,
+    status     ENUM('pending','sent','failed') NOT NULL DEFAULT 'pending',
+    attempts   TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    last_error VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at    DATETIME NULL,
+    KEY idx_mq_status (status, id),
+    KEY idx_mq_ref (module, ref_type, ref_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Layouts de documentos (papel timbrado) — compartilhados por Documentos,
+-- Intranet e impressos de outros módulos. Cadastro em Administração →
+-- Layouts de documentos (Core\DocLayout). Nome da tabela mantido por
+-- compatibilidade com o módulo Intranet.
+CREATE TABLE IF NOT EXISTS intra_layouts (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name          VARCHAR(120) NOT NULL,
+    description   VARCHAR(255) NULL,
+    kind          ENUM('both','page','cover') NOT NULL DEFAULT 'both' COMMENT 'uso: capa e/ou páginas',
+    page_size     VARCHAR(20)  NOT NULL DEFAULT 'A4' COMMENT 'A4, A3, A5, Letter, Oficio',
+    orientation   ENUM('portrait','landscape') NOT NULL DEFAULT 'portrait',
+    margin_top    SMALLINT UNSIGNED NOT NULL DEFAULT 20 COMMENT 'mm',
+    margin_right  SMALLINT UNSIGNED NOT NULL DEFAULT 15,
+    margin_bottom SMALLINT UNSIGNED NOT NULL DEFAULT 20,
+    margin_left   SMALLINT UNSIGNED NOT NULL DEFAULT 15,
+    header_html   MEDIUMTEXT NULL COMMENT 'aceita {{logo}} {{org}} {{titulo}} {{codigo}} {{setor}} {{autor}} {{data}} {{versao}}',
+    footer_html   MEDIUMTEXT NULL,
+    header_height SMALLINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'mm; >0 repete em todas as páginas',
+    footer_height SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    cover_html    MEDIUMTEXT NULL COMMENT 'modelo de capa (HTML com variáveis)',
+    custom_css    TEXT NULL,
+    fonts         TEXT NULL COMMENT 'JSON: fontes permitidas no editor',
+    font_sizes    TEXT NULL COMMENT 'JSON: tamanhos permitidos (ex.: ["10pt","12pt"])',
+    default_font  VARCHAR(80) NULL,
+    default_font_size VARCHAR(10) NULL,
+    logo_path     VARCHAR(255) NULL,
+    background_path VARCHAR(255) NULL COMMENT 'imagem de fundo das páginas (PNG/JPG)',
+    cover_background_path VARCHAR(255) NULL COMMENT 'imagem de fundo da capa',
+    is_default    TINYINT(1) NOT NULL DEFAULT 0,
+    active        TINYINT(1) NOT NULL DEFAULT 1,
+    created_by    INT UNSIGNED NULL,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_intral_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Módulos padrão
 INSERT INTO modules (slug, name, icon, sort_order, active) VALUES
     ('documentos', 'Documentos',   'bi-file-earmark-text', 10, 1),
     ('chat',       'Comunicação',  'bi-chat-dots',         20, 1),
     ('rh',         'RH',           'bi-people',            30, 1),
     ('manutencao', 'Manutenção',   'bi-tools',             40, 1),
-    ('intranet',   'Intranet',     'bi-newspaper',         50, 1)
+    ('intranet',   'Intranet',     'bi-newspaper',         50, 1),
+    ('planejamento', 'Planejamento', 'bi-kanban',          60, 1)
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- Usuário administrador inicial (senha: admin123 — TROQUE após o primeiro login)
@@ -166,3 +229,14 @@ INSERT INTO users (name, username, email, password_hash, is_admin, active)
 SELECT 'Administrador', 'admin', 'admin@example.com',
        '$2y$12$/zdMoBKaHmBS0CG1CmvYbu4QK15ijiRXr45cgOUbKhg7tOUPOxuxO', 1, 1
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin');
+
+-- Layout de documento inicial (papel timbrado A4 genérico)
+INSERT INTO intra_layouts
+    (name, description, page_size, orientation, margin_top, margin_right, margin_bottom, margin_left,
+     header_html, footer_html, header_height, footer_height, is_default, active)
+SELECT 'Padrão A4 (retrato)', 'Layout inicial — personalize em Administração > Layouts de documentos', 'A4', 'portrait',
+       25, 15, 20, 15,
+       '<div style="display:flex;align-items:center;gap:10px;border-bottom:2px solid #0d5c8f;padding-bottom:6px;">{{logo}}<div><strong style="font-size:14pt;color:#0d5c8f;">{{org}}</strong><br><span style="font-size:9pt;color:#555;">{{titulo}}</span></div></div>',
+       '<div style="border-top:1px solid #ccc;padding-top:4px;font-size:8pt;color:#666;display:flex;justify-content:space-between;"><span>{{titulo}} — v{{versao}}</span><span>Atualizado em {{data}} por {{autor}}</span></div>',
+       18, 12, 1, 1
+WHERE NOT EXISTS (SELECT 1 FROM intra_layouts);

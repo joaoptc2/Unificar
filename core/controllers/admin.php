@@ -1,41 +1,90 @@
 <?php
 /**
- * Administração central da plataforma (somente admins globais):
- *  - usuários (CRUD) e suas micropermissões;
- *  - grupos de usuários (permissões replicadas aos membros);
- *  - configurações gerais e log de auditoria unificado.
+ * Administração central da plataforma:
+ *  - usuários (CRUD) e suas micropermissões, grupos, módulos, configurações,
+ *    auditoria, atualizações de banco e fila de e-mails — somente admins globais;
+ *  - layouts de documentos (papel timbrado) — admins globais ou quem tem
+ *    'layouts.*' em algum módulo;
+ *  - painéis de configuração dos MÓDULOS (setores, categorias, departamentos,
+ *    cargos, emojis...) — abertos a quem tem as micropermissões do módulo
+ *    (ver Core\AdminPanel).
  * Rotas: index.php?m=admin&a=<ação>
  */
 
 declare(strict_types=1);
 
+use Core\AdminPanel;
 use Core\Audit;
 use Core\Auth;
 use Core\Csrf;
 use Core\DB;
 use Core\Flash;
 use Core\Layout;
+use Core\MailQueue;
+use Core\Migrations;
 use Core\Modules;
 use Core\Perms;
 use Core\Settings;
 
-Auth::requireGlobalAdmin();
+Auth::requireLogin();
 
-$action = preg_replace('/[^a-z0-9_]/', '', strtolower((string) ($_GET['a'] ?? 'index')));
+$action   = preg_replace('/[^a-z0-9_]/', '', strtolower((string) ($_GET['a'] ?? 'index')));
+$userId   = (int) Auth::id();
+$isGlobal = Auth::isGlobalAdmin();
+
+// Ações exclusivas do administrador global
+$coreActions = [
+    'users', 'user_form', 'user_save', 'user_delete', 'user_perms', 'user_perms_save',
+    'groups', 'group_form', 'group_save', 'group_delete',
+    'modules', 'settings', 'audit',
+    'migrations', 'migrations_apply',
+    'mailqueue', 'mailqueue_process', 'mailqueue_retry',
+];
+if (in_array($action, $coreActions, true)) {
+    Auth::requireGlobalAdmin();
+} elseif ($action === 'index' && !AdminPanel::canAccess($userId)) {
+    http_response_code(403);
+    Layout::renderError(403, 'Acesso restrito aos administradores da plataforma.');
+    exit;
+}
 
 function admin_sidebar(): array
 {
-    return [[
-        'heading' => 'Administração',
-        'items'   => [
-            ['label' => 'Visão geral', 'url' => core_module_url('admin'), 'icon' => 'bi-speedometer2', 'key' => 'index'],
-            ['label' => 'Usuários', 'url' => core_module_url('admin', ['a' => 'users']), 'icon' => 'bi-people', 'key' => 'users'],
-            ['label' => 'Grupos de permissões', 'url' => core_module_url('admin', ['a' => 'groups']), 'icon' => 'bi-diagram-3', 'key' => 'groups'],
-            ['label' => 'Módulos', 'url' => core_module_url('admin', ['a' => 'modules']), 'icon' => 'bi-grid', 'key' => 'modules'],
-            ['label' => 'Configurações', 'url' => core_module_url('admin', ['a' => 'settings']), 'icon' => 'bi-sliders', 'key' => 'settings'],
-            ['label' => 'Auditoria', 'url' => core_module_url('admin', ['a' => 'audit']), 'icon' => 'bi-journal-text', 'key' => 'audit'],
-        ],
-    ]];
+    $userId   = (int) Auth::id();
+    $sections = [];
+
+    $core = [['label' => 'Visão geral', 'url' => core_module_url('admin'), 'icon' => 'bi-speedometer2', 'key' => 'index']];
+    if (Auth::isGlobalAdmin()) {
+        $core[] = ['label' => 'Usuários',            'url' => core_module_url('admin', ['a' => 'users']),      'icon' => 'bi-people',       'key' => 'users'];
+        $core[] = ['label' => 'Grupos de permissões','url' => core_module_url('admin', ['a' => 'groups']),     'icon' => 'bi-diagram-3',    'key' => 'groups'];
+        $core[] = ['label' => 'Módulos',             'url' => core_module_url('admin', ['a' => 'modules']),    'icon' => 'bi-grid',         'key' => 'modules'];
+        $core[] = ['label' => 'Configurações',       'url' => core_module_url('admin', ['a' => 'settings']),   'icon' => 'bi-sliders',      'key' => 'settings'];
+        $core[] = ['label' => 'Atualizações de banco','url' => core_module_url('admin', ['a' => 'migrations']),'icon' => 'bi-database-up',  'key' => 'migrations'];
+        $core[] = ['label' => 'Fila de e-mails',     'url' => core_module_url('admin', ['a' => 'mailqueue']),  'icon' => 'bi-envelope-paper','key' => 'mailqueue'];
+        $core[] = ['label' => 'Auditoria',           'url' => core_module_url('admin', ['a' => 'audit']),      'icon' => 'bi-journal-text', 'key' => 'audit'];
+    }
+    $sections[] = ['heading' => 'Administração', 'items' => $core];
+
+    if (AdminPanel::canManageLayouts($userId)) {
+        $sections[] = ['heading' => 'Padronização', 'items' => [
+            ['label' => 'Layouts de documentos', 'url' => core_module_url('admin', ['a' => 'layouts']), 'icon' => 'bi-layout-text-window-reverse', 'key' => 'layouts'],
+        ]];
+    }
+
+    $mods = [];
+    foreach (AdminPanel::modulesFor($userId) as $slug => $info) {
+        $m = $info['manifest'];
+        $mods[] = [
+            'label' => $m['admin']['label'] ?? $m['name'],
+            'url'   => AdminPanel::url($slug),
+            'icon'  => $m['admin']['icon'] ?? ($m['icon'] ?? 'bi-app'),
+            'key'   => 'mod-' . $slug,
+        ];
+    }
+    if ($mods) {
+        $sections[] = ['heading' => 'Configuração dos módulos', 'items' => $mods];
+    }
+    return $sections;
 }
 
 function admin_render(string $title, string $content, string $active): void
@@ -151,9 +200,44 @@ function admin_read_perms_post(): array
     return $out;
 }
 
+/** Cartões dos painéis de configuração de módulos acessíveis ao usuário. */
+function admin_module_cards(): string
+{
+    $mods = AdminPanel::modulesFor((int) Auth::id());
+    if (!$mods) {
+        return '';
+    }
+    ob_start(); ?>
+    <h2 class="h6 text-uppercase text-muted mt-4 mb-2">Configuração dos módulos</h2>
+    <div class="row g-3">
+        <?php foreach ($mods as $slug => $info): $m = $info['manifest']; ?>
+            <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+                <a class="card portal-module-card h-100" href="<?= AdminPanel::url($slug) ?>">
+                    <div class="card-body d-flex flex-column gap-2">
+                        <div class="module-icon"><i class="bi <?= core_e($m['admin']['icon'] ?? ($m['icon'] ?? 'bi-app')) ?>"></i></div>
+                        <div class="fw-semibold text-body"><?= core_e($m['admin']['label'] ?? $m['name']) ?></div>
+                        <div class="small text-muted"><?= core_e(implode(' · ', array_map(fn ($t) => $t['label'] ?? '', $info['tabs']))) ?></div>
+                    </div>
+                </a>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    <?php
+    return (string) ob_get_clean();
+}
+
 switch ($action) {
 
     case 'index':
+        if (!$isGlobal) {
+            ob_start(); ?>
+            <h1 class="h4 mb-3"><i class="bi bi-gear me-2"></i>Administração</h1>
+            <p class="text-muted">Você tem acesso às configurações abaixo. A gestão de usuários, grupos e permissões é feita pelos administradores da plataforma.</p>
+            <?= admin_module_cards() ?>
+            <?php
+            admin_render('Administração', (string) ob_get_clean(), 'index');
+            break;
+        }
         $stats = [
             'users'   => (int) (DB::queryOne('SELECT COUNT(*) n FROM users')['n'] ?? 0),
             'active'  => (int) (DB::queryOne('SELECT COUNT(*) n FROM users WHERE active = 1')['n'] ?? 0),
@@ -161,6 +245,7 @@ switch ($action) {
             'moodle'  => (int) (DB::queryOne('SELECT COUNT(*) n FROM users WHERE auth_source = "moodle"')['n'] ?? 0),
         ];
         $recent = DB::query('SELECT a.*, u.name AS user_name FROM audit_log a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.id DESC LIMIT 12');
+        $mailStats = MailQueue::stats();
         ob_start(); ?>
         <h1 class="h4 mb-3"><i class="bi bi-gear me-2"></i>Administração da plataforma</h1>
         <div class="row g-3 mb-4">
@@ -183,6 +268,13 @@ switch ($action) {
                 </div>
             <?php endforeach; ?>
         </div>
+        <?php if ($mailStats['pending'] > 0 || $mailStats['failed'] > 0): ?>
+            <div class="alert alert-info py-2 small">
+                <i class="bi bi-envelope-paper me-1"></i>Fila de e-mails: <strong><?= $mailStats['pending'] ?></strong> pendente(s),
+                <strong><?= $mailStats['failed'] ?></strong> com falha —
+                <a href="<?= core_module_url('admin', ['a' => 'mailqueue']) ?>">gerenciar</a>.
+            </div>
+        <?php endif; ?>
         <div class="card">
             <div class="card-header">Atividade recente</div>
             <div class="table-responsive">
@@ -201,8 +293,99 @@ switch ($action) {
                 </table>
             </div>
         </div>
+        <?= admin_module_cards() ?>
         <?php
         admin_render('Administração', (string) ob_get_clean(), 'index');
+        break;
+
+    // ================= PAINÉIS DE CONFIGURAÇÃO DOS MÓDULOS =================
+
+    case 'module':
+        $slug     = preg_replace('/[^a-z0-9_-]/', '', strtolower((string) ($_GET['slug'] ?? '')));
+        $manifest = Modules::manifest($slug);
+        if (!$manifest || empty($manifest['admin']) || !($manifest['active'] ?? true)) {
+            Layout::renderError(404, 'Este módulo não possui painel de configuração.');
+            break;
+        }
+        $tabs = AdminPanel::tabsFor($userId, $slug);
+        if ($tabs === []) {
+            http_response_code(403);
+            Layout::renderError(403, 'Você não tem permissão para configurar este módulo.');
+            break;
+        }
+        $tab = preg_replace('/[^a-z0-9_-]/', '', strtolower((string) ($_GET['tab'] ?? '')));
+        if ($tab === '' || !isset($tabs[$tab])) {
+            if ($tab !== '') {
+                http_response_code(403);
+                Layout::renderError(403, 'Você não tem permissão para esta configuração.');
+                break;
+            }
+            $tab = (string) array_key_first($tabs);
+        }
+
+        // Contexto do módulo (como no front controller)
+        if (!defined('MODULE_SLUG')) {
+            define('MODULE_SLUG', $slug);
+            define('MODULE_PATH', $manifest['path']);
+            define('MODULE_URL', BASE_URL . '/index.php?m=' . $slug);
+        }
+        define('CORE_ADMIN_TAB', $tab);
+        $GLOBALS['MODULE_PERMS'] = Perms::effective($userId, $slug);
+
+        $entry = MODULE_PATH . '/' . ltrim((string) ($manifest['admin']['entry'] ?? 'admin.php'), '/');
+        if (!is_file($entry)) {
+            Layout::renderError(500, 'Painel de configuração do módulo não encontrado (' . core_e(basename($entry)) . ').');
+            break;
+        }
+
+        // Cabeçalho + abas do painel, prefixados ao conteúdo que o módulo renderizar
+        ob_start(); ?>
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <h1 class="h5 mb-0 text-muted">
+                <i class="bi <?= core_e($manifest['admin']['icon'] ?? ($manifest['icon'] ?? 'bi-app')) ?> me-1"></i>
+                <?= core_e($manifest['admin']['label'] ?? $manifest['name']) ?>
+                <span class="text-muted fw-normal">— configuração</span>
+            </h1>
+            <a class="btn btn-sm btn-outline-secondary ms-auto" href="<?= core_module_url($slug) ?>">
+                <i class="bi bi-box-arrow-up-right me-1"></i>Abrir o módulo
+            </a>
+        </div>
+        <ul class="nav nav-tabs mb-3 admin-module-tabs">
+            <?php foreach ($tabs as $key => $t): ?>
+                <li class="nav-item">
+                    <a class="nav-link <?= $key === $tab ? 'active' : '' ?>" href="<?= AdminPanel::url($slug, (string) $key) ?>">
+                        <?php if (!empty($t['icon'])): ?><i class="bi <?= core_e($t['icon']) ?> me-1"></i><?php endif; ?>
+                        <?= core_e($t['label'] ?? $key) ?>
+                    </a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+        <?php
+        Layout::embed([
+            'sidebar' => admin_sidebar(),
+            'active'  => 'mod-' . $slug,
+            'prepend' => (string) ob_get_clean(),
+            'title'   => 'Administração',
+        ]);
+        chdir(MODULE_PATH);
+        require $entry;
+        break;
+
+    // ================= LAYOUTS DE DOCUMENTOS =================
+
+    case 'layouts':
+    case 'layout_form':
+    case 'layout_save':
+    case 'layout_delete':
+    case 'layout_preview':
+        require CORE_PATH . '/controllers/admin_layouts.php';
+        match ($action) {
+            'layouts'        => core_admin_layouts_index(),
+            'layout_form'    => core_admin_layouts_form(),
+            'layout_save'    => core_admin_layouts_save(),
+            'layout_delete'  => core_admin_layouts_delete(),
+            'layout_preview' => core_admin_layout_preview(),
+        };
         break;
 
     // ================= USUÁRIOS =================
@@ -255,7 +438,7 @@ switch ($action) {
                                     <?php if ($u['is_admin']): ?><span class="badge text-bg-primary">Admin</span><?php endif; ?>
                                     <?php if ($u['auth_source'] === 'moodle'): ?><span class="badge text-bg-info" title="Autentica via Moodle"><i class="bi bi-mortarboard"></i></span><?php endif; ?>
                                 </div>
-                                <div class="small text-muted"><?= core_e($u['email']) ?></div>
+                                <div class="small text-muted"><?= core_e($u['email']) ?> · <?= core_e($u['username']) ?></div>
                             </td>
                             <td>
                                 <?php foreach ($groupsByUser[(int) $u['id']] ?? [] as $gName): ?>
@@ -710,6 +893,14 @@ switch ($action) {
             Flash::set('success', 'Módulos atualizados.');
             core_redirect('index.php?m=admin&a=modules');
         }
+        // Garante que módulos presentes em disco existam na tabela
+        foreach (Modules::all() as $slug => $m) {
+            DB::execute(
+                'INSERT INTO modules (slug, name, icon, sort_order, active) VALUES (?, ?, ?, ?, 1)
+                 ON DUPLICATE KEY UPDATE name = VALUES(name), icon = VALUES(icon)',
+                [$slug, $m['name'], $m['icon'] ?? null, (int) ($m['sort_order'] ?? 999)]
+            );
+        }
         $rows = DB::query('SELECT * FROM modules ORDER BY sort_order');
         ob_start(); ?>
         <h1 class="h4 mb-3"><i class="bi bi-grid me-2"></i>Módulos</h1>
@@ -724,6 +915,7 @@ switch ($action) {
                             <tr>
                                 <td><i class="bi <?= core_e($r['icon'] ?? '') ?> me-2"></i><?= core_e($r['name']) ?>
                                     <?php if (!$m): ?><span class="badge text-bg-warning">arquivos ausentes</span><?php endif; ?>
+                                    <?php if ($m && !empty($m['description'])): ?><div class="small text-muted"><?= core_e($m['description']) ?></div><?php endif; ?>
                                 </td>
                                 <td><input type="number" class="form-control form-control-sm" name="mod[<?= core_e($r['slug']) ?>][sort]" value="<?= (int) $r['sort_order'] ?>"></td>
                                 <td class="text-center">
@@ -773,6 +965,20 @@ switch ($action) {
                 </div>
             </div>
             <div class="col-12 col-lg-6">
+                <div class="card mb-3">
+                    <div class="card-header">E-mail (SMTP)</div>
+                    <div class="card-body">
+                        <?php if (core_config('mail.enabled')): ?>
+                            <p><span class="badge text-bg-success">Habilitado</span>
+                                <span class="small text-muted"><?= core_e(core_config('mail.host', '')) ?>:<?= core_e((string) core_config('mail.port', '')) ?> · de <?= core_e(core_config('mail.from', '')) ?></span></p>
+                        <?php else: ?>
+                            <p><span class="badge text-bg-secondary">Desabilitado</span></p>
+                            <p class="small text-muted mb-0">Habilite em <code>config/config.php</code> (bloco <code>mail</code>) para o envio de comunicados,
+                                pesquisas, alertas de vencimento e redefinição de senha. Os envios ficam na
+                                <a href="<?= core_module_url('admin', ['a' => 'mailqueue']) ?>">fila de e-mails</a>.</p>
+                        <?php endif; ?>
+                    </div>
+                </div>
                 <div class="card">
                     <div class="card-header">Integração Moodle</div>
                     <div class="card-body">
@@ -838,6 +1044,132 @@ switch ($action) {
         </div>
         <?php
         admin_render('Auditoria', (string) ob_get_clean(), 'audit');
+        break;
+
+    // ================= ATUALIZAÇÕES DE BANCO (migrações) =================
+
+    case 'migrations':
+        $files   = Migrations::files();
+        $applied = Migrations::applied();
+        $pending = array_values(array_filter($files, fn ($f) => !isset($applied[$f])));
+        $results = $_SESSION['_mig_results'] ?? null;
+        unset($_SESSION['_mig_results']);
+        ob_start(); ?>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h1 class="h4 mb-0"><i class="bi bi-database-up me-2"></i>Atualizações de banco de dados</h1>
+            <?php if ($pending): ?>
+                <form method="post" action="<?= core_module_url('admin', ['a' => 'migrations_apply']) ?>"
+                      onsubmit="return confirm('Aplicar <?= count($pending) ?> atualização(ões) pendente(s) no banco de dados agora?')">
+                    <?= Csrf::field() ?>
+                    <button class="btn btn-warning"><i class="bi bi-play-fill me-1"></i>Aplicar pendentes (<?= count($pending) ?>)</button>
+                </form>
+            <?php endif; ?>
+        </div>
+        <p class="text-muted small">Cada versão do sistema pode trazer alterações de estrutura (novas tabelas e colunas) em
+            <code>sql/migrations/</code>. Os scripts são idempotentes: podem ser reaplicados com segurança. Recomenda-se um
+            backup do banco antes de aplicar. Alternativa por linha de comando: <code>php scripts/migrate.php</code>.</p>
+        <?php if ($results): ?>
+            <?php foreach ($results as $r): ?>
+                <div class="alert <?= $r['ok'] ? 'alert-success' : 'alert-danger' ?> py-2">
+                    <strong><?= core_e($r['file']) ?></strong>: <?= $r['ok'] ? 'aplicada' : 'FALHOU' ?>
+                    (<?= (int) $r['ran'] ?> comandos<?= $r['skipped'] ? ', ' . count($r['skipped']) . ' já existiam' : '' ?>)
+                    <?php foreach ($r['errors'] as $e): ?><div class="small font-monospace mt-1"><?= core_e($e) ?></div><?php endforeach; ?>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead><tr><th>Arquivo</th><th class="text-center">Status</th><th>Aplicada em</th></tr></thead>
+                    <tbody>
+                    <?php if (!$files): ?><tr><td colspan="3" class="text-center text-muted py-4">Nenhum arquivo de migração.</td></tr><?php endif; ?>
+                    <?php foreach ($files as $f): ?>
+                        <tr>
+                            <td class="font-monospace small"><?= core_e($f) ?></td>
+                            <td class="text-center"><?= isset($applied[$f]) ? '<span class="badge text-bg-success">aplicada</span>' : '<span class="badge text-bg-warning">pendente</span>' ?></td>
+                            <td class="small text-muted"><?= isset($applied[$f]) ? core_e(date('d/m/Y H:i', strtotime((string) $applied[$f]))) : '—' ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php
+        admin_render('Atualizações de banco', (string) ob_get_clean(), 'migrations');
+        break;
+
+    case 'migrations_apply':
+        Csrf::check();
+        $results = Migrations::applyAll();
+        $_SESSION['_mig_results'] = $results;
+        $failed = array_filter($results, fn ($r) => !$r['ok']);
+        Audit::log('migrations.apply', 'schema_migrations', null, ['files' => array_column($results, 'file'), 'failed' => count($failed)], null, 'admin');
+        Flash::set($failed ? 'error' : 'success', $failed ? 'Uma atualização falhou — veja os detalhes abaixo.' : (count($results) . ' atualização(ões) aplicada(s).'));
+        core_redirect('index.php?m=admin&a=migrations');
+        break;
+
+    // ================= FILA DE E-MAILS =================
+
+    case 'mailqueue':
+        $stats  = MailQueue::stats();
+        $recent = MailQueue::recent(60);
+        ob_start(); ?>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h1 class="h4 mb-0"><i class="bi bi-envelope-paper me-2"></i>Fila de e-mails</h1>
+            <div class="d-flex gap-2">
+                <form method="post" action="<?= core_module_url('admin', ['a' => 'mailqueue_process']) ?>">
+                    <?= Csrf::field() ?>
+                    <button class="btn btn-primary btn-sm" <?= $stats['pending'] ? '' : 'disabled' ?>><i class="bi bi-send me-1"></i>Processar agora</button>
+                </form>
+                <form method="post" action="<?= core_module_url('admin', ['a' => 'mailqueue_retry']) ?>">
+                    <?= Csrf::field() ?>
+                    <button class="btn btn-outline-secondary btn-sm" <?= $stats['failed'] ? '' : 'disabled' ?>><i class="bi bi-arrow-repeat me-1"></i>Reenfileirar falhas</button>
+                </form>
+            </div>
+        </div>
+        <div class="row g-3 mb-3">
+            <?php foreach ([['Pendentes', $stats['pending'], 'warning'], ['Enviados', $stats['sent'], 'success'], ['Falhas', $stats['failed'], 'danger']] as [$l, $v, $c]): ?>
+                <div class="col-4"><div class="card"><div class="card-body py-2"><div class="fs-4 fw-semibold text-<?= $c ?>"><?= (int) $v ?></div><div class="small text-muted"><?= $l ?></div></div></div></div>
+            <?php endforeach; ?>
+        </div>
+        <p class="text-muted small">Os e-mails são enviados pelo cron unificado (<code>cron.php</code>, a cada execução) ou pelo botão acima.
+            <?php if (!core_config('mail.enabled')): ?><strong class="text-danger">O envio de e-mail está desabilitado em config/config.php (mail.enabled).</strong><?php endif; ?></p>
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 align-middle">
+                    <thead><tr><th>Quando</th><th>Para</th><th>Assunto</th><th>Origem</th><th class="text-center">Status</th><th>Erro</th></tr></thead>
+                    <tbody>
+                    <?php if (!$recent): ?><tr><td colspan="6" class="text-center text-muted py-4">Fila vazia.</td></tr><?php endif; ?>
+                    <?php foreach ($recent as $r): ?>
+                        <tr>
+                            <td class="text-nowrap small"><?= core_e(date('d/m H:i', strtotime((string) $r['created_at']))) ?></td>
+                            <td class="small"><?= core_e($r['to_email']) ?></td>
+                            <td class="small"><?= core_e($r['subject']) ?></td>
+                            <td><span class="badge text-bg-light border"><?= core_e($r['module'] ?? '—') ?></span></td>
+                            <td class="text-center"><span class="badge text-bg-<?= ['pending' => 'warning', 'sent' => 'success', 'failed' => 'danger'][$r['status']] ?? 'secondary' ?>"><?= core_e($r['status']) ?></span></td>
+                            <td class="small text-muted"><?= core_e(mb_substr((string) ($r['last_error'] ?? ''), 0, 80)) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php
+        admin_render('Fila de e-mails', (string) ob_get_clean(), 'mailqueue');
+        break;
+
+    case 'mailqueue_process':
+        Csrf::check();
+        $s = MailQueue::process(200);
+        Flash::set('success', "Processado: {$s['sent']} enviado(s), {$s['failed']} falha(s), {$s['retried']} reagendado(s).");
+        core_redirect('index.php?m=admin&a=mailqueue');
+        break;
+
+    case 'mailqueue_retry':
+        Csrf::check();
+        $n = MailQueue::retryFailed();
+        Flash::set('success', "{$n} e-mail(s) reenfileirado(s).");
+        core_redirect('index.php?m=admin&a=mailqueue');
         break;
 
     default:

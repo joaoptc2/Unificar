@@ -33,6 +33,18 @@ if (PHP_SAPI !== 'cli') {
     }
 }
 
+// ---- Núcleo: fila de e-mails -------------------------------------------
+if ($only === '' || $only === 'core') {
+    echo "[core] fila de e-mails...\n";
+    try {
+        $mq = Core\MailQueue::process(300);
+        echo "[core] e-mails: {$mq['sent']} enviado(s), {$mq['failed']} falha(s), {$mq['retried']} reagendado(s)\n";
+    } catch (Throwable $e) {
+        echo "[core] ERRO na fila de e-mails: {$e->getMessage()}\n";
+        error_log('cron mail_queue: ' . $e->getMessage());
+    }
+}
+
 // ---- Execução -------------------------------------------------------------
 foreach (Modules::all() as $slug => $manifest) {
     if ($only !== '' && $only !== $slug) {

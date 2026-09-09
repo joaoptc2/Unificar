@@ -15,6 +15,8 @@ declare(strict_types=1);
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
 
+require_once __DIR__ . '/core/src/Migrations.php'; // apenas o parser de SQL
+
 $configFile = __DIR__ . '/config/config.php';
 if (is_file($configFile) && empty($_GET['force'])) {
     exit('A plataforma já está instalada. Remova o arquivo install.php. Para reinstalar, apague config/config.php.');
@@ -58,13 +60,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($sql === false) {
                     throw new RuntimeException("Não foi possível ler {$file}");
                 }
-                // Remove comentários de linha e executa statement a statement
-                $sql = preg_replace('/^\s*--.*$/m', '', $sql);
-                foreach (array_filter(array_map('trim', explode(";\n", $sql))) as $stmt) {
-                    if ($stmt !== '') {
-                        $pdo->exec($stmt);
-                    }
+                // Executa statement a statement (parser do núcleo: respeita strings e comentários)
+                foreach (Core\Migrations::split($sql) as $stmt) {
+                    $pdo->exec($stmt);
                 }
+            }
+
+            // Instalação nova: o schema já está atualizado — registra todas as
+            // migrações como aplicadas (Administração → Atualizações de banco).
+            $pdo->exec('CREATE TABLE IF NOT EXISTS schema_migrations (
+                filename VARCHAR(150) PRIMARY KEY,
+                applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                notes TEXT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+            $mark = $pdo->prepare("INSERT IGNORE INTO schema_migrations (filename, notes) VALUES (?, 'instalação')");
+            foreach (glob(__DIR__ . '/sql/migrations/*.sql') ?: [] as $mf) {
+                $mark->execute([basename($mf)]);
             }
 
             // Administrador inicial (substitui o seed padrão)
@@ -123,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="card shadow" style="width:640px;max-width:95vw">
     <div class="card-body p-4">
         <h1 class="h4 mb-1"><i class="bi bi-grid-3x3-gap-fill me-2"></i>Plataforma Unificada</h1>
-        <p class="text-muted">Instalação — Documentos, Comunicação, RH e Manutenção com login único.</p>
+        <p class="text-muted">Instalação — Documentos, Comunicação, RH, Manutenção, Intranet e Planejamento com login único.</p>
 
         <?php foreach ($errors as $err): ?>
             <div class="alert alert-danger py-2"><?= htmlspecialchars($err) ?></div>
