@@ -6,7 +6,7 @@
  * Toda resposta é application/json. Métodos que alteram estado exigem
  * POST + token CSRF (_csrf_token no corpo ou header X-CSRF-TOKEN).
  *
- * Endpoints: sendMessage, getMessages, editMessage, deleteMessage,
+ * Endpoints: sendMessage, getMessages, getOlderMessages, editMessage, deleteMessage,
  * toggleReaction, pinMessage, getThread, getPinnedMessages, heartbeat,
  * userStatus, searchUsers, markChannelRead, typing, linkPreview,
  * getCustomEmojis, toggleFavorite.
@@ -188,6 +188,31 @@ class ApiController
             'changed'   => $changed,
             'reactions' => (object) $reactions,
             'typing'    => $this->typingUsers($channelId, $userId),
+        ]);
+    }
+
+    /** GET getOlderMessages — channel_id, before_id (paginação para trás) */
+    public function getOlderMessages(): void
+    {
+        $this->requireAuth();
+        $this->requirePerm('chat.view');
+
+        $userId    = Session::userId();
+        $channelId = Sanitize::int($_GET['channel_id'] ?? 0);
+        $beforeId  = Sanitize::int($_GET['before_id']  ?? 0);
+
+        if ($channelId <= 0 || $beforeId <= 0 || !Channel::isMember($channelId, $userId)) {
+            $this->json(['success' => false, 'error' => 'Acesso negado.'], 403);
+            return;
+        }
+
+        $limit    = (int) ((require CHAT_PATH . '/config/app.php')['pagination']['messages'] ?? 50);
+        $messages = Message::channelMessages($channelId, $limit, $beforeId);
+
+        $this->json([
+            'success'  => true,
+            'messages' => $messages,
+            'has_more' => count($messages) >= $limit,
         ]);
     }
 

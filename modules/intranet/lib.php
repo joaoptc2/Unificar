@@ -69,3 +69,71 @@ function intra_view(string $title, string $content, string $active, string $head
         'scripts' => $scripts,
     ]);
 }
+
+/**
+ * Valida os campos de layout do formulário do editor (layout de página,
+ * layout de capa opcional, fonte e tamanho restritos ao layout de página).
+ * @return array{layout_id:?int, cover_layout_id:?int, font_family:?string, font_size:?string, cover_html:?string}
+ */
+function intra_collect_layout_fields(array $post): array
+{
+    $layoutId = (int) ($post['layout_id'] ?? 0) ?: null;
+    $layout   = $layoutId ? Core\DocLayout::find($layoutId) : null;
+    if (!$layout || empty($layout['active'])) {
+        $layout   = Core\DocLayout::findOrDefault(null);
+        $layoutId = $layout ? (int) $layout['id'] : null;
+    }
+
+    $coverId = (int) ($post['cover_layout_id'] ?? 0) ?: null;
+    $cover   = $coverId ? Core\DocLayout::find($coverId) : null;
+    if (!$cover || empty($cover['active']) || !in_array($cover['kind'] ?? 'both', ['cover', 'both'], true)) {
+        $coverId = null;
+    }
+
+    $font = trim((string) ($post['font_family'] ?? ''));
+    $size = trim((string) ($post['font_size'] ?? ''));
+    if ($font !== '' && !in_array($font, Core\DocLayout::fontsOf($layout), true)) {
+        $font = '';
+    }
+    if ($size !== '' && !in_array($size, Core\DocLayout::sizesOf($layout), true)) {
+        $size = '';
+    }
+
+    $coverHtml = $coverId ? intra_sanitize_html((string) ($post['cover_html'] ?? '')) : '';
+
+    return [
+        'layout_id'       => $layoutId,
+        'cover_layout_id' => $coverId,
+        'font_family'     => $font !== '' ? $font : null,
+        'font_size'       => $size !== '' ? $size : null,
+        'cover_html'      => trim(strip_tags($coverHtml)) !== '' || str_contains($coverHtml, '<img') ? $coverHtml : null,
+    ];
+}
+
+/**
+ * Mapa JSON id → configuração do editor por layout (fontes/tamanhos
+ * permitidos, largura da folha, margens) para o JS do formulário.
+ */
+function intra_layouts_editor_json(array $layouts): string
+{
+    $map = [];
+    foreach ($layouts as $l) {
+        $map[(int) $l['id']] = Core\DocLayout::editorConfig($l, ['name' => $l['name'], 'kind' => $l['kind'] ?? 'both']);
+    }
+    return (string) json_encode($map, JSON_UNESCAPED_UNICODE | JSON_FORCE_OBJECT);
+}
+
+/**
+ * Bloco 'cover' para Core\DocLayout::renderHtml a partir de um registro
+ * (documento ou versão): null quando não há capa.
+ */
+function intra_cover_for(array $row): ?array
+{
+    $coverId  = !empty($row['cover_layout_id']) ? (int) $row['cover_layout_id'] : null;
+    $coverLay = $coverId ? Core\DocLayout::find($coverId) : null;
+    $html     = trim((string) ($row['cover_html'] ?? ''));
+    if ($coverLay === null && $html === '') {
+        return null;
+    }
+    return ['layout' => $coverLay, 'html' => $html];
+}

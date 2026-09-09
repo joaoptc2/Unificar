@@ -11,7 +11,7 @@
 </div>
 
 <p class="text-muted small mb-3">
-    Indicadores pré-configurados baseados em referências nacionais e internacionais (ONA, JCI, ANVISA, ANAHP, IHI, OMS).
+    Indicadores pré-configurados baseados em referências nacionais e internacionais (ONA, JCI, ANVISA, ANAHP, IHI, OMS), incluindo indicadores financeiros.
     Selecione um template para criar o indicador com variáveis, fórmula e meta já preenchidos.
 </p>
 
@@ -58,7 +58,7 @@
         'Gestão'=>'bi-building','Mortalidade'=>'bi-heart-pulse','Controle de Infecção'=>'bi-shield-plus',
         'Segurança do Paciente'=>'bi-shield-check','Centro Cirúrgico'=>'bi-scissors',
         'Obstetrícia'=>'bi-gender-female','Pronto-Socorro'=>'bi-lightning','Satisfação'=>'bi-emoji-smile',
-        'Farmácia'=>'bi-capsule',
+        'Farmácia'=>'bi-capsule','Financeiro'=>'bi-cash-coin',
     ];
     ?>
     <?php foreach ($by_cat as $cat_name => $cat_templates): ?>

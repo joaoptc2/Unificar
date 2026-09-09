@@ -33,6 +33,17 @@ function manCategoriesWithCounts(int $hid): array
     return $st->fetchAll();
 }
 
+/** A linha (setor/categoria) existe nesta unidade? */
+function manAdminRowExists(string $table, int $id, int $hid): bool
+{
+    if ($id <= 0 || !in_array($table, ['man_sectors', 'man_equipment_categories'], true)) {
+        return false;
+    }
+    $st = db()->prepare("SELECT 1 FROM {$table} WHERE id = ? AND hospital_id = ?");
+    $st->execute([$id, $hid]);
+    return (bool) $st->fetchColumn();
+}
+
 /**
  * Processa uma ação POST de configuração. Devolve a aba do painel para a
  * qual redirecionar ('sectors' | 'categories') ou null se a ação é
@@ -66,9 +77,14 @@ function manAdminHandlePost(string $act): ?string
             if ($name === '') {
                 flash('error', 'Informe o nome do setor.');
             } else {
-                db()->prepare("UPDATE man_sectors SET name=?, description=?, status=? WHERE id=? AND hospital_id=?")->execute([$name, $desc, $status, $id, $hid]);
-                auditLog('update', 'man_sectors', $id);
-                flash('success', 'Setor atualizado!');
+                $st = db()->prepare("UPDATE man_sectors SET name=?, description=?, status=? WHERE id=? AND hospital_id=?");
+                $st->execute([$name, $desc, $status, $id, $hid]);
+                if (!manAdminRowExists('man_sectors', $id, $hid)) {
+                    flash('error', 'Setor não encontrado.');
+                } else {
+                    auditLog('update', 'man_sectors', $id);
+                    flash('success', 'Setor atualizado!');
+                }
             }
             return 'sectors';
 
@@ -81,9 +97,14 @@ function manAdminHandlePost(string $act): ?string
             if ($inUse > 0) {
                 flash('error', "Este setor possui {$inUse} equipamento(s) vinculado(s). Transfira-os para outro setor ou marque o setor como inativo.");
             } else {
-                db()->prepare("DELETE FROM man_sectors WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
-                auditLog('delete', 'man_sectors', $id);
-                flash('success', 'Setor removido.');
+                $st = db()->prepare("DELETE FROM man_sectors WHERE id = ? AND hospital_id = ?");
+                $st->execute([$id, $hid]);
+                if ($st->rowCount() > 0) {
+                    auditLog('delete', 'man_sectors', $id);
+                    flash('success', 'Setor removido.');
+                } else {
+                    flash('error', 'Setor não encontrado.');
+                }
             }
             return 'sectors';
 
@@ -110,8 +131,12 @@ function manAdminHandlePost(string $act): ?string
                 flash('error', 'Informe o nome da categoria.');
             } else {
                 db()->prepare("UPDATE man_equipment_categories SET name = ?, description = ? WHERE id = ? AND hospital_id = ?")->execute([$name, $desc, $id, $hid]);
-                auditLog('update', 'man_equipment_categories', $id);
-                flash('success', 'Categoria atualizada.');
+                if (!manAdminRowExists('man_equipment_categories', $id, $hid)) {
+                    flash('error', 'Categoria não encontrada.');
+                } else {
+                    auditLog('update', 'man_equipment_categories', $id);
+                    flash('success', 'Categoria atualizada.');
+                }
             }
             return 'categories';
 
@@ -124,9 +149,14 @@ function manAdminHandlePost(string $act): ?string
             if ($inUse > 0) {
                 flash('error', "Esta categoria está em uso por {$inUse} equipamento(s) e não pode ser excluída.");
             } else {
-                db()->prepare("DELETE FROM man_equipment_categories WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
-                auditLog('delete', 'man_equipment_categories', $id);
-                flash('success', 'Categoria removida.');
+                $st = db()->prepare("DELETE FROM man_equipment_categories WHERE id = ? AND hospital_id = ?");
+                $st->execute([$id, $hid]);
+                if ($st->rowCount() > 0) {
+                    auditLog('delete', 'man_equipment_categories', $id);
+                    flash('success', 'Categoria removida.');
+                } else {
+                    flash('error', 'Categoria não encontrada.');
+                }
             }
             return 'categories';
     }

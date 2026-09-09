@@ -27,14 +27,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resto
     if ($row) {
         $newVersion = (int) $doc['current_version'] + 1;
         DB::execute(
-            'INSERT INTO intra_document_versions (document_id, version, title, layout_id, content_html, note, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [$id, $newVersion, $row['title'], $row['layout_id'], $row['content_html'],
-             "Restauração da versão v{$v}", Auth::id()]
+            'INSERT INTO intra_document_versions
+                (document_id, version, title, layout_id, cover_layout_id, content_html, cover_html, font_family, font_size, note, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [$id, $newVersion, $row['title'], $row['layout_id'], $row['cover_layout_id'], $row['content_html'], $row['cover_html'],
+             $row['font_family'], $row['font_size'], "Restauração da versão v{$v}", Auth::id()]
         );
         DB::execute(
-            'UPDATE intra_documents SET title = ?, layout_id = ?, content_html = ?, current_version = ?, updated_by = ? WHERE id = ?',
-            [$row['title'], $row['layout_id'], $row['content_html'], $newVersion, Auth::id(), $id]
+            'UPDATE intra_documents SET title = ?, layout_id = ?, cover_layout_id = ?, content_html = ?, cover_html = ?,
+                    font_family = ?, font_size = ?, current_version = ?, updated_by = ? WHERE id = ?',
+            [$row['title'], $row['layout_id'], $row['cover_layout_id'], $row['content_html'], $row['cover_html'],
+             $row['font_family'], $row['font_size'], $newVersion, Auth::id(), $id]
         );
         Audit::log('intranet.document_restore', 'intra_documents', (string) $id, ['restored' => $v, 'new' => $newVersion]);
         Flash::set('success', "Versão v{$v} restaurada como v{$newVersion}.");
@@ -43,8 +46,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resto
 }
 
 $versions = DB::query(
-    'SELECT v.*, u.name AS author FROM intra_document_versions v
+    'SELECT v.*, u.name AS author, l.name AS layout_name, cl.name AS cover_name
+     FROM intra_document_versions v
      LEFT JOIN users u ON u.id = v.created_by
+     LEFT JOIN intra_layouts l ON l.id = v.layout_id
+     LEFT JOIN intra_layouts cl ON cl.id = v.cover_layout_id
      WHERE v.document_id = ? ORDER BY v.version DESC',
     [$id]
 );
@@ -63,7 +69,7 @@ ob_start(); ?>
 <div class="card">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
-            <thead><tr><th class="text-center">Versão</th><th>O que mudou</th><th>Autor</th><th>Quando</th><th class="text-end"></th></tr></thead>
+            <thead><tr><th class="text-center">Versão</th><th>O que mudou</th><th>Layout / capa / fonte</th><th>Autor</th><th>Quando</th><th class="text-end"></th></tr></thead>
             <tbody>
             <?php foreach ($versions as $v): $isCurrent = (int) $v['version'] === (int) $doc['current_version']; ?>
                 <tr class="<?= $isCurrent ? 'table-primary' : '' ?>">
@@ -74,6 +80,11 @@ ob_start(); ?>
                     <td>
                         <div class="fw-semibold small"><?= core_e($v['title']) ?></div>
                         <div class="small text-muted"><?= core_e($v['note'] ?? '—') ?></div>
+                    </td>
+                    <td class="small text-muted">
+                        <?= core_e($v['layout_name'] ?? 'Layout padrão') ?>
+                        <?php if (!empty($v['cover_name'])): ?><br><i class="bi bi-file-earmark-break me-1"></i>capa: <?= core_e($v['cover_name']) ?><?php endif; ?>
+                        <?php if (!empty($v['font_family']) || !empty($v['font_size'])): ?><br><i class="bi bi-fonts me-1"></i><?= core_e(trim(($v['font_family'] ?? '') . ' ' . ($v['font_size'] ?? ''))) ?><?php endif; ?>
                     </td>
                     <td class="small"><?= core_e($v['author'] ?? '—') ?></td>
                     <td class="small text-muted"><?= core_e(date('d/m/Y H:i', strtotime((string) $v['created_at']))) ?></td>

@@ -149,6 +149,14 @@ class ChatController
             }
         }
 
+        // Pode gerir o canal atual? (micropermissão, criador ou owner/admin do canal)
+        $canManage = false;
+        if ($currentChannel && $currentChannel['type'] !== 'direct') {
+            $canManage = core_can('channels.edit')
+                || (int) ($currentChannel['created_by'] ?? 0) === $userId
+                || in_array($currentChannel['member_role'] ?? '', ['owner', 'admin'], true);
+        }
+
         User::updateLastSeen($userId);
 
         $title = $currentChannel
@@ -165,8 +173,17 @@ class ChatController
             'members'        => $members,
             'memberCount'    => count($members),
             'pinnedCount'    => $pinned,
+            'canManage'      => $canManage,
+            'customEmojis'   => $this->customEmojis(),
             'csrfToken'      => Csrf::token(),
         ]);
+    }
+
+    /** Emojis personalizados (seletor e renderização de :nome:). */
+    private function customEmojis(): array
+    {
+        $rows = $this->db->query('SELECT name, image_path FROM chat_custom_emojis ORDER BY name ASC')->fetchAll();
+        return array_map(static fn (array $e) => ['name' => $e['name'], 'url' => Upload::url($e['image_path'])], $rows);
     }
 
     private function markRead(int $channelId, int $userId, array $messages): void

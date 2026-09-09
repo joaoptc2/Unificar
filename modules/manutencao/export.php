@@ -58,7 +58,7 @@ function renderPrint(string $title, array $columns, array $rows): void
     </style></head><body>';
     echo '<div class="no-print" style="margin-bottom:12px"><button onclick="window.print()" style="padding:8px 14px;background:#3b82f6;color:#fff;border:none;border-radius:6px;cursor:pointer">Imprimir / Salvar como PDF</button></div>';
     echo '<h1>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</h1>';
-    echo '<p class="sub">Gerado em ' . date('d/m/Y H:i') . ' — ' . count($rows) . ' registro(s)</p>';
+    echo '<p class="sub">' . htmlspecialchars(manOrgName(), ENT_QUOTES, 'UTF-8') . ' — gerado em ' . date('d/m/Y H:i') . ' — ' . count($rows) . ' registro(s)</p>';
     echo '<table><thead><tr>';
     foreach ($columns as $c) echo '<th>' . htmlspecialchars($c, ENT_QUOTES, 'UTF-8') . '</th>';
     echo '</tr></thead><tbody>';
@@ -87,7 +87,7 @@ if ($type === 'calibrations') {
         $where[] = 'c.next_date > DATE_ADD(CURDATE(), INTERVAL 30 DAY)';
     }
 
-    $sql = "SELECT e.name AS equipment, e.code AS equipment_code,
+    $sql = "SELECT e.name AS equipment, e.code AS equipment_code, e.asset_code,
                    c.calibration_date, c.next_date, c.result, c.responsible_body,
                    c.responsible_person, c.cost, c.observations
             FROM man_equipment_calibrations c
@@ -104,10 +104,11 @@ if ($type === 'calibrations') {
         'conforme_com_ressalvas' => 'Com ressalvas',
     ];
 
-    $columns = ['Equipamento', 'Código', 'Data', 'Próxima', 'Resultado', 'Órgão', 'Responsável', 'Custo', 'Observações'];
+    $columns = ['Equipamento', 'Identificação', 'Cód. patrimonial', 'Data', 'Próxima', 'Resultado', 'Órgão', 'Responsável', 'Custo', 'Observações'];
     $mapped = array_map(function ($r) use ($resultLabels) {
         return [
             $r['equipment'],
+            man_asset_code_format((string)($r['asset_code'] ?? '')),
             $r['equipment_code'],
             date('d/m/Y', strtotime($r['calibration_date'])),
             date('d/m/Y', strtotime($r['next_date'])),
@@ -139,7 +140,7 @@ if ($type === 'calibrations') {
  * ------------------------------------------------------------------ */
 if ($type === 'service_orders') {
     $sql = "SELECT so.os_number, so.title, so.type, so.priority, so.status,
-                   e.name AS equipment, u.name AS assigned,
+                   e.name AS equipment, e.asset_code, u.name AS assigned,
                    so.scheduled_date, so.created_at, so.completed_at, so.cost
             FROM man_service_orders so
             LEFT JOIN man_equipment e ON e.id = so.equipment_id
@@ -150,11 +151,11 @@ if ($type === 'service_orders') {
     $st->execute([$hid]);
     $rows = $st->fetchAll();
 
-    $columns = ['OS', 'Título', 'Tipo', 'Prioridade', 'Status', 'Equipamento', 'Responsável', 'Agendada', 'Criada', 'Concluída', 'Custo'];
+    $columns = ['OS', 'Título', 'Tipo', 'Prioridade', 'Status', 'Equipamento', 'Identificação', 'Responsável', 'Agendada', 'Criada', 'Concluída', 'Custo'];
     $mapped = array_map(function ($r) {
         return [
             $r['os_number'], $r['title'], $r['type'], $r['priority'], $r['status'],
-            $r['equipment'] ?? '', $r['assigned'] ?? '',
+            $r['equipment'] ?? '', man_asset_code_format((string)($r['asset_code'] ?? '')), $r['assigned'] ?? '',
             $r['scheduled_date'] ? date('d/m/Y', strtotime($r['scheduled_date'])) : '',
             $r['created_at']    ? date('d/m/Y H:i', strtotime($r['created_at'])) : '',
             $r['completed_at']  ? date('d/m/Y H:i', strtotime($r['completed_at'])) : '',

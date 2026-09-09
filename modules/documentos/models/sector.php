@@ -64,12 +64,3 @@ function sector_update($id, $name, $code = null, $description = null, $is_active
 function sector_soft_delete($id) {
     return db_execute("UPDATE doc_sectors SET deleted_at = NOW() WHERE id = ?", [(int) $id]);
 }
-
-/**
- * Retorna o primeiro hospital (unidade) ativo.
- */
-function get_default_hospital() {
-    return db_query_one(
-        "SELECT id, name FROM doc_hospitals WHERE is_active = 1 AND deleted_at IS NULL ORDER BY id ASC LIMIT 1"
-    );
-}

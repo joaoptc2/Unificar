@@ -28,8 +28,21 @@ Contrato do porte: `docs/PORTING.md` (raiz da plataforma).
   `stock.edit`).
 - **Login/registro/logout locais removidos** → telas do núcleo
   (`?m=auth&a=login|logout`). O CRUD de usuários saiu de `pages/admin.php`
-  → administração central (`?m=admin&a=users`); o módulo mantém apenas
-  Hospital e Setores.
+  → administração central (`?m=admin&a=users`).
+- **Configuração do módulo na Administração central**: setores e
+  categorias de equipamentos ficam em `admin_panel.php` (abas `sectors` e
+  `categories` de `?m=admin&a=module&slug=manutencao`; ações em
+  `lib/admin_actions.php`). `?page=admin` e `?page=equipment&action=categories`
+  só redirecionam (GET) ou processam POST legado. A aba "Hospital / Dados
+  da unidade" foi descontinuada — o nome da unidade vem de
+  `Core\Settings::get('org_name')` (`manOrgName()`).
+- **Código de identificação único (12 dígitos, DV Luhn)** em
+  `man_equipment.asset_code` (`lib/asset_code.php`), com código de barras
+  Code 128 (`lib/barcode.php`) e QR Code (`lib/qrcode.php`) em PHP puro.
+  Rotas: `equipment&action=lookup[&code=]` (busca/leitor → histórico),
+  `action=history&id=` (linha do tempo consolidada + totais),
+  `action=label&id=|ids=` (etiquetas 50×30, 70×40 ou A4). Equipamentos
+  antigos recebem código na listagem e no cron (`man_asset_code_ensure_all`).
 - **Banco único**: todas as tabelas do módulo têm prefixo `man_`
   (`sql/modules/manutencao.sql`). `users`, `notifications` e `audit_log`
   são as tabelas GLOBAIS do núcleo (`notifications.module='manutencao'`,

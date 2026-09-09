@@ -335,18 +335,28 @@ function plan_normalize_board_template(array $data): array
     return $out;
 }
 
+/** Carrega lib/diagram.php (do agente de diagramas) se existir; true quando plan_diagram_svg() está disponível. */
+function plan_diagram_lib(): bool
+{
+    static $loaded = null;
+    if ($loaded === null) {
+        $file = __DIR__ . '/lib/diagram.php';
+        if (!function_exists('plan_diagram_svg') && is_file($file)) {
+            try {
+                require_once $file;
+            } catch (\Throwable $e) {
+                // biblioteca indisponível: segue sem miniaturas
+            }
+        }
+        $loaded = function_exists('plan_diagram_svg');
+    }
+    return $loaded;
+}
+
 /** SVG estático de um diagrama (via lib/diagram.php do agente de diagramas, se existir) ou null. */
 function plan_diagram_thumb(array $data, array $opts = []): ?string
 {
-    $file = __DIR__ . '/lib/diagram.php';
-    if (!function_exists('plan_diagram_svg') && is_file($file)) {
-        try {
-            require_once $file;
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-    if (!function_exists('plan_diagram_svg')) {
+    if (!plan_diagram_lib()) {
         return null;
     }
     try {

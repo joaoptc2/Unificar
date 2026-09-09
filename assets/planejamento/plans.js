@@ -1,5 +1,6 @@
-/* PLANEJAMENTO — árvore de itens do plano (objetivo → meta → ação → tarefa)
- * Renderização e edição inline em JS vanilla; escritas via pages/api.php. */
+/* PLANEJAMENTO — (1) árvore de itens do plano (objetivo → meta → ação → tarefa):
+ * renderização e edição inline em JS vanilla, escritas via pages/api.php;
+ * (2) editor estruturado de modelos (plano / quadro / diagrama) da página de modelos. */
 (function () {
     'use strict';
     var D = window.PLAN_DATA;
@@ -266,4 +267,251 @@
     });
 
     render();
+})();
+
+/* ===================================================================== */
+/* Editor estruturado de modelos (page=templates&action=create|edit)     */
+/* ===================================================================== */
+(function () {
+    'use strict';
+    var T = window.PLAN_TPL;
+    if (!T) { return; }
+
+    function esc(s) {
+        return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+    function options(map, sel) {
+        var h = '';
+        Object.keys(map).forEach(function (k) { h += '<option value="' + k + '"' + (sel === k ? ' selected' : '') + '>' + esc(map[k]) + '</option>'; });
+        return h;
+    }
+    var NEXT = { objective: 'goal', goal: 'action', action: 'task', task: 'task' };
+    var form = document.getElementById('tplForm');
+    var dataField = document.getElementById('tplData');
+    var kindSel = document.getElementById('tplKind');
+    var kind = T.kind;
+
+    // ---- ícone -------------------------------------------------------------
+    var iconIn = document.getElementById('tplIcon'), iconPrev = document.getElementById('tplIconPreview');
+    if (iconIn && iconPrev) {
+        iconIn.addEventListener('input', function () { iconPrev.className = 'bi ' + iconIn.value.replace(/[^a-z0-9\-]/g, ''); });
+    }
+
+    // ---- troca de tipo (só na criação) --------------------------------------
+    function showEditor() {
+        document.querySelectorAll('.plan-tpl-editor').forEach(function (c) { c.hidden = c.getAttribute('data-kind') !== kind; });
+    }
+    if (kindSel) { kindSel.addEventListener('change', function () { kind = kindSel.value; showEditor(); }); }
+    showEditor();
+
+    // ---- PLANO: árvore ------------------------------------------------------
+    var planItems = (T.plan && T.plan.items) || [];
+    var planTree = document.getElementById('tplPlanTree');
+    var planKind = document.getElementById('tplPlanKind');
+    planKind.innerHTML = options(T.labels.planKinds, (T.plan && T.plan.kind) || 'work_plan');
+
+    function nodeAt(path) {
+        var list = planItems, node = null;
+        for (var i = 0; i < path.length; i++) {
+            node = list[path[i]];
+            if (!node) { return null; }
+            node.children = node.children || [];
+            list = node.children;
+        }
+        return node;
+    }
+    function listAt(path) { // lista que contém o último índice de path
+        if (path.length === 1) { return planItems; }
+        return nodeAt(path.slice(0, -1)).children;
+    }
+    function renderPlan() {
+        planTree.innerHTML = renderNodes(planItems, []);
+        if (!planItems.length) { planTree.innerHTML = '<li class="text-muted small">Nenhum item. Clique em "Objetivo" para começar.</li>'; }
+    }
+    function renderNodes(list, base) {
+        var h = '';
+        list.forEach(function (n, i) {
+            var path = base.concat([i]);
+            var p = path.join('.');
+            var L = T.labels;
+            var hasDetails = !!(n.description || n.how_text || n.where_text || n.indicator || n.responsible_name || n.cost || (n.priority && n.priority !== 'medium'));
+            h += '<li data-path="' + p + '"><div class="plan-tpl-node">'
+                + '<select class="form-select form-select-sm w-auto" data-f="kind">' + options(L.kinds, n.kind) + '</select>'
+                + '<input class="form-control form-control-sm" data-f="title" maxlength="300" value="' + esc(n.title) + '" placeholder="Título (o quê)" required>'
+                + '<span class="btn-group btn-group-sm">'
+                + (n.kind !== 'task' ? '<button type="button" class="btn btn-outline-primary" data-act="add" title="Adicionar subitem"><i class="bi bi-plus-lg"></i></button>' : '')
+                + '<button type="button" class="btn btn-outline-secondary" data-act="up" title="Mover para cima"><i class="bi bi-arrow-up"></i></button>'
+                + '<button type="button" class="btn btn-outline-secondary" data-act="down" title="Mover para baixo"><i class="bi bi-arrow-down"></i></button>'
+                + '<button type="button" class="btn btn-outline-danger" data-act="del" title="Excluir"><i class="bi bi-trash"></i></button>'
+                + '</span>'
+                + '<details' + (hasDetails ? ' open' : '') + '><summary class="small text-muted" style="cursor:pointer">detalhes 5W2H</summary><div>'
+                + '<input class="form-control form-control-sm" data-f="description" value="' + esc(n.description || '') + '" placeholder="Por quê (justificativa)">'
+                + '<input class="form-control form-control-sm" data-f="how_text" value="' + esc(n.how_text || '') + '" placeholder="Como (passos)">'
+                + '<input class="form-control form-control-sm" data-f="where_text" maxlength="200" value="' + esc(n.where_text || '') + '" placeholder="Onde">'
+                + '<input class="form-control form-control-sm" data-f="responsible_name" maxlength="150" value="' + esc(n.responsible_name || '') + '" placeholder="Quem (sugestão de responsável)">'
+                + '<input class="form-control form-control-sm" data-f="indicator" maxlength="255" value="' + esc(n.indicator || '') + '" placeholder="Indicador / evidência">'
+                + '<input type="number" step="0.01" min="0" class="form-control form-control-sm" data-f="cost" value="' + (n.cost === undefined || n.cost === null ? '' : n.cost) + '" placeholder="Quanto custa (R$)">'
+                + '<select class="form-select form-select-sm" data-f="priority">' + options(L.priorities, n.priority || 'medium') + '</select>'
+                + '</div></details></div>';
+            if (n.children && n.children.length) { h += '<ul>' + renderNodes(n.children, path) + '</ul>'; }
+            h += '</li>';
+        });
+        return h;
+    }
+    function pathOf(el) {
+        var li = el.closest('li[data-path]');
+        return li ? li.getAttribute('data-path').split('.').map(function (x) { return parseInt(x, 10); }) : null;
+    }
+    planTree.addEventListener('input', function (e) {
+        var f = e.target.getAttribute('data-f');
+        var path = pathOf(e.target);
+        if (!f || !path) { return; }
+        var n = nodeAt(path);
+        if (!n) { return; }
+        n[f] = f === 'cost' ? (e.target.value === '' ? null : parseFloat(e.target.value)) : e.target.value;
+        if (f === 'kind') { renderPlan(); }
+    });
+    planTree.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-act]');
+        if (!btn) { return; }
+        var path = pathOf(btn);
+        if (!path) { return; }
+        var act = btn.getAttribute('data-act');
+        var list = listAt(path), i = path[path.length - 1], n = list[i];
+        if (act === 'add') {
+            n.children = n.children || [];
+            n.children.push({ kind: NEXT[n.kind] || 'action', title: '', children: [] });
+            renderPlan();
+            var last = planTree.querySelector('li[data-path="' + path.concat([n.children.length - 1]).join('.') + '"] input[data-f=title]');
+            if (last) { last.focus(); }
+        } else if (act === 'up' && i > 0) {
+            list[i] = list[i - 1]; list[i - 1] = n; renderPlan();
+        } else if (act === 'down' && i < list.length - 1) {
+            list[i] = list[i + 1]; list[i + 1] = n; renderPlan();
+        } else if (act === 'del') {
+            if (!n.title || confirm('Excluir "' + n.title + '" e seus subitens?')) { list.splice(i, 1); renderPlan(); }
+        }
+    });
+    document.getElementById('tplPlanAddRoot').addEventListener('click', function () {
+        planItems.push({ kind: 'objective', title: '', children: [] });
+        renderPlan();
+        var last = planTree.querySelector('li[data-path="' + (planItems.length - 1) + '"] input[data-f=title]');
+        if (last) { last.focus(); }
+    });
+    function cleanItems(list) {
+        var out = [];
+        (list || []).forEach(function (n) {
+            if (!n.title || !String(n.title).trim()) { return; }
+            var o = { kind: n.kind, title: String(n.title).trim() };
+            ['description', 'how_text', 'where_text', 'responsible_name', 'indicator'].forEach(function (f) { if (n[f] && String(n[f]).trim()) { o[f] = String(n[f]).trim(); } });
+            if (n.priority && n.priority !== 'medium') { o.priority = n.priority; }
+            if (n.cost !== undefined && n.cost !== null && n.cost !== '' && !isNaN(n.cost)) { o.cost = Number(n.cost); }
+            var ch = cleanItems(n.children);
+            if (ch.length) { o.children = ch; }
+            out.push(o);
+        });
+        return out;
+    }
+    renderPlan();
+
+    // ---- QUADRO: colunas ----------------------------------------------------
+    var board = T.board || { columns: [], labels: [], points: false };
+    var colsBody = document.querySelector('#tplBoardCols tbody');
+    var boardKind = document.getElementById('tplBoardKind');
+    boardKind.innerHTML = options(T.labels.boardKinds, board.kind || 'kanban');
+    document.getElementById('tplBoardLabels').value = (board.labels || []).join(', ');
+    document.getElementById('tplBoardPoints').checked = !!board.points;
+    document.getElementById('tplBoardSprint').value = board.sprint_days || 0;
+    function renderCols() {
+        var h = '';
+        (board.columns || []).forEach(function (c, i) {
+            h += '<tr data-i="' + i + '">'
+                + '<td><input class="form-control form-control-sm" data-f="name" maxlength="100" value="' + esc(c.name) + '" placeholder="Nome da coluna" required></td>'
+                + '<td><input type="color" class="form-control form-control-color form-control-sm" data-f="color" value="' + esc(c.color || '#adb5bd') + '"></td>'
+                + '<td><input type="number" min="0" max="999" class="form-control form-control-sm" data-f="wip_limit" value="' + (c.wip_limit || 0) + '" title="Limite WIP (0 = sem limite)"></td>'
+                + '<td class="text-center"><input type="checkbox" class="form-check-input" data-f="is_done"' + (c.is_done ? ' checked' : '') + '></td>'
+                + '<td class="text-end text-nowrap"><span class="btn-group btn-group-sm">'
+                + '<button type="button" class="btn btn-outline-secondary" data-act="up"><i class="bi bi-arrow-up"></i></button>'
+                + '<button type="button" class="btn btn-outline-secondary" data-act="down"><i class="bi bi-arrow-down"></i></button>'
+                + '<button type="button" class="btn btn-outline-danger" data-act="del"><i class="bi bi-trash"></i></button></span></td></tr>';
+        });
+        colsBody.innerHTML = h || '<tr><td colspan="5" class="text-muted small">Nenhuma coluna.</td></tr>';
+    }
+    colsBody.addEventListener('input', function (e) {
+        var tr = e.target.closest('tr[data-i]'), f = e.target.getAttribute('data-f');
+        if (!tr || !f) { return; }
+        var c = board.columns[parseInt(tr.getAttribute('data-i'), 10)];
+        if (f === 'is_done') { c.is_done = e.target.checked ? 1 : 0; }
+        else if (f === 'wip_limit') { c.wip_limit = parseInt(e.target.value, 10) || 0; }
+        else { c[f] = e.target.value; }
+    });
+    colsBody.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-act]');
+        if (!btn) { return; }
+        var i = parseInt(btn.closest('tr').getAttribute('data-i'), 10), act = btn.getAttribute('data-act'), c = board.columns[i];
+        if (act === 'up' && i > 0) { board.columns[i] = board.columns[i - 1]; board.columns[i - 1] = c; }
+        else if (act === 'down' && i < board.columns.length - 1) { board.columns[i] = board.columns[i + 1]; board.columns[i + 1] = c; }
+        else if (act === 'del') { board.columns.splice(i, 1); }
+        renderCols();
+    });
+    document.getElementById('tplBoardAddCol').addEventListener('click', function () {
+        board.columns.push({ name: '', color: '#0d6efd', wip_limit: 0, is_done: 0 });
+        renderCols();
+        var last = colsBody.querySelector('tr:last-child input[data-f=name]');
+        if (last) { last.focus(); }
+    });
+    renderCols();
+
+    // ---- DIAGRAMA: JSON -----------------------------------------------------
+    var diagTa = document.getElementById('tplDiagJson'), diagInfo = document.getElementById('tplDiagInfo');
+    function validateDiagram(format) {
+        var txt = diagTa.value.trim();
+        try {
+            var d = JSON.parse(txt);
+            if (!d || typeof d !== 'object' || !Array.isArray(d.nodes)) { throw new Error('O JSON precisa de um objeto com a lista "nodes".'); }
+            if (d.edges && !Array.isArray(d.edges)) { throw new Error('"edges" deve ser uma lista.'); }
+            var ids = {};
+            d.nodes.forEach(function (n, i) { if (!n || typeof n !== 'object') { throw new Error('Nó #' + (i + 1) + ' inválido.'); } if (n.id) { ids[n.id] = true; } });
+            (d.edges || []).forEach(function (e, i) {
+                if (!e || typeof e !== 'object') { throw new Error('Conexão #' + (i + 1) + ' inválida.'); }
+                if (e.from && !ids[e.from]) { throw new Error('Conexão #' + (i + 1) + ': nó de origem "' + e.from + '" não existe.'); }
+                if (e.to && !ids[e.to]) { throw new Error('Conexão #' + (i + 1) + ': nó de destino "' + e.to + '" não existe.'); }
+            });
+            if (format) { diagTa.value = JSON.stringify(d, null, 2); }
+            diagInfo.className = 'small mt-1 text-success';
+            diagInfo.textContent = 'JSON válido: ' + d.nodes.length + ' elemento(s), ' + (d.edges || []).length + ' conexão(ões).';
+            diagTa.classList.remove('is-invalid');
+            return true;
+        } catch (err) {
+            diagInfo.className = 'small mt-1 text-danger';
+            diagInfo.textContent = 'Erro: ' + err.message;
+            diagTa.classList.add('is-invalid');
+            return false;
+        }
+    }
+    document.getElementById('tplDiagValidate').addEventListener('click', function () { validateDiagram(true); });
+
+    // ---- serialização no envio ------------------------------------------
+    form.addEventListener('submit', function (e) {
+        if (kind === 'plan') {
+            var items = cleanItems(planItems);
+            if (!items.length) { e.preventDefault(); alert('Informe ao menos um item com título no modelo de plano.'); return; }
+            dataField.value = JSON.stringify({ kind: planKind.value, items: items });
+        } else if (kind === 'board') {
+            var cols = (board.columns || []).filter(function (c) { return c.name && c.name.trim(); })
+                .map(function (c) { return { name: c.name.trim(), color: c.color, wip_limit: c.wip_limit || 0, is_done: c.is_done ? 1 : 0 }; });
+            if (!cols.length) { e.preventDefault(); alert('Informe ao menos uma coluna no modelo de quadro.'); return; }
+            dataField.value = JSON.stringify({
+                kind: boardKind.value, columns: cols,
+                labels: document.getElementById('tplBoardLabels').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+                points: document.getElementById('tplBoardPoints').checked,
+                sprint_days: parseInt(document.getElementById('tplBoardSprint').value, 10) || 0
+            });
+        } else {
+            if (!validateDiagram(false)) { e.preventDefault(); return; }
+            dataField.value = diagTa.value;
+        }
+    });
 })();

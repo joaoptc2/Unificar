@@ -377,3 +377,26 @@ body {
 .text-slate-900 { color: #0f172a !important; }
 
 a.text-decoration-none-hover:hover { text-decoration: none !important; }
+
+/* ============================================================
+   CÓDIGO DE IDENTIFICAÇÃO — QR / código de barras / linha do tempo
+   ============================================================ */
+.man-qr svg { display: block; max-width: 100%; height: auto; }
+.man-barcode svg { display: block; width: 100%; height: auto; }
+.man-lookup-form .input-group-text { background: #f8fafc; }
+
+.man-timeline { position: relative; padding-left: 2.25rem; }
+.man-timeline::before {
+    content: ""; position: absolute; left: 0.95rem; top: 0.5rem; bottom: 0.5rem;
+    width: 2px; background: #e2e8f0;
+}
+.man-timeline-item { position: relative; padding: 0.35rem 0 0.75rem; }
+.man-timeline-item:last-child { padding-bottom: 0; }
+.man-timeline-dot {
+    position: absolute; left: -2.25rem; top: 0.35rem;
+    width: 2rem; height: 2rem; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 0.85rem; box-shadow: 0 0 0 3px #fff;
+}
+.man-timeline-dot.bg-warning { color: #1f2937; }
+.man-timeline-body { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.5rem 0.75rem; }

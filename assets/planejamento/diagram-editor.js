@@ -529,6 +529,13 @@
             var self = this, c = this.container;
             c.classList.add('pde');
             c.innerHTML = '';
+            // Bootstrap Icons indisponível (CDN bloqueada)? usa os textos alternativos
+            try {
+                var probe = htmlEl('i', { 'class': 'bi bi-save' }, c);
+                var ff = global.getComputedStyle(probe).fontFamily || '';
+                c.removeChild(probe);
+                if (!/bootstrap-icons/i.test(ff)) { c.classList.add('pde-no-icons'); }
+            } catch (e) { c.classList.add('pde-no-icons'); }
             var tb = this.toolbar = htmlEl('div', { 'class': 'pde-toolbar' }, c);
             function btn(id, icon, fb, title, cls) {
                 var b = htmlEl('button', { type: 'button', 'class': 'pde-btn ' + (cls || ''), 'data-act': id, title: title, html: bi(icon, fb) }, tb);

@@ -24,11 +24,16 @@ if ($mode === 'preview') {
     $sample = '<h1>Documento de exemplo</h1><p>Este é um texto de demonstração para conferir o papel timbrado, '
         . 'as margens e o tamanho da página deste layout.</p><p>' . str_repeat('Conteúdo de exemplo. ', 80) . '</p>'
         . '<h2>Seção 2</h2><p>' . str_repeat('Mais conteúdo de exemplo. ', 120) . '</p>';
+    $hasCoverModel = trim((string) ($layout['cover_html'] ?? '')) !== '' && in_array($layout['kind'] ?? 'both', ['cover', 'both'], true);
     intra_render_page([
         'title'        => 'Pré-visualização — ' . $layout['name'],
         'layout'       => $layout,
         'content_html' => $sample,
-        'meta'         => ['title' => 'Documento de exemplo', 'author' => core_user()['name'] ?? '', 'version' => 1],
+        'cover'        => $hasCoverModel ? ['layout' => $layout, 'html' => ''] : null,
+        'font_family'  => $layout['default_font'] ?? null,
+        'font_size'    => $layout['default_font_size'] ?? null,
+        'meta'         => ['title' => 'Documento de exemplo', 'author' => core_user()['name'] ?? '', 'version' => 1,
+                           'subtitle' => 'Exemplo de capa', 'sector' => 'Setor de exemplo', 'code' => 'DOC-000'],
         'toolbar'      => '<strong>Pré-visualização do layout: ' . core_e($layout['name']) . '</strong>'
             . '<span class="spacer"></span>'
             . '<button onclick="window.print()">Testar impressão/PDF</button>'
@@ -57,6 +62,9 @@ if ($mode === 'public') {
         'title'        => (string) $doc['title'],
         'layout'       => $layout,
         'content_html' => (string) $doc['content_html'],
+        'cover'        => intra_cover_for($doc),
+        'font_family'  => $doc['font_family'] ?? null,
+        'font_size'    => $doc['font_size'] ?? null,
         'meta'         => [
             'title'   => $doc['title'],
             'author'  => $author['name'] ?? '',
@@ -80,10 +88,13 @@ if (!$doc) {
 }
 
 // Versão específica do histórico (acompanhamento das edições)
-$title   = (string) $doc['title'];
-$content = (string) $doc['content_html'];
-$version = (int) $doc['current_version'];
+$title    = (string) $doc['title'];
+$content  = (string) $doc['content_html'];
+$version  = (int) $doc['current_version'];
 $layoutId = $doc['layout_id'] !== null ? (int) $doc['layout_id'] : null;
+$cover    = intra_cover_for($doc);
+$font     = $doc['font_family'] ?? null;
+$size     = $doc['font_size'] ?? null;
 
 $reqVersion = (int) ($_GET['v'] ?? 0);
 if ($reqVersion > 0 && $reqVersion !== $version) {
@@ -94,12 +105,15 @@ if ($reqVersion > 0 && $reqVersion !== $version) {
         $content  = (string) $vRow['content_html'];
         $version  = (int) $vRow['version'];
         $layoutId = $vRow['layout_id'] !== null ? (int) $vRow['layout_id'] : $layoutId;
+        $cover    = intra_cover_for($vRow);
+        $font     = $vRow['font_family'] ?? null;
+        $size     = $vRow['font_size'] ?? null;
     }
 }
 
 $layout = intra_find_layout($layoutId);
 if (!$layout) {
-    Core\Layout::renderError(500, 'Nenhum layout cadastrado — crie um em Intranet > Layouts.');
+    Core\Layout::renderError(500, 'Nenhum layout cadastrado — crie um em Administração > Layouts de documentos.');
     exit;
 }
 $author = DB::queryOne('SELECT name FROM users WHERE id = ?', [$doc['updated_by'] ?? $doc['created_by']]);
@@ -119,6 +133,9 @@ intra_render_page([
     'title'        => $title,
     'layout'       => $layout,
     'content_html' => $content,
+    'cover'        => $cover,
+    'font_family'  => $font,
+    'font_size'    => $size,
     'meta'         => [
         'title'   => $title,
         'author'  => $author['name'] ?? '',

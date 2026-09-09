@@ -671,6 +671,9 @@ else:
         <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=service_orders&format=print" target="_blank" rel="noopener"><i class="bi bi-printer me-1"></i> Imprimir</a>
         <?php if (core_can('service_orders.create')): ?>
             <button onclick="openModal('modalAdd')" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nova OS</button>
+            <?php if ((int)($_GET['equipment_id'] ?? 0) > 0): ?>
+            <script>document.addEventListener('DOMContentLoaded', function () { if (typeof openModal === 'function') openModal('modalAdd'); });</script>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 </div>
@@ -805,7 +808,7 @@ else:
                             <label class="form-label">Equipamento (opcional)</label>
                             <select class="form-select" name="equipment_id">
                                 <option value="">Nenhum</option>
-                                <?php foreach ($equipments as $eq): ?><option value="<?php echo $eq['id']; ?>"><?php echo e($eq['code'] ? $eq['code'].' - ' : ''); echo e($eq['name']); ?></option><?php endforeach; ?>
+                                <?php $preEq = (int)($_GET['equipment_id'] ?? 0); foreach ($equipments as $eq): ?><option value="<?php echo $eq['id']; ?>" <?php echo $preEq === (int)$eq['id'] ? 'selected' : ''; ?>><?php echo e($eq['code'] ? $eq['code'].' - ' : ''); echo e($eq['name']); ?></option><?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-md-4">
