@@ -55,6 +55,21 @@ final class Layout
             $userId  = (int) $user['id'];
             $can     = fn (string $permKey): bool => Perms::can($userId, $moduleSlug, $permKey);
             $sidebar = ($manifest['menu'])($can);
+
+            // Painel de configuração do módulo na administração central:
+            // link padronizado no fim do menu lateral de todos os módulos.
+            if (self::$embed === null && !empty($manifest['admin']) && AdminPanel::tabsFor($userId, $moduleSlug) !== []) {
+                $sidebar   = is_array($sidebar) ? $sidebar : [];
+                $sidebar[] = [
+                    'heading' => 'Configuração',
+                    'items'   => [[
+                        'label' => 'Configurações do módulo',
+                        'url'   => AdminPanel::url($moduleSlug),
+                        'icon'  => 'bi-gear',
+                        'key'   => 'module-settings',
+                    ]],
+                ];
+            }
         }
 
         $title        = $opts['title'] ?? ($manifest['name'] ?? core_config('app.name', 'Portal'));

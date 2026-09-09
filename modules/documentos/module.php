@@ -10,36 +10,41 @@
  * chave efetiva "<recurso>.<ação>"). Os antigos níveis admin/gestor/operador
  * viraram 'presets' (modelos na UI de permissões + base do conversor
  * scripts/migrate_role_grants.php).
+ *
+ * Configuração do módulo (setores e categorias) fica na ADMINISTRAÇÃO
+ * CENTRAL (chave 'admin' → Core\AdminPanel): index.php?m=admin&a=module
+ * &slug=documentos&tab=<aba>. As antigas abas "Usuários & Setores" e
+ * "Unidades" foram descontinuadas.
  */
 
 return [
     'slug'        => 'documentos',
     'name'        => 'Documentos',
     'icon'        => 'bi-file-earmark-text',
-    'description' => 'Gestão documental, indicadores de qualidade e planos de ação (PDCA).',
+    'description' => 'Gestão documental (controlados e não controlados), editor com layouts do hospital, indicadores de qualidade e planos de ação (PDCA).',
 
     'entry'       => 'index.php',
 
     // ── Catálogo de micropermissões (recurso => ações) ──────────────────────
     'permissions' => [
         'dashboard'    => [
-            'label'   => 'Dashboard',
+            'label'   => 'Dashboard (inclui conformidade)',
             'actions' => ['view' => 'Visualizar'],
         ],
         'documents'    => [
-            'label'   => 'Documentos',
+            'label'   => 'Documentos (controlados e não controlados)',
             'actions' => [
                 'view'        => 'Visualizar',
-                'create'      => 'Criar',
+                'create'      => 'Criar (upload ou editor)',
                 'edit'        => 'Editar',
                 'delete'      => 'Excluir',
                 'approve'     => 'Aprovar/Reprovar',
                 'acknowledge' => 'Dar ciência',
-                'export'      => 'Exportar',
+                'export'      => 'Exportar / imprimir PDF',
             ],
         ],
         'indicators'   => [
-            'label'   => 'Indicadores',
+            'label'   => 'Indicadores (painel unificado)',
             'actions' => [
                 'view'   => 'Visualizar',
                 'create' => 'Criar',
@@ -59,28 +64,17 @@ return [
                 'delete' => 'Excluir',
             ],
         ],
-        'reports'      => [
-            'label'   => 'Conformidade',
-            'actions' => ['view' => 'Visualizar'],
-        ],
         'sectors'      => [
-            'label'   => 'Setores',
+            'label'   => 'Setores (configuração)',
             'actions' => [
                 'view'   => 'Visualizar',
                 'create' => 'Criar',
                 'edit'   => 'Editar',
                 'delete' => 'Excluir',
-            ],
-        ],
-        'user_sectors' => [
-            'label'   => 'Usuários e Setores',
-            'actions' => [
-                'view' => 'Visualizar',
-                'edit' => 'Associar/Desassociar setores',
             ],
         ],
         'categories'   => [
-            'label'   => 'Categorias de documentos',
+            'label'   => 'Categorias de documentos (configuração)',
             'actions' => [
                 'view'   => 'Visualizar',
                 'create' => 'Criar',
@@ -88,11 +82,15 @@ return [
                 'delete' => 'Excluir',
             ],
         ],
-        'hospitals'    => [
-            'label'   => 'Unidades',
+        // Layouts de documentos (papel timbrado, capa, fundo, fontes) —
+        // gerenciados em Administração > Padronização > Layouts de documentos.
+        'layouts'      => [
+            'label'   => 'Layouts de documentos (padronização)',
             'actions' => [
-                'view' => 'Visualizar',
-                'edit' => 'Gerenciar',
+                'view'   => 'Visualizar',
+                'create' => 'Criar',
+                'edit'   => 'Editar',
+                'delete' => 'Excluir',
             ],
         ],
     ],
@@ -107,77 +105,63 @@ return [
             'label' => 'Gestor',
             'keys'  => [
                 'dashboard.*', 'documents.*', 'indicators.*', 'actions.*',
-                'reports.*', 'sectors.*', 'user_sectors.*', 'categories.*',
+                'sectors.*', 'categories.*', 'layouts.view',
             ],
         ],
         'operador' => [
             'label' => 'Operador',
             'keys'  => [
                 'dashboard.view',
-                'documents.view', 'documents.create', 'documents.acknowledge',
+                'documents.view', 'documents.create', 'documents.acknowledge', 'documents.export',
                 'indicators.view', 'indicators.record',
                 'actions.view',
-                'reports.view',
             ],
         ],
     ],
 
     // ── Menu lateral — filtrado por micropermissões ──────────────────────────
+    // (o link "Configurações do módulo" para a administração central é
+    //  acrescentado automaticamente pelo núcleo — Core\Layout)
     'menu'        => function (callable $can): array {
         $u = fn (string $path) => core_module_url('documentos', ['url' => $path]);
 
         $main = [];
         if ($can('dashboard.view')) {
-            $main[] = ['label' => 'Dashboard',             'url' => $u('dashboard'),            'icon' => 'bi-speedometer2',   'key' => 'dashboard'];
+            $main[] = ['label' => 'Dashboard',                 'url' => $u('dashboard'),              'icon' => 'bi-speedometer2',      'key' => 'dashboard'];
         }
         if ($can('documents.view')) {
-            $main[] = ['label' => 'Documentos',            'url' => $u('documents'),            'icon' => 'bi-folder2-open',   'key' => 'documents'];
+            $main[] = ['label' => 'Documentos controlados',    'url' => $u('documents'),              'icon' => 'bi-folder2-open',      'key' => 'documents'];
+            $main[] = ['label' => 'Documentos não controlados','url' => $u('documents/uncontrolled'), 'icon' => 'bi-archive',           'key' => 'documents-uncontrolled'];
         }
         if ($can('indicators.view')) {
-            $main[] = ['label' => 'Indicadores',           'url' => $u('indicators'),           'icon' => 'bi-graph-up',       'key' => 'indicators'];
-            $main[] = ['label' => 'Painel de Indicadores', 'url' => $u('indicators/dashboard'), 'icon' => 'bi-speedometer',    'key' => 'indicators-dashboard'];
+            $main[] = ['label' => 'Indicadores',               'url' => $u('indicators'),             'icon' => 'bi-graph-up',          'key' => 'indicators'];
         }
         if ($can('actions.view')) {
-            $main[] = ['label' => 'Planos de Ação',        'url' => $u('indicators/actions'),   'icon' => 'bi-list-check',     'key' => 'indicators-actions'];
-        }
-        if ($can('reports.view')) {
-            $main[] = ['label' => 'Conformidade',          'url' => $u('reports'),              'icon' => 'bi-clipboard-data', 'key' => 'reports'];
+            $main[] = ['label' => 'Planos de Ação',            'url' => $u('indicators/actions'),     'icon' => 'bi-list-check',        'key' => 'indicators-actions'];
         }
 
         $sections = [];
         if ($main) {
             $sections[] = ['heading' => 'Principal', 'items' => $main];
         }
-
-        $adminItems = [];
-        if ($can('sectors.view')) {
-            $adminItems[] = ['label' => 'Setores',            'url' => $u('admin/sectors'),    'icon' => 'bi-diagram-3', 'key' => 'admin-sectors'];
+        if ($can('layouts.view')) {
+            $sections[] = ['heading' => 'Padronização', 'items' => [
+                ['label' => 'Layouts de documentos', 'url' => core_module_url('admin', ['a' => 'layouts']), 'icon' => 'bi-layout-text-window-reverse', 'key' => 'layouts'],
+            ]];
         }
-        if ($can('user_sectors.view')) {
-            $adminItems[] = ['label' => 'Usuários & Setores', 'url' => $u('admin/users'),      'icon' => 'bi-people',    'key' => 'admin-users'];
-        }
-        if ($can('categories.view')) {
-            $adminItems[] = ['label' => 'Categorias',         'url' => $u('admin/categories'), 'icon' => 'bi-tags',      'key' => 'admin-categories'];
-        }
-        if ($can('hospitals.view')) {
-            $adminItems[] = ['label' => 'Unidades',           'url' => $u('admin/hospitals'),  'icon' => 'bi-hospital',  'key' => 'admin-hospitals'];
-        }
-        // Administração central de usuários: só para admin GLOBAL da
-        // plataforma (não é função do módulo — flag do núcleo).
-        if (!empty(core_user()['is_admin'])) {
-            $adminItems[] = [
-                'label' => 'Usuários (central)',
-                'url'   => core_url('index.php?m=admin&a=users'),
-                'icon'  => 'bi-people-fill',
-                'key'   => 'admin-central-users',
-            ];
-        }
-        if ($adminItems) {
-            $sections[] = ['heading' => 'Administração', 'items' => $adminItems];
-        }
-
         return $sections;
     },
+
+    // ── Painel de configuração na Administração central ─────────────────────
+    'admin'       => [
+        'label' => 'Documentos',
+        'icon'  => 'bi-file-earmark-text',
+        'entry' => 'admin_panel.php',
+        'tabs'  => [
+            'sectors'    => ['label' => 'Setores',    'icon' => 'bi-diagram-3', 'perm' => 'sectors.view'],
+            'categories' => ['label' => 'Categorias', 'icon' => 'bi-tags',      'perm' => 'categories.view'],
+        ],
+    ],
 
     // Rotina periódica: documentos vencendo/vencidos → notificações + e-mails
     'cron'        => function (): void {

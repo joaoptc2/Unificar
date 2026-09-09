@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS `chat_messages` (
     KEY `idx_chat_msg_user` (`user_id`),
     KEY `idx_chat_msg_pinned` (`channel_id`, `is_pinned`),
     KEY `idx_chat_msg_deleted` (`deleted_at`),
+    KEY `idx_chat_msg_channel_deleted` (`channel_id`, `deleted_at`, `created_at`),
     CONSTRAINT `fk_chat_msg_channel` FOREIGN KEY (`channel_id`) REFERENCES `chat_channels`(`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_chat_msg_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,
     CONSTRAINT `fk_chat_msg_parent` FOREIGN KEY (`parent_id`) REFERENCES `chat_messages`(`id`) ON DELETE CASCADE
@@ -163,6 +164,14 @@ CREATE TABLE IF NOT EXISTS `chat_mentions` (
     CONSTRAINT `fk_chat_mention_message` FOREIGN KEY (`message_id`) REFERENCES `chat_messages`(`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_chat_mention_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ================================================================
+-- TABELAS DESCONTINUADAS (equipes, tarefas, reuniões, processos,
+-- enquetes, exportações): o módulo passou a ser SOMENTE chat. São
+-- mantidas apenas para a importação de dados legados
+-- (sql/legacy-migration/chat.sql) e podem ser removidas — ver
+-- sql/migrations/005_chat.sql.
+-- ================================================================
 
 -- ----------------------------------------------------------------
 -- EQUIPES
@@ -425,12 +434,6 @@ CREATE TABLE IF NOT EXISTS `chat_export_logs` (
 -- ----------------------------------------------------------------
 
 INSERT IGNORE INTO `chat_settings` (`key`, `value`) VALUES
-('app_name', 'TeamChat'),
-('primary_color', '#6366f1'),
-('sidebar_bg', '#0f0a25'),
-('sidebar_text', '#a5b4fc'),
-('sidebar_hover', '#1e1b4b'),
-('allow_registration', '0'),
 ('max_upload_size', '10485760'),
 ('default_channel', 'geral');
 

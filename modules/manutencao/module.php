@@ -5,13 +5,22 @@
  * Atenção: este arquivo é carregado também FORA do módulo (topbar, admin,
  * cron), quando MODULE_URL não existe — por isso o menu usa
  * core_module_url() em vez de MODULE_URL.
+ *
+ * Configuração do módulo (setores e categorias de equipamentos) fica na
+ * ADMINISTRAÇÃO CENTRAL (chave 'admin' → Core\AdminPanel). A antiga aba
+ * "Hospital / Dados da unidade" foi descontinuada (o nome da organização
+ * é o do núcleo — Administração > Configurações).
+ *
+ * Todo equipamento possui um CÓDIGO DE IDENTIFICAÇÃO ÚNICO de 12 dígitos
+ * (man_equipment.asset_code) que gera código de barras (Code 128) e QR
+ * code para localizar o equipamento e abrir sua página de histórico.
  */
 
 return [
     'slug'        => 'manutencao',
     'name'        => 'Manutenção',
     'icon'        => 'bi-tools',
-    'description' => 'Equipamentos, ordens de serviço, preventivas, calibração e limpeza.',
+    'description' => 'Equipamentos (código único, etiquetas com código de barras/QR), ordens de serviço, preventivas, calibração e limpeza.',
     'entry'       => 'index.php',
 
     /**
@@ -25,7 +34,12 @@ return [
         ],
         'equipment' => [
             'label'   => 'Equipamentos',
-            'actions' => ['view' => 'Visualizar', 'create' => 'Criar', 'edit' => 'Editar', 'delete' => 'Excluir'],
+            'actions' => [
+                'view'   => 'Visualizar (inclui histórico, busca por código e etiquetas)',
+                'create' => 'Criar',
+                'edit'   => 'Editar',
+                'delete' => 'Excluir',
+            ],
         ],
         'service_orders' => [
             'label'   => 'Ordens de Serviço',
@@ -91,30 +105,29 @@ return [
             'actions' => ['view' => 'Visualizar'],
         ],
         'sectors' => [
-            'label'   => 'Setores (Administração)',
+            'label'   => 'Setores (configuração)',
             'actions' => ['view' => 'Visualizar', 'create' => 'Criar', 'edit' => 'Editar', 'delete' => 'Excluir'],
         ],
-        'org_settings' => [
-            'label'   => 'Dados da Unidade',
-            'actions' => ['edit' => 'Editar'],
+        'categories' => [
+            'label'   => 'Categorias de equipamentos (configuração)',
+            'actions' => ['view' => 'Visualizar', 'create' => 'Criar', 'edit' => 'Editar', 'delete' => 'Excluir'],
         ],
     ],
 
     /**
      * MODELOS (presets): atalhos na UI de permissões + base do conversor de
-     * níveis legados (a chave É o nível legado). Reproduzem o mapa de acesso
-     * por página do ManuHosp v4, com curingas '*' e 'recurso.*'.
+     * níveis legados (a chave É o nível legado).
      */
     'presets' => [
         'admin' => [
             'label' => 'Administrador',
             'keys'  => ['*'],
         ],
-        // Gestor: tudo, exceto administração (setores e dados da unidade).
+        // Gestor: tudo, exceto a configuração de setores.
         'manager' => [
             'label' => 'Gestor',
             'keys'  => [
-                'dashboard.view', 'equipment.*', 'service_orders.*', 'stock.*',
+                'dashboard.view', 'equipment.*', 'categories.*', 'service_orders.*', 'stock.*',
                 'maintenance.*', 'calibration.*', 'cleaning.*', 'inspections.*',
                 'technicians.*', 'calendar.view', 'indicators.view', 'heatmap.view',
                 'anvisa.view', 'qr_locations.*', 'notifications.view',
@@ -127,7 +140,7 @@ return [
             'label' => 'Manutenção',
             'keys'  => [
                 'service_orders.view', 'service_orders.create', 'service_orders.edit',
-                'equipment.view', 'equipment.create', 'equipment.edit',
+                'equipment.view', 'equipment.create', 'equipment.edit', 'categories.view',
                 'stock.view', 'stock.create', 'stock.edit',
                 'maintenance.view', 'maintenance.create', 'maintenance.edit',
                 'calibration.view', 'calibration.create', 'calibration.edit',
@@ -135,7 +148,6 @@ return [
                 'inspections.view', 'inspections.create', 'inspections.edit',
                 'dashboard.view', 'notifications.view', 'indicators.view',
                 'calendar.view', 'search.view', 'export.view',
-                // legado: o nível "maintenance" acessava o relatório ANVISA
                 'anvisa.view',
             ],
         ],
@@ -144,15 +156,14 @@ return [
             'label' => 'Limpeza',
             'keys'  => [
                 'cleaning.*', 'dashboard.view', 'notifications.view', 'indicators.view',
-                // legado: o nível "cleaning" também acessava calendário/busca/export
                 'calendar.view', 'search.view', 'export.view',
             ],
         ],
-        // Visualizador: somente leitura (sem administração).
+        // Visualizador: somente leitura (sem configuração).
         'viewer' => [
             'label' => 'Visualizador',
             'keys'  => [
-                'dashboard.view', 'equipment.view', 'service_orders.view',
+                'dashboard.view', 'equipment.view', 'categories.view', 'service_orders.view',
                 'stock.view', 'maintenance.view', 'calibration.view',
                 'cleaning.view', 'inspections.view', 'technicians.view',
                 'calendar.view', 'indicators.view', 'heatmap.view', 'anvisa.view',
@@ -164,8 +175,7 @@ return [
     /**
      * Menu lateral — recebe o verificador de micropermissões do usuário
      * logado e filtra cada item pela permissão .view correspondente.
-     * O item "Administração" aparece para quem vê setores OU edita os
-     * dados da unidade.
+     * (o link "Configurações do módulo" é acrescentado pelo núcleo)
      */
     'menu' => function (callable $can): array {
         $sections = [
@@ -189,12 +199,9 @@ return [
                 ['page' => 'anvisa-report', 'perm' => 'anvisa.view',     'icon' => 'bi-shield-check', 'label' => 'ANVISA'],
             ]],
             ['heading' => 'Sistema', 'items' => [
-                ['page' => 'qr-locations',  'perm' => 'qr_locations.view',  'icon' => 'bi-qr-code', 'label' => 'QR Codes'],
-                ['page' => 'notifications', 'perm' => 'notifications.view', 'icon' => 'bi-bell',    'label' => 'Notificações'],
-                // Administração do módulo: setores e dados da unidade (o
-                // CRUD de usuários migrou para a administração central).
-                ['page' => 'admin', 'perms_any' => ['sectors.view', 'org_settings.edit'],
-                 'icon' => 'bi-gear', 'label' => 'Administração', 'params' => ['tab' => 'sectors']],
+                ['page' => 'equipment',     'perm' => 'equipment.view',     'icon' => 'bi-upc-scan', 'label' => 'Buscar por código', 'params' => ['action' => 'lookup'], 'key' => 'equipment-lookup'],
+                ['page' => 'qr-locations',  'perm' => 'qr_locations.view',  'icon' => 'bi-qr-code',  'label' => 'QR Codes'],
+                ['page' => 'notifications', 'perm' => 'notifications.view', 'icon' => 'bi-bell',     'label' => 'Notificações'],
             ]],
         ];
 
@@ -220,7 +227,7 @@ return [
                 $items[] = [
                     'label' => $item['label'],
                     'icon'  => $item['icon'],
-                    'key'   => $item['page'],
+                    'key'   => $item['key'] ?? $item['page'],
                     'url'   => core_module_url('manutencao', $params),
                 ];
             }
@@ -230,6 +237,19 @@ return [
         }
         return $result;
     },
+
+    /**
+     * Painel de configuração na Administração central.
+     */
+    'admin' => [
+        'label' => 'Manutenção',
+        'icon'  => 'bi-tools',
+        'entry' => 'admin_panel.php',
+        'tabs'  => [
+            'sectors'    => ['label' => 'Setores',                    'icon' => 'bi-diagram-3', 'perm' => 'sectors.view'],
+            'categories' => ['label' => 'Categorias de equipamentos', 'icon' => 'bi-tags',      'perm' => 'categories.view'],
+        ],
+    ],
 
     // Rotas públicas (sem login): OS anônima, QR scan e rastreamento
     'is_public' => fn (array $get): bool => in_array(
