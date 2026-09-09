@@ -12,8 +12,6 @@ class VacationController
         $where = []; $params = [];
         if ($status) { $where[] = 'v.status = ?'; $params[] = $status; }
         $wc = $where ? 'WHERE ' . implode(' AND ', $where) : '';
-        $total = (int)$this->db->prepare("SELECT COUNT(*) FROM rh_vacations v JOIN rh_employees e ON v.employee_id = e.id $wc")->execute($params) ? (int)$this->db->prepare("SELECT COUNT(*) FROM rh_vacations v JOIN rh_employees e ON v.employee_id = e.id $wc")->fetchColumn() : 0;
-        // Fix: proper count
         $cs = $this->db->prepare("SELECT COUNT(*) FROM rh_vacations v JOIN rh_employees e ON v.employee_id = e.id $wc");
         $cs->execute($params);
         $total = (int)$cs->fetchColumn();
@@ -91,10 +89,12 @@ class VacationController
         $id = Sanitize::int($_POST['id'] ?? 0);
         $action = Sanitize::post('decision');
         $status = $action === 'aprovar' ? 'aprovada' : 'rejeitada';
-        $this->db->prepare('UPDATE rh_vacations SET status = ?, approved_by = ?, approved_at = NOW() WHERE id = ?')
-                 ->execute([$status, Session::userId(), $id]);
+        // Atualiza as férias E a solicitação vinculada (rh_requests), notificando o funcionário.
+        $vac = Vacation::decide($id, $status, Session::userId(), Sanitize::post('response'));
+        if (!$vac) { Session::flash('error', 'Férias não encontradas.'); header('Location: index.php?m=rh&page=vacations'); exit; }
+        if ($status === 'aprovada') { $this->syncSchedule($id, $vac); }
         AuditLog::log('approve', 'vacations', $id, null, ['status' => $status]);
-        Session::flash('success', 'Ferias ' . $status . '.');
+        Session::flash('success', 'Férias ' . $status . '.');
         header('Location: index.php?m=rh&page=vacations'); exit;
     }
 
@@ -110,32 +110,70 @@ class VacationController
         header('Location: index.php?m=rh&page=vacations'); exit;
     }
 
-    // Portal do funcionario: solicitar ferias
+    /**
+     * Portal do funcionário: solicitar férias (POST de Minha Área).
+     * Cria rh_vacations (status 'solicitada') E a solicitação em rh_requests
+     * (type 'ferias', vinculada por vacation_id) para o RH aprovar/rejeitar
+     * na aba Solicitações — as duas ficam sincronizadas (Vacation::decide).
+     */
     public function request(): void
     {
-        Auth::requireLogin();
+        core_require('my.view');
         Csrf::check();
-        $userId = Session::userId();
-        $stmt = $this->db->prepare('SELECT employee_id FROM rh_user_profile WHERE user_id = ?');
-        $stmt->execute([$userId]);
-        $empId = (int)($stmt->fetchColumn() ?: 0);
-        if (!$empId) { Session::flash('error', 'Sem vinculo com funcionario.'); header('Location: index.php?m=rh&page=my'); exit; }
+        $userId = (int)Session::userId();
+        $empId  = EmployeeAccess::employeeIdOf($userId);
+        $back   = 'index.php?m=rh&page=my#ferias';
+        if (!$empId) { Session::flash('error', 'Seu usuário não está vinculado a um funcionário.'); header('Location: index.php?m=rh&page=my'); exit; }
+
         $start = Sanitize::date($_POST['start_date'] ?? '');
-        $end = Sanitize::date($_POST['end_date'] ?? '');
-        if (!$start || !$end) { Session::flash('error', 'Preencha as datas.'); header('Location: index.php?m=rh&page=my'); exit; }
-        if (Vacation::overlapping($empId, $start, $end)) {
-            Session::flash('error', 'Voce ja tem ferias no periodo.');
-            header('Location: index.php?m=rh&page=my'); exit;
-        }
+        $end   = Sanitize::date($_POST['end_date'] ?? '');
+        $pStart = Sanitize::date($_POST['period_start'] ?? '');
+        $pEnd   = Sanitize::date($_POST['period_end'] ?? '');
+        $sold  = max(0, min(10, Sanitize::int($_POST['sold_days'] ?? 0)));
+        $notes = mb_substr(Sanitize::post('notes'), 0, 1000);
+
+        if (!$start || !$end) { Session::flash('error', 'Informe as datas de início e fim das férias.'); header("Location: $back"); exit; }
+        if ($end < $start) { Session::flash('error', 'A data final deve ser posterior à inicial.'); header("Location: $back"); exit; }
+        if ($start < date('Y-m-d')) { Session::flash('error', 'As férias não podem começar em data passada.'); header("Location: $back"); exit; }
         $days = (int)(new DateTime($start))->diff(new DateTime($end))->days + 1;
-        Vacation::insert([
-            'employee_id' => $empId, 'period_start' => $start, 'period_end' => $end,
-            'start_date' => $start, 'end_date' => $end, 'days' => $days,
-            'status' => 'solicitada', 'created_by' => $userId,
-        ]);
-        AuditLog::log('request', 'vacations', (int)$this->db->lastInsertId());
-        Session::flash('success', 'Solicitacao de ferias enviada para aprovacao.');
-        header('Location: index.php?m=rh&page=my'); exit;
+        if ($days > 30) { Session::flash('error', 'O período não pode exceder 30 dias.'); header("Location: $back"); exit; }
+        if ($sold + $days > 30) { Session::flash('error', 'Dias de gozo + dias vendidos não podem exceder 30.'); header("Location: $back"); exit; }
+        if (Vacation::overlapping($empId, $start, $end)) {
+            Session::flash('error', 'Você já possui férias (solicitadas ou aprovadas) nesse período.');
+            header("Location: $back"); exit;
+        }
+
+        $employee = Employee::find($empId);
+        $this->db->beginTransaction();
+        try {
+            $vacId = Vacation::insert([
+                'employee_id' => $empId,
+                'period_start' => $pStart ?: date('Y-m-d', strtotime('-1 year', strtotime($start))),
+                'period_end'   => $pEnd ?: $start,
+                'start_date' => $start, 'end_date' => $end, 'days' => $days, 'sold_days' => $sold,
+                'installment' => 1, 'status' => 'solicitada', 'notes' => $notes ?: null, 'created_by' => $userId,
+            ]);
+            $subject = 'Férias: ' . Sanitize::formatDate($start) . ' a ' . Sanitize::formatDate($end) . " ({$days} dias)";
+            $body = "Solicitação de férias enviada pelo portal.\n"
+                  . 'Período de gozo: ' . Sanitize::formatDate($start) . ' a ' . Sanitize::formatDate($end) . " ({$days} dias)\n"
+                  . ($pStart || $pEnd ? 'Período aquisitivo: ' . Sanitize::formatDate($pStart) . ' a ' . Sanitize::formatDate($pEnd) . "\n" : '')
+                  . 'Abono pecuniário (dias vendidos): ' . $sold . "\n"
+                  . ($notes !== '' ? 'Observação: ' . $notes : '');
+            $reqId = EmployeeRequest::insert([
+                'employee_id' => $empId, 'type' => 'ferias', 'vacation_id' => $vacId,
+                'subject' => mb_substr($subject, 0, 200), 'body' => trim($body),
+                'requested_by' => $userId, 'status' => 'pendente',
+            ]);
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            Session::flash('error', 'Não foi possível registrar a solicitação: ' . Sanitize::e($e->getMessage()));
+            header("Location: $back"); exit;
+        }
+        AuditLog::log('request', 'vacations', $vacId, null, ['request_id' => $reqId]);
+        EmployeeRequest::notifyResponders($reqId, (string)($employee['full_name'] ?? 'Funcionário'), $subject);
+        Session::flash('success', 'Solicitação de férias enviada para aprovação do RH.');
+        header("Location: $back"); exit;
     }
 
     private function formData(): array

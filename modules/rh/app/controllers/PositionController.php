@@ -1,6 +1,8 @@
 <?php
 /**
- * Controller de Cargos (Administração)
+ * Controller de Cargos — configurado na Administração central
+ * (index.php?m=admin&a=module&slug=rh&tab=positions). As telas (GET)
+ * são servidas por admin_panel.php; os POSTs continuam em ?m=rh&page=positions.
  */
 class PositionController
 {
@@ -58,8 +60,7 @@ class PositionController
         AuditLog::log('create', 'job_positions', (int)$this->db->lastInsertId());
 
         Session::flash('success', 'Cargo criado com sucesso.');
-        header('Location: index.php?m=rh&page=positions');
-        exit;
+        core_redirect(core_admin_url('rh', 'positions'));
     }
 
     public function edit(): void
@@ -73,8 +74,7 @@ class PositionController
 
         if (!$position) {
             Session::flash('error', 'Cargo não encontrado.');
-            header('Location: index.php?m=rh&page=positions');
-            exit;
+            core_redirect(core_admin_url('rh', 'positions'));
         }
 
         $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
@@ -103,8 +103,7 @@ class PositionController
         AuditLog::log('update', 'job_positions', $id);
 
         Session::flash('success', 'Cargo atualizado.');
-        header('Location: index.php?m=rh&page=positions');
-        exit;
+        core_redirect(core_admin_url('rh', 'positions'));
     }
 
     public function delete(): void
@@ -118,15 +117,13 @@ class PositionController
         $stmt->execute([$id]);
         if ((int)$stmt->fetchColumn() > 0) {
             Session::flash('error', 'Não é possível excluir: existem funcionários vinculados.');
-            header('Location: index.php?m=rh&page=positions');
-            exit;
+            core_redirect(core_admin_url('rh', 'positions'));
         }
 
         $this->db->prepare('DELETE FROM rh_job_positions WHERE id = ?')->execute([$id]);
         AuditLog::log('delete', 'job_positions', $id);
 
         Session::flash('success', 'Cargo excluído.');
-        header('Location: index.php?m=rh&page=positions');
-        exit;
+        core_redirect(core_admin_url('rh', 'positions'));
     }
 }

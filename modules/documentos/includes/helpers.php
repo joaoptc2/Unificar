@@ -47,21 +47,20 @@ function asset($path) {
 // ── Views ───────────────────────────────────────────────────────────────────
 
 /**
- * Chave do item ativo do menu lateral, derivada do título da página —
- * mesmo critério do $is_active do layout legado (match exato do título).
+ * Chave do item ativo do menu lateral, derivada do título da página.
  * Controllers podem sobrescrever passando 'menu_key' em $data.
+ * Chaves do menu (module.php): dashboard, documents, documents-uncontrolled,
+ * indicators, indicators-actions.
  */
 function _doc_active_key($page_title) {
     $map = [
-        'Dashboard'                 => 'dashboard',
-        'Documentos'                => 'documents',
-        'Indicadores de Enfermagem' => 'indicators',
-        'Painel de Indicadores'     => 'indicators-dashboard',
-        'Planos de Ação'            => 'indicators-actions',
-        'Relatório de Conformidade' => 'reports',
-        'Gerenciar Setores'         => 'admin-sectors',
-        'Usuários & Setores'        => 'admin-users',
-        'Categorias de Documentos'  => 'admin-categories',
+        'Dashboard'                  => 'dashboard',
+        'Documentos'                 => 'documents',
+        'Documentos controlados'     => 'documents',
+        'Documentos não controlados' => 'documents-uncontrolled',
+        'Indicadores'                => 'indicators',
+        'Templates de Indicadores'   => 'indicators',
+        'Planos de Ação'             => 'indicators-actions',
     ];
     return $map[$page_title] ?? '';
 }
@@ -85,7 +84,58 @@ function _doc_flash_html() {
 }
 
 /**
+ * Setores ativos da unidade para o seletor global (cache por requisição).
+ */
+function doc_sectors_for_selector() {
+    static $cache = null;
+    if ($cache !== null) return $cache;
+    try {
+        $cache = sector_list(get_hospital_id());
+    } catch (Exception $ex) {
+        $cache = [];
+    }
+    return $cache;
+}
+
+/**
+ * Seletor global de setor (topo do conteúdo de TODAS as páginas do módulo):
+ * "Todos os setores" (0) + setores ativos da unidade. Faz POST para
+ * dashboard/switch-sector e volta para a página atual.
+ */
+function _doc_sector_selector_html() {
+    if (!is_logged_in()) return '';
+    $sectors = doc_sectors_for_selector();
+    $current = get_sector_id();
+    $return  = (string) ($_SERVER['REQUEST_URI'] ?? '');
+
+    $html  = '<div class="doc-sector-bar d-flex flex-wrap align-items-center gap-2 mb-3">';
+    $html .= '<form method="POST" action="' . e(url('dashboard/switch-sector')) . '" class="d-flex align-items-center gap-2 flex-wrap">';
+    $html .= csrf_field();
+    $html .= '<input type="hidden" name="return" value="' . e($return) . '">';
+    $html .= '<label class="form-label mb-0 small text-muted" for="doc-sector-select"><i class="bi bi-diagram-3 me-1"></i>Setor em foco:</label>';
+    $html .= '<select name="sector_id" id="doc-sector-select" class="form-select form-select-sm" style="min-width:200px;max-width:320px" onchange="this.form.submit()">';
+    $html .= '<option value="0"' . ($current === 0 ? ' selected' : '') . '>Todos os setores</option>';
+    foreach ($sectors as $s) {
+        $label = $s['name'] . (!empty($s['code']) ? ' (' . $s['code'] . ')' : '');
+        $html .= '<option value="' . (int) $s['id'] . '"' . ((int) $s['id'] === $current ? ' selected' : '') . '>' . e($label) . '</option>';
+    }
+    $html .= '</select>';
+    $html .= '<noscript><button type="submit" class="btn btn-sm btn-outline-primary">Aplicar</button></noscript>';
+    $html .= '</form>';
+    if ($current > 0) {
+        $html .= '<span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-funnel me-1"></i>Filtrando por: ' . e(get_sector_name()) . '</span>';
+    } else {
+        $html .= '<span class="text-muted small"><i class="bi bi-info-circle me-1"></i>Sem filtro de setor</span>';
+    }
+    $html .= '</div>';
+    return $html;
+}
+
+/**
  * Renderiza uma view do módulo dentro do layout unificado do núcleo.
+ * $data['menu_key']    → item ativo do menu (opcional)
+ * $data['head']/$data['scripts'] → HTML extra no <head>/fim da página
+ * $data['no_sector_bar'] → true para não exibir o seletor global de setor
  */
 function view($view_name, $data = []) {
     extract($data);
@@ -102,14 +152,22 @@ function view($view_name, $data = []) {
     require $view_file;
     $content = ob_get_clean();
 
+    // Seletor global de setor: em todas as páginas do módulo, exceto dentro
+    // do painel de configuração da administração central.
+    $sector_bar = '';
+    if (empty($data['no_sector_bar']) && !Core\Layout::embedded()) {
+        $sector_bar = _doc_sector_selector_html();
+    }
+
     Core\Layout::render([
         'title'   => $page_title,
-        'content' => _doc_flash_html() . $content,
+        'content' => _doc_flash_html() . $sector_bar . $content,
         'active'  => $data['menu_key'] ?? _doc_active_key($page_title),
         // Chart.js sempre incluído: dashboard/indicadores usam gráficos
         'head'    => '<link rel="stylesheet" href="' . asset('style.css') . '">' . "\n"
-                   . '    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>',
-        'scripts' => '<script src="' . asset('app.js') . '"></script>',
+                   . '    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>' . "\n"
+                   . (string) ($data['head'] ?? ''),
+        'scripts' => '<script src="' . asset('app.js') . '"></script>' . "\n" . (string) ($data['scripts'] ?? ''),
     ]);
 }
 

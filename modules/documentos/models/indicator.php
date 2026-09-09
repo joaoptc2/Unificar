@@ -27,6 +27,7 @@ function indicator_hydrate($row) {
         'responsible_user_id' => null,
         'accreditation'       => null,
         'template_slug'       => null,
+        'sector_id'           => null,
     ];
     foreach ($defaults as $k => $v) {
         if (!array_key_exists($k, $row)) $row[$k] = $v;
@@ -34,48 +35,80 @@ function indicator_hydrate($row) {
     return $row;
 }
 
-function indicator_count($hospital_id, $type = '', $search = '', $category = '') {
-    $has_category = db_has_column('doc_indicators', 'category');
-    $sql = "SELECT COUNT(*) AS total FROM doc_indicators
-            WHERE hospital_id = ? AND deleted_at IS NULL";
-    $params = [$hospital_id];
-    if ($type !== '')     { $sql .= " AND type = ?";     $params[] = $type; }
-    if ($category !== '' && $has_category) {
-        $sql .= " AND category = ?"; $params[] = $category;
+/**
+ * Filtros das listagens de indicadores.
+ * @param array $f type, search, category, sector_id (0 = todos), accreditation,
+ *                 responsible_user_id
+ */
+function _indicator_filter_where(array $f) {
+    $sql    = " WHERE i.hospital_id = ? AND i.deleted_at IS NULL";
+    $params = [(int) ($f['hospital_id'] ?? 0)];
+    if (!empty($f['type']))      { $sql .= " AND i.type = ?";     $params[] = $f['type']; }
+    if (!empty($f['category']))  { $sql .= " AND i.category = ?"; $params[] = $f['category']; }
+    if ((int) ($f['sector_id'] ?? 0) > 0) { $sql .= " AND i.sector_id = ?"; $params[] = (int) $f['sector_id']; }
+    if (!empty($f['accreditation'])) { $sql .= " AND i.accreditation LIKE ?"; $params[] = '%' . $f['accreditation'] . '%'; }
+    if ((int) ($f['responsible_user_id'] ?? 0) > 0) { $sql .= " AND i.responsible_user_id = ?"; $params[] = (int) $f['responsible_user_id']; }
+    if (!empty($f['search'])) {
+        $sql .= " AND (i.name LIKE ? OR i.description LIKE ?)";
+        $params[] = "%{$f['search']}%"; $params[] = "%{$f['search']}%";
     }
-    if ($search !== '') {
-        $sql .= " AND (name LIKE ? OR description LIKE ?)";
-        $params[] = "%$search%"; $params[] = "%$search%";
-    }
-    $row = db_query_one($sql, $params);
+    return [$sql, $params];
+}
+
+function indicator_count($hospital_id, $type = '', $search = '', $category = '', $sector_id = 0, array $extra = []) {
+    [$where, $params] = _indicator_filter_where(array_merge($extra, [
+        'hospital_id' => $hospital_id, 'type' => $type, 'search' => $search,
+        'category' => $category, 'sector_id' => $sector_id,
+    ]));
+    $row = db_query_one("SELECT COUNT(*) AS total FROM doc_indicators i" . $where, $params);
     return (int) ($row['total'] ?? 0);
 }
 
-function indicator_list($hospital_id, $type = '', $search = '', $category = '', $limit = 20, $offset = 0) {
-    $has_category = db_has_column('doc_indicators', 'category');
-    $sql = "SELECT * FROM doc_indicators
-            WHERE hospital_id = ? AND deleted_at IS NULL";
-    $params = [$hospital_id];
-    if ($type !== '')     { $sql .= " AND type = ?";     $params[] = $type; }
-    if ($category !== '' && $has_category) {
-        $sql .= " AND category = ?"; $params[] = $category;
-    }
-    if ($search !== '') {
-        $sql .= " AND (name LIKE ? OR description LIKE ?)";
-        $params[] = "%$search%"; $params[] = "%$search%";
-    }
-    $sql .= " ORDER BY name ASC LIMIT ? OFFSET ?";
+function indicator_list($hospital_id, $type = '', $search = '', $category = '', $limit = 20, $offset = 0, $sector_id = 0, array $extra = []) {
+    [$where, $params] = _indicator_filter_where(array_merge($extra, [
+        'hospital_id' => $hospital_id, 'type' => $type, 'search' => $search,
+        'category' => $category, 'sector_id' => $sector_id,
+    ]));
     $params[] = (int) $limit;
     $params[] = (int) $offset;
-    $rows = db_query($sql, $params);
+    $rows = db_query(
+        "SELECT i.*, s.name AS sector_name, ru.name AS responsible_name
+         FROM doc_indicators i
+         LEFT JOIN doc_sectors s ON s.id = i.sector_id
+         LEFT JOIN users ru ON ru.id = i.responsible_user_id" . $where . "
+         ORDER BY i.name ASC LIMIT ? OFFSET ?",
+        $params
+    );
     return array_map('indicator_hydrate', $rows);
+}
+
+/** Acreditações distintas (para o filtro da página unificada). */
+function indicator_distinct_accreditations($hospital_id) {
+    try {
+        $rows = db_query(
+            "SELECT DISTINCT accreditation FROM doc_indicators
+             WHERE hospital_id = ? AND deleted_at IS NULL AND accreditation IS NOT NULL AND accreditation <> ''",
+            [(int) $hospital_id]
+        );
+        $out = [];
+        foreach ($rows as $r) {
+            foreach (explode(',', (string) $r['accreditation']) as $a) {
+                $a = trim($a);
+                if ($a !== '') $out[$a] = true;
+            }
+        }
+        ksort($out);
+        return array_keys($out);
+    } catch (Exception $ex) { return []; }
 }
 
 function indicator_find($id, $hospital_id) {
     $row = db_query_one(
-        "SELECT i.*, u.name AS created_by_name
+        "SELECT i.*, u.name AS created_by_name, s.name AS sector_name, ru.name AS responsible_name
          FROM doc_indicators i
          LEFT JOIN users u ON u.id = i.created_by
+         LEFT JOIN doc_sectors s ON s.id = i.sector_id
+         LEFT JOIN users ru ON ru.id = i.responsible_user_id
          WHERE i.id = ? AND i.hospital_id = ? AND i.deleted_at IS NULL",
         [(int) $id, (int) $hospital_id]
     );
@@ -106,7 +139,7 @@ function _indicator_available_columns() {
     $all = ['formula', 'goal_numeric', 'goal_direction', 'goal_tolerance',
             'chart_type', 'category', 'decimal_places',
             'benchmark_value', 'benchmark_source', 'responsible_user_id',
-            'accreditation', 'template_slug'];
+            'accreditation', 'template_slug', 'sector_id'];
     $cache = [];
     foreach ($all as $c) {
         if (db_has_column('doc_indicators', $c)) $cache[] = $c;

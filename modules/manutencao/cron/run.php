@@ -13,6 +13,8 @@
  *   2. Gera notificações de calibrações vencidas ou a vencer (30 e 15 dias).
  *   3. Gera notificações de peças com estoque abaixo do mínimo.
  *   4. Limpa notificações lidas do módulo com mais de 60 dias.
+ *   5. Atribui código de identificação (asset_code) aos equipamentos
+ *      que ainda não têm (lib/asset_code.php).
  *
  * Notificações agora são por usuário (tabela global notifications):
  * cada alerta vai para quem tem a micropermissão do assunto
@@ -248,8 +250,21 @@ try {
     man_cron_log('ERRO ao limpar notificações: ' . $ex->getMessage());
 }
 
+/* ------------------------------------------------------------------
+ * 5. Código de identificação dos equipamentos sem asset_code
+ * ------------------------------------------------------------------ */
+$codesAssigned = 0;
+try {
+    if (man_asset_code_missing_count() > 0) {
+        $codesAssigned = man_asset_code_ensure_all();
+    }
+    man_cron_log(sprintf('Códigos de identificação atribuídos: %d.', $codesAssigned));
+} catch (Throwable $ex) {
+    man_cron_log('ERRO ao atribuir códigos de identificação: ' . $ex->getMessage());
+}
+
 /* ------------------------------------------------------------------ */
-auditLog('cron_run', 'system', null, sprintf('os=%d calib=%d stock=%d', $osCreated, $calibNotifs, $stockNotifs));
+auditLog('cron_run', 'system', null, sprintf('os=%d calib=%d stock=%d codes=%d', $osCreated, $calibNotifs, $stockNotifs, $codesAssigned));
 
 $elapsed = round(microtime(true) - $startedAt, 3);
 man_cron_log(sprintf('Concluído em %.3fs.', $elapsed));

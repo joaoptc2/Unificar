@@ -1,8 +1,11 @@
 <?php
 /**
- * ChannelController — Channel management (create, edit, archive, members).
+ * ChannelController — canais (criar, editar, arquivar, membros,
+ * explorar, mensagens diretas, configurações por canal).
  *
- * Every public method maps to ?page=channels&action=X.
+ * Cada método público corresponde a ?page=channels&action=X.
+ * Gerir um canal = ter channels.edit (ou channels.delete para arquivar),
+ * ser o criador ou owner/admin do próprio canal.
  */
 class ChannelController
 {
@@ -13,28 +16,27 @@ class ChannelController
         $this->db = Database::getInstance();
     }
 
+    public function index(): void
+    {
+        $this->browse();
+    }
+
     /* ------------------------------------------------------------------
-     *  create  — Show channel creation form
-     *  GET ?page=channels&action=create
+     *  create / store
      * ----------------------------------------------------------------*/
     public function create(): void
     {
         Auth::requireLogin();
         core_require('channels.create');
 
-        $users = User::active();
-
         View::render('channels/form', [
-            'pageTitle' => 'Novo Canal',
-            'channel'   => null,
-            'users'     => $users,
+            'pageTitle'  => 'Novo canal',
+            'channel'    => null,
+            'users'      => User::active(),
+            'categories' => $this->categories(),
         ]);
     }
 
-    /* ------------------------------------------------------------------
-     *  store  — Persist a new channel
-     *  POST ?page=channels&action=store
-     * ----------------------------------------------------------------*/
     public function store(): void
     {
         Auth::requireLogin();
@@ -42,21 +44,17 @@ class ChannelController
         Csrf::check();
 
         $userId      = Session::userId();
-        $name        = Sanitize::post('name');
+        $name        = mb_substr(Sanitize::post('name'), 0, 200);
         $description = Sanitize::post('description');
-        $type        = in_array($_POST['type'] ?? '', ['public', 'private'], true)
-                     ? $_POST['type']
-                     : 'public';
+        $type        = in_array($_POST['type'] ?? '', ['public', 'private'], true) ? $_POST['type'] : 'public';
+        $categoryId  = Sanitize::int($_POST['category_id'] ?? 0) ?: null;
 
         if ($name === '') {
             Session::flash('error', 'O nome do canal é obrigatório.');
-            header('Location: index.php?m=chat&page=channels&action=create');
-            exit;
+            core_redirect('index.php?m=chat&page=channels&action=create');
         }
 
-        $slug = Sanitize::slug($name);
-
-        // Ensure slug uniqueness
+        $slug = Sanitize::slug($name) ?: 'canal';
         if (Channel::findBySlug($slug)) {
             $slug .= '-' . time();
         }
@@ -68,115 +66,97 @@ class ChannelController
             'type'        => $type,
             'created_by'  => $userId,
             'is_archived' => 0,
+            'category_id' => $categoryId,
         ]);
 
-        // Creator becomes owner
         Channel::addMember($channelId, $userId, 'owner');
 
-        // Add selected members
-        $memberIds = array_map('intval', $_POST['members'] ?? []);
-        foreach ($memberIds as $memberId) {
+        $memberIds = array_map('intval', (array) ($_POST['members'] ?? []));
+        foreach (array_unique($memberIds) as $memberId) {
             if ($memberId > 0 && $memberId !== $userId) {
                 Channel::addMember($channelId, $memberId);
             }
         }
 
-        AuditLog::log('create', 'channel', $channelId, null, [
-            'name' => $name,
-            'type' => $type,
-        ]);
+        AuditLog::log('create', 'channel', $channelId, null, ['name' => $name, 'type' => $type]);
 
         Session::flash('success', 'Canal criado com sucesso.');
-        header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
-        exit;
+        core_redirect('index.php?m=chat&page=chat&channel_id=' . $channelId);
     }
 
     /* ------------------------------------------------------------------
-     *  edit  — Show channel edit form
-     *  GET ?page=channels&action=edit&id=N
+     *  edit / update
      * ----------------------------------------------------------------*/
     public function edit(): void
     {
         Auth::requireLogin();
+        core_require('channels.view');
 
         $channelId = isset($_GET['id']) ? Sanitize::int($_GET['id']) : 0;
         $channel   = Channel::find($channelId);
 
-        if (!$channel) {
+        if (!$channel || $channel['type'] === 'direct') {
             Session::flash('error', 'Canal não encontrado.');
-            header('Location: index.php?m=chat&page=chat');
-            exit;
+            core_redirect('index.php?m=chat&page=chat');
         }
 
-        // Only channel owner or holders of channels.edit may edit
-        $userId = Session::userId();
-        if (!$this->canManageChannel($channel, $userId, 'channels.edit')) {
+        if (!$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
             Session::flash('error', 'Você não tem permissão para editar este canal.');
-            header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
-            exit;
+            core_redirect('index.php?m=chat&page=chat&channel_id=' . $channelId);
         }
-
-        $users = User::active();
 
         View::render('channels/form', [
-            'pageTitle' => 'Editar Canal',
-            'channel'   => $channel,
-            'users'     => $users,
-            'members'   => Channel::members($channelId),
+            'pageTitle'  => 'Editar canal',
+            'channel'    => $channel,
+            'users'      => User::active(),
+            'members'    => Channel::members($channelId),
+            'categories' => $this->categories(),
         ]);
     }
 
-    /* ------------------------------------------------------------------
-     *  update  — Persist channel changes
-     *  POST ?page=channels&action=update
-     * ----------------------------------------------------------------*/
     public function update(): void
     {
         Auth::requireLogin();
+        core_require('channels.view');
         Csrf::check();
 
         $channelId = Sanitize::int($_POST['id'] ?? 0);
         $channel   = Channel::find($channelId);
 
-        if (!$channel) {
+        if (!$channel || $channel['type'] === 'direct') {
             Session::flash('error', 'Canal não encontrado.');
-            header('Location: index.php?m=chat&page=chat');
-            exit;
+            core_redirect('index.php?m=chat&page=chat');
         }
 
-        $userId = Session::userId();
-        if (!$this->canManageChannel($channel, $userId, 'channels.edit')) {
+        if (!$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
             Session::flash('error', 'Você não tem permissão para editar este canal.');
-            header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
-            exit;
+            core_redirect('index.php?m=chat&page=chat&channel_id=' . $channelId);
         }
 
-        $name        = Sanitize::post('name');
+        $name        = mb_substr(Sanitize::post('name'), 0, 200);
         $description = Sanitize::post('description');
-        $topic       = Sanitize::post('topic');
+        $topic       = mb_substr(Sanitize::post('topic'), 0, 500);
+        $categoryId  = Sanitize::int($_POST['category_id'] ?? 0) ?: null;
 
-        $oldData = ['name' => $channel['name'], 'description' => $channel['description'], 'topic' => $channel['topic'] ?? ''];
-
-        Channel::update($channelId, [
+        $new = [
             'name'        => $name !== '' ? $name : $channel['name'],
             'description' => $description,
             'topic'       => $topic,
-        ]);
+            'category_id' => $categoryId,
+        ];
+        Channel::update($channelId, $new);
 
-        AuditLog::log('update', 'channel', $channelId, $oldData, [
-            'name'        => $name !== '' ? $name : $channel['name'],
-            'description' => $description,
-            'topic'       => $topic,
-        ]);
+        AuditLog::log('update', 'channel', $channelId, [
+            'name' => $channel['name'], 'description' => $channel['description'],
+            'topic' => $channel['topic'] ?? '', 'category_id' => $channel['category_id'],
+        ], $new);
 
         Session::flash('success', 'Canal atualizado com sucesso.');
-        header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
-        exit;
+        core_redirect('index.php?m=chat&page=chat&channel_id=' . $channelId);
     }
 
     /* ------------------------------------------------------------------
-     *  archive  — Soft-archive a channel
-     *  POST ?page=channels&action=archive
+     *  archive — POST
      * ----------------------------------------------------------------*/
     public function archive(): void
     {
@@ -188,84 +168,85 @@ class ChannelController
 
         if (!$channel) {
             Session::flash('error', 'Canal não encontrado.');
-            header('Location: index.php?m=chat&page=chat');
-            exit;
+            core_redirect('index.php?m=chat&page=chat');
         }
-
-        $userId = Session::userId();
-        if (!$this->canManageChannel($channel, $userId, 'channels.delete')) {
+        if ((int) $channel['is_general'] === 1) {
+            Session::flash('error', 'O canal geral não pode ser arquivado.');
+            core_redirect('index.php?m=chat&page=chat&channel_id=' . $channelId);
+        }
+        if (!$this->canManageChannel($channel, Session::userId(), 'channels.delete')) {
             Session::flash('error', 'Você não tem permissão para arquivar este canal.');
-            header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
-            exit;
+            core_redirect('index.php?m=chat&page=chat&channel_id=' . $channelId);
         }
 
         Channel::update($channelId, ['is_archived' => 1]);
-
-        // Send system message
-        Message::insert([
-            'channel_id' => $channelId,
-            'user_id'    => null,
-            'content'    => 'Este canal foi arquivado por ' . Session::userName() . '.',
-            'type'       => 'system',
-        ]);
-
+        Channel::systemMessage($channelId, 'Este canal foi arquivado por ' . (Session::userName() ?? 'Usuário') . '.');
         AuditLog::log('archive', 'channel', $channelId);
 
         Session::flash('success', 'Canal arquivado com sucesso.');
-        header('Location: index.php?m=chat&page=chat');
-        exit;
+        core_redirect('index.php?m=chat&page=chat');
     }
 
     /* ------------------------------------------------------------------
-     *  members  — Return JSON list of channel members
-     *  GET ?page=channels&action=members&id=N
+     *  members — GET JSON (somente membros ou canais públicos)
      * ----------------------------------------------------------------*/
     public function members(): void
     {
         Auth::requireLogin();
-        if (!core_can('channels.view')) {
+        if (!core_can('chat.view')) {
             $this->jsonResponse(false, 'Sem permissão.', 403);
             return;
         }
 
         $channelId = isset($_GET['id']) ? Sanitize::int($_GET['id']) : 0;
-
-        if ($channelId <= 0) {
-            $this->jsonResponse(false, 'ID de canal inválido.', 400);
+        $channel   = $channelId > 0 ? Channel::find($channelId) : null;
+        if (!$channel) {
+            $this->jsonResponse(false, 'Canal não encontrado.', 404);
+            return;
+        }
+        if ($channel['type'] !== 'public' && !Channel::isMember($channelId, Session::userId())) {
+            $this->jsonResponse(false, 'Você não é membro deste canal.', 403);
             return;
         }
 
         $members = Channel::members($channelId);
-
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'success' => true,
             'members' => $members,
             'count'   => count($members),
-        ]);
+            'can_manage' => $this->canManageChannel($channel, Session::userId(), 'channels.edit'),
+        ], JSON_UNESCAPED_UNICODE);
     }
 
     /* ------------------------------------------------------------------
-     *  addMember  — Add a user to a channel
-     *  POST ?page=channels&action=addMember
+     *  addMember / removeMember — POST JSON
      * ----------------------------------------------------------------*/
     public function addMember(): void
     {
         Auth::requireLogin();
-        Csrf::check();
+        if (!Csrf::checkAjax()) {
+            $this->jsonResponse(false, 'Token CSRF inválido.', 403);
+            return;
+        }
 
         $channelId = Sanitize::int($_POST['channel_id'] ?? 0);
         $memberId  = Sanitize::int($_POST['user_id'] ?? 0);
 
         $channel = Channel::find($channelId);
-        if (!$channel || $memberId <= 0) {
+        if (!$channel || $memberId <= 0 || $channel['type'] === 'direct') {
             $this->jsonResponse(false, 'Dados inválidos.', 400);
             return;
         }
 
-        // Gerir membros = channels.edit (donos do canal continuam podendo).
         if (!$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
             $this->jsonResponse(false, 'Sem permissão para gerenciar membros deste canal.', 403);
+            return;
+        }
+
+        $addedUser = User::find($memberId);
+        if (!$addedUser || (int) ($addedUser['active'] ?? 0) !== 1) {
+            $this->jsonResponse(false, 'Usuário não encontrado.', 404);
             return;
         }
 
@@ -275,62 +256,55 @@ class ChannelController
         }
 
         Channel::addMember($channelId, $memberId);
-
-        // System message
-        $addedUser = User::find($memberId);
-        $userName  = $addedUser ? $addedUser['name'] : 'Usuário';
-        Message::insert([
-            'channel_id' => $channelId,
-            'user_id'    => null,
-            'content'    => $userName . ' entrou no canal.',
-            'type'       => 'system',
-        ]);
+        Channel::systemMessage($channelId, $addedUser['name'] . ' entrou no canal.');
+        Notification::create(
+            $memberId, 'channel',
+            (Session::userName() ?? 'Alguém') . ' adicionou você ao canal #' . $channel['name'],
+            null,
+            'index.php?m=chat&page=chat&channel_id=' . $channelId
+        );
+        AuditLog::log('add_member', 'channel', $channelId, null, ['user_id' => $memberId]);
 
         $this->jsonResponse(true, 'Membro adicionado com sucesso.');
     }
 
-    /* ------------------------------------------------------------------
-     *  removeMember  — Remove a user from a channel
-     *  POST ?page=channels&action=removeMember
-     * ----------------------------------------------------------------*/
     public function removeMember(): void
     {
         Auth::requireLogin();
-        Csrf::check();
+        if (!Csrf::checkAjax()) {
+            $this->jsonResponse(false, 'Token CSRF inválido.', 403);
+            return;
+        }
 
         $channelId = Sanitize::int($_POST['channel_id'] ?? 0);
         $memberId  = Sanitize::int($_POST['user_id'] ?? 0);
 
         $channel = Channel::find($channelId);
-        if (!$channel || $memberId <= 0) {
+        if (!$channel || $memberId <= 0 || $channel['type'] === 'direct') {
             $this->jsonResponse(false, 'Dados inválidos.', 400);
             return;
         }
 
-        // Gerir membros = channels.edit (donos do canal continuam podendo).
         if (!$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
             $this->jsonResponse(false, 'Sem permissão para gerenciar membros deste canal.', 403);
             return;
         }
 
-        Channel::removeMember($channelId, $memberId);
+        if (!Channel::isMember($channelId, $memberId)) {
+            $this->jsonResponse(false, 'Usuário não é membro deste canal.', 404);
+            return;
+        }
 
-        // System message
+        Channel::removeMember($channelId, $memberId);
         $removedUser = User::find($memberId);
-        $userName    = $removedUser ? $removedUser['name'] : 'Usuário';
-        Message::insert([
-            'channel_id' => $channelId,
-            'user_id'    => null,
-            'content'    => $userName . ' saiu do canal.',
-            'type'       => 'system',
-        ]);
+        Channel::systemMessage($channelId, ($removedUser['name'] ?? 'Usuário') . ' saiu do canal.');
+        AuditLog::log('remove_member', 'channel', $channelId, null, ['user_id' => $memberId]);
 
         $this->jsonResponse(true, 'Membro removido com sucesso.');
     }
 
     /* ------------------------------------------------------------------
-     *  join  — Current user joins a public channel
-     *  POST ?page=channels&action=join
+     *  join / leave — POST
      * ----------------------------------------------------------------*/
     public function join(): void
     {
@@ -341,42 +315,24 @@ class ChannelController
         $channelId = Sanitize::int($_POST['channel_id'] ?? 0);
         $channel   = Channel::find($channelId);
 
-        if (!$channel || $channel['type'] !== 'public') {
+        if (!$channel || $channel['type'] !== 'public' || (int) $channel['is_archived'] === 1) {
             Session::flash('error', 'Canal não encontrado ou não é público.');
-            header('Location: index.php?m=chat&page=channels&action=browse');
-            exit;
+            core_redirect('index.php?m=chat&page=channels&action=browse');
         }
 
         $userId = Session::userId();
-
-        if (Channel::isMember($channelId, $userId)) {
-            header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
-            exit;
+        if (!Channel::isMember($channelId, $userId)) {
+            Channel::addMember($channelId, $userId);
+            Channel::systemMessage($channelId, (Session::userName() ?? 'Usuário') . ' entrou no canal.');
+            Session::flash('success', 'Você entrou no canal #' . $channel['name'] . '.');
         }
-
-        Channel::addMember($channelId, $userId);
-
-        // System message
-        Message::insert([
-            'channel_id' => $channelId,
-            'user_id'    => null,
-            'content'    => Session::userName() . ' entrou no canal.',
-            'type'       => 'system',
-        ]);
-
-        Session::flash('success', 'Você entrou no canal #' . Sanitize::e($channel['name']) . '.');
-        header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
-        exit;
+        core_redirect('index.php?m=chat&page=chat&channel_id=' . $channelId);
     }
 
-    /* ------------------------------------------------------------------
-     *  leave  — Current user leaves a channel
-     *  POST ?page=channels&action=leave
-     * ----------------------------------------------------------------*/
     public function leave(): void
     {
         Auth::requireLogin();
-        core_require('channels.view');
+        core_require('chat.view');
         Csrf::check();
 
         $channelId = Sanitize::int($_POST['channel_id'] ?? 0);
@@ -384,54 +340,39 @@ class ChannelController
 
         if (!$channel) {
             Session::flash('error', 'Canal não encontrado.');
-            header('Location: index.php?m=chat&page=chat');
-            exit;
+            core_redirect('index.php?m=chat&page=chat');
+        }
+        if ((int) $channel['is_general'] === 1) {
+            Session::flash('error', 'Não é possível sair do canal geral.');
+            core_redirect('index.php?m=chat&page=chat&channel_id=' . $channelId);
         }
 
         $userId = Session::userId();
-        Channel::removeMember($channelId, $userId);
+        if (Channel::isMember($channelId, $userId)) {
+            Channel::removeMember($channelId, $userId);
+            Channel::systemMessage($channelId, (Session::userName() ?? 'Usuário') . ' saiu do canal.');
+        }
 
-        // System message
-        Message::insert([
-            'channel_id' => $channelId,
-            'user_id'    => null,
-            'content'    => Session::userName() . ' saiu do canal.',
-            'type'       => 'system',
-        ]);
-
-        Session::flash('success', 'Você saiu do canal #' . Sanitize::e($channel['name']) . '.');
-        header('Location: index.php?m=chat&page=chat');
-        exit;
+        Session::flash('success', 'Você saiu do canal #' . $channel['name'] . '.');
+        core_redirect('index.php?m=chat&page=chat');
     }
 
     /* ------------------------------------------------------------------
-     *  browse  — List all public channels the user can join
-     *  GET ?page=channels&action=browse
+     *  browse — GET
      * ----------------------------------------------------------------*/
     public function browse(): void
     {
         Auth::requireLogin();
         core_require('channels.view');
 
-        $userId         = Session::userId();
-        $publicChannels = Channel::publicChannels();
-
-        // Annotate each channel with membership status and member count
-        foreach ($publicChannels as &$ch) {
-            $ch['is_member']    = Channel::isMember((int) $ch['id'], $userId);
-            $ch['member_count'] = Channel::memberCount((int) $ch['id']);
-        }
-        unset($ch);
-
         View::render('channels/browse', [
-            'pageTitle' => 'Explorar Canais',
-            'channels'  => $publicChannels,
+            'pageTitle' => 'Canais',
+            'channels'  => Channel::publicChannelsFor(Session::userId()),
         ]);
     }
 
     /* ------------------------------------------------------------------
-     *  direct  — Find or create a direct-message channel
-     *  POST ?page=channels&action=direct
+     *  direct — abre (ou cria) a conversa direta com um usuário
      * ----------------------------------------------------------------*/
     public function direct(): void
     {
@@ -446,119 +387,115 @@ class ChannelController
 
         if ($targetId <= 0 || $targetId === $userId) {
             Session::flash('error', 'Usuário inválido.');
-            header('Location: index.php?m=chat&page=chat');
-            exit;
+            core_redirect('index.php?m=chat&page=chat');
         }
 
         $target = User::find($targetId);
-        if (!$target) {
+        if (!$target || (int) ($target['active'] ?? 0) !== 1) {
             Session::flash('error', 'Usuário não encontrado.');
-            header('Location: index.php?m=chat&page=chat');
-            exit;
+            core_redirect('index.php?m=chat&page=chat');
         }
 
-        // Check for existing DM channel
         $channel = Channel::directChannel($userId, $targetId);
-
         if (!$channel) {
-            // Create a new direct-message channel
+            $slug = 'dm-' . min($userId, $targetId) . '-' . max($userId, $targetId);
+            if (Channel::findBySlug($slug)) {
+                $slug .= '-' . time();
+            }
             $channelId = Channel::insert([
-                'name'        => 'dm-' . min($userId, $targetId) . '-' . max($userId, $targetId),
-                'slug'        => 'dm-' . min($userId, $targetId) . '-' . max($userId, $targetId),
+                'name'        => $slug,
+                'slug'        => $slug,
                 'description' => '',
                 'type'        => 'direct',
                 'created_by'  => $userId,
                 'is_archived' => 0,
             ]);
-
             Channel::addMember($channelId, $userId, 'member');
             Channel::addMember($channelId, $targetId, 'member');
         } else {
             $channelId = (int) $channel['id'];
         }
 
-        header('Location: index.php?m=chat&page=chat&channel_id=' . $channelId);
-        exit;
+        core_redirect('index.php?m=chat&page=chat&channel_id=' . $channelId);
     }
 
+    /* ------------------------------------------------------------------
+     *  settings / updateSettings
+     * ----------------------------------------------------------------*/
     public function settings(): void
     {
         Auth::requireLogin();
+        core_require('channels.view');
+
         $channelId = Sanitize::int($_GET['id'] ?? 0);
-        $channel = Channel::find($channelId);
-        if (!$channel || !$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
+        $channel   = Channel::find($channelId);
+        if (!$channel || $channel['type'] === 'direct' || !$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
             Session::flash('error', 'Sem permissão.');
-            header('Location: index.php?m=chat&page=chat');
-            exit;
+            core_redirect('index.php?m=chat&page=chat');
         }
         View::render('channels/settings', [
-            'pageTitle' => 'Configurações do Canal',
-            'page' => 'channels',
-            'channel' => $channel,
+            'pageTitle' => 'Configurações do canal',
+            'channel'   => $channel,
+            'canArchive' => (int) $channel['is_general'] !== 1 && $this->canManageChannel($channel, Session::userId(), 'channels.delete'),
         ]);
     }
 
     public function updateSettings(): void
     {
         Auth::requireLogin();
+        core_require('channels.view');
         Csrf::check();
+
         $channelId = Sanitize::int($_POST['id'] ?? 0);
-        $channel = Channel::find($channelId);
-        if (!$channel || !$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
+        $channel   = Channel::find($channelId);
+        if (!$channel || $channel['type'] === 'direct' || !$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
             Session::flash('error', 'Sem permissão.');
-            header('Location: index.php?m=chat&page=chat');
-            exit;
+            core_redirect('index.php?m=chat&page=chat');
         }
+
+        $retention = ($_POST['retention_days'] ?? '') !== '' ? max(0, Sanitize::int($_POST['retention_days'])) : null;
         Channel::update($channelId, [
-            'is_readonly'       => Sanitize::int($_POST['is_readonly'] ?? 0),
-            'retention_days'    => ($_POST['retention_days'] ?? '') !== '' ? Sanitize::int($_POST['retention_days']) : null,
-            'slow_mode_seconds' => Sanitize::int($_POST['slow_mode_seconds'] ?? 0),
-            'max_pinned'        => Sanitize::int($_POST['max_pinned'] ?? 50),
-            'allow_threads'     => Sanitize::int($_POST['allow_threads'] ?? 1),
+            'is_readonly'       => Sanitize::int($_POST['is_readonly'] ?? 0) ? 1 : 0,
+            'retention_days'    => $retention ?: null,
+            'slow_mode_seconds' => max(0, min(3600, Sanitize::int($_POST['slow_mode_seconds'] ?? 0))),
+            'max_pinned'        => max(1, min(200, Sanitize::int($_POST['max_pinned'] ?? 50))),
+            'allow_threads'     => Sanitize::int($_POST['allow_threads'] ?? 1) ? 1 : 0,
         ]);
         AuditLog::log('update_channel_settings', 'channel', $channelId);
+
         Session::flash('success', 'Configurações do canal atualizadas.');
-        header('Location: index.php?m=chat&page=channels&action=settings&id=' . $channelId);
-        exit;
+        core_redirect('index.php?m=chat&page=channels&action=settings&id=' . $channelId);
     }
 
     /* ------------------------------------------------------------------
      *  Helpers
      * ----------------------------------------------------------------*/
 
+    private function categories(): array
+    {
+        return $this->db->query('SELECT id, name FROM chat_channel_categories ORDER BY order_num ASC, name ASC')->fetchAll();
+    }
+
     /**
-     * Check whether the current user may manage a channel.
-     * Permitidos: quem tem a micropermissão do módulo ($permKey —
-     * channels.edit para editar/configurar/membros, channels.delete para
-     * arquivar), o criador do canal e os owners/admins do próprio canal.
+     * Pode gerir o canal? Quem tem a micropermissão ($permKey), o criador
+     * do canal e os owners/admins do próprio canal.
      */
     private function canManageChannel(array $channel, int $userId, string $permKey = 'channels.edit'): bool
     {
         if (core_can($permKey)) {
             return true;
         }
-
         if ((int) ($channel['created_by'] ?? 0) === $userId) {
             return true;
         }
-
-        // Check channel-level role
-        $stmt = $this->db->prepare(
-            'SELECT role FROM chat_channel_members WHERE channel_id = ? AND user_id = ? LIMIT 1'
-        );
-        $stmt->execute([(int) $channel['id'], $userId]);
-        $row = $stmt->fetch();
-
-        return $row && in_array($row['role'], ['owner', 'admin'], true);
+        $role = Channel::memberRole((int) $channel['id'], $userId);
+        return $role !== null && in_array($role, ['owner', 'admin'], true);
     }
 
-    /**
-     * Send a JSON response and exit.
-     */
     private function jsonResponse(bool $success, string $message, int $code = 200): void
     {
         http_response_code($code);
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['success' => $success, 'message' => $message]);
+        echo json_encode(['success' => $success, 'message' => $message], JSON_UNESCAPED_UNICODE);
     }
 }

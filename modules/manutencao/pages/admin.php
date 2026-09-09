@@ -1,258 +1,28 @@
 <?php
 /**
- * MÓDULO DE ADMINISTRAÇÃO
- * Hospital (unidade) e Setores.
+ * ROTA LEGADA ?page=admin — Setores e Categorias de equipamentos
  *
- * O CRUD de usuários foi REMOVIDO — usuários e permissões agora são
- * geridos na administração central da plataforma (?m=admin&a=users).
+ * A configuração do módulo agora fica na ADMINISTRAÇÃO CENTRAL
+ * (index.php?m=admin&a=module&slug=manutencao&tab=sectors|categories —
+ * ver admin_panel.php). Esta rota é mantida apenas como:
+ *   • GET  → redirecionamento para o painel central;
+ *   • POST → processamento dos formulários (setores/categorias) e
+ *            redirecionamento de volta ao painel.
+ *
+ * A antiga aba "Hospital / Dados da unidade" foi descontinuada — o nome da
+ * organização é o do núcleo (Core\Settings 'org_name').
  */
-requireModule('admin'); // sectors.view OU org_settings.edit
+requireLogin();
 
-$hid = hospitalId();
-$tab = $_GET['tab'] ?? 'sectors';
-if (!in_array($tab, ['hospital', 'sectors'], true)) {
-    $tab = 'sectors';
-}
-// Ajusta a aba ao conjunto de micropermissões do usuário
-if ($tab === 'hospital' && !core_can('org_settings.edit')) {
-    $tab = 'sectors';
-}
-if ($tab === 'sectors' && !core_can('sectors.view')) {
-    $tab = 'hospital';
+$tab = ($_GET['tab'] ?? $_POST['tab'] ?? '') === 'categories' ? 'categories' : 'sectors';
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    core_redirect(core_admin_url(MAN_MODULE_SLUG, $tab));
 }
 
-// ============================================================
-// PROCESSAR POST
-// ============================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
-    $act = $_POST['action'] ?? '';
-
-    // --- HOSPITAL ("Dados da unidade") ---
-    if ($act === 'edit_hospital') {
-        core_require('org_settings.edit');
-        $name    = trim($_POST['name'] ?? '');
-        $cnpj    = trim($_POST['cnpj'] ?? '') ?: null;
-        $address = trim($_POST['address'] ?? '') ?: null;
-        $city    = trim($_POST['city'] ?? '') ?: null;
-        $state   = trim($_POST['state'] ?? '') ?: null;
-        $phone   = trim($_POST['phone'] ?? '') ?: null;
-        $email   = trim($_POST['email'] ?? '') ?: null;
-        $contact = trim($_POST['contact_person'] ?? '') ?: null;
-
-        if ($name === '') {
-            flash('error', 'Nome do hospital é obrigatório.');
-        } else {
-            db()->prepare("
-                UPDATE man_hospitals SET name=?, cnpj=?, address=?, city=?, state=?, phone=?, email=?, contact_person=?
-                WHERE id=?
-            ")->execute([$name, $cnpj, $address, $city, $state, $phone, $email, $contact, $hid]);
-            auditLog('update', 'man_hospitals', $hid);
-            flash('success', 'Dados do hospital atualizados!');
-        }
-        redirect(url('admin', ['tab' => 'hospital']));
-    }
-
-    // --- SETORES ---
-    if ($act === 'add_sector') {
-        core_require('sectors.create');
-        $name = trim($_POST['sector_name'] ?? '');
-        $desc = trim($_POST['sector_desc'] ?? '') ?: null;
-        if ($name !== '') {
-            db()->prepare("INSERT INTO man_sectors (hospital_id, name, description) VALUES (?, ?, ?)")->execute([$hid, $name, $desc]);
-            auditLog('create', 'man_sectors', (int)db()->lastInsertId());
-            flash('success', 'Setor adicionado!');
-        }
-        redirect(url('admin', ['tab' => 'sectors']));
-    }
-    if ($act === 'edit_sector') {
-        core_require('sectors.edit');
-        $id   = (int)($_POST['sector_id'] ?? 0);
-        $name = trim($_POST['sector_name'] ?? '');
-        $desc = trim($_POST['sector_desc'] ?? '') ?: null;
-        $status = $_POST['sector_status'] ?? 'active';
-        if ($name !== '') {
-            db()->prepare("UPDATE man_sectors SET name=?, description=?, status=? WHERE id=? AND hospital_id=?")->execute([$name, $desc, $status, $id, $hid]);
-            auditLog('update', 'man_sectors', $id);
-            flash('success', 'Setor atualizado!');
-        }
-        redirect(url('admin', ['tab' => 'sectors']));
-    }
-    if ($act === 'delete_sector') {
-        core_require('sectors.delete');
-        $id = (int)($_POST['sector_id'] ?? 0);
-        db()->prepare("UPDATE man_equipment SET sector_id = NULL WHERE sector_id = ? AND hospital_id = ?")->execute([$id, $hid]);
-        db()->prepare("DELETE FROM man_sectors WHERE id = ? AND hospital_id = ?")->execute([$id, $hid]);
-        auditLog('delete', 'man_sectors', $id);
-        flash('success', 'Setor removido.');
-        redirect(url('admin', ['tab' => 'sectors']));
-    }
+if (verifyCsrf()) {
+    $tab = manAdminHandlePost($_POST['action'] ?? '') ?? $tab;
+} else {
+    flash('error', 'Sessão expirada ou token inválido. Tente novamente.');
 }
-
-// ============================================================
-// OBTER DADOS
-// ============================================================
-$hospital = db()->prepare("SELECT * FROM man_hospitals WHERE id = ?");
-$hospital->execute([$hid]);
-$hospital = $hospital->fetch();
-
-$sectorsList = db()->prepare("SELECT * FROM man_sectors WHERE hospital_id = ? ORDER BY name");
-$sectorsList->execute([$hid]);
-$sectorsList = $sectorsList->fetchAll();
-
-$pageTitle = 'Administração';
-ob_start();
-?>
-
-<div class="page-header">
-    <h1><i class="bi bi-gear me-2"></i>Administração</h1>
-</div>
-
-<ul class="nav nav-tabs mb-4">
-    <?php if (core_can('sectors.view')): ?>
-    <li class="nav-item">
-        <a class="nav-link <?php echo $tab==='sectors'?'active':''; ?>" href="<?php echo url('admin', ['tab'=>'sectors']); ?>">
-            <i class="bi bi-diagram-3 me-1"></i>Setores
-        </a>
-    </li>
-    <?php endif; ?>
-    <?php if (core_can('org_settings.edit')): ?>
-    <li class="nav-item">
-        <a class="nav-link <?php echo $tab==='hospital'?'active':''; ?>" href="<?php echo url('admin', ['tab'=>'hospital']); ?>">
-            <i class="bi bi-building me-1"></i>Hospital
-        </a>
-    </li>
-    <?php endif; ?>
-    <li class="nav-item">
-        <a class="nav-link" href="<?php echo core_url('index.php?m=admin&a=users'); ?>">
-            <i class="bi bi-people me-1"></i>Usuários <i class="bi bi-box-arrow-up-right small"></i>
-        </a>
-    </li>
-</ul>
-
-<?php
-// ============================================================
-// TAB: HOSPITAL
-// ============================================================
-if ($tab === 'hospital'):
-?>
-<div class="card border-0 shadow-sm">
-    <div class="card-header bg-white fw-semibold"><i class="bi bi-building me-1"></i> Dados do Hospital</div>
-    <div class="card-body">
-        <form method="POST" action="<?php echo url('admin', ['tab'=>'hospital']); ?>">
-            <?php echo csrfField(); ?>
-            <input type="hidden" name="action" value="edit_hospital">
-            <div class="row g-3">
-                <div class="col-md-6"><label class="form-label required">Nome</label><input type="text" class="form-control" name="name" value="<?php echo e($hospital['name'] ?? ''); ?>" required></div>
-                <div class="col-md-6"><label class="form-label">CNPJ</label><input type="text" class="form-control" name="cnpj" value="<?php echo e($hospital['cnpj'] ?? ''); ?>" data-mask="cpf"></div>
-                <div class="col-md-4"><label class="form-label">Endereço</label><input type="text" class="form-control" name="address" value="<?php echo e($hospital['address'] ?? ''); ?>"></div>
-                <div class="col-md-4"><label class="form-label">Cidade</label><input type="text" class="form-control" name="city" value="<?php echo e($hospital['city'] ?? ''); ?>"></div>
-                <div class="col-md-4"><label class="form-label">Estado</label><input type="text" class="form-control" name="state" value="<?php echo e($hospital['state'] ?? ''); ?>" maxlength="2"></div>
-                <div class="col-md-4"><label class="form-label">Telefone</label><input type="text" class="form-control" name="phone" value="<?php echo e($hospital['phone'] ?? ''); ?>" data-mask="phone"></div>
-                <div class="col-md-4"><label class="form-label">Email</label><input type="email" class="form-control" name="email" value="<?php echo e($hospital['email'] ?? ''); ?>"></div>
-                <div class="col-md-4"><label class="form-label">Pessoa de Contato</label><input type="text" class="form-control" name="contact_person" value="<?php echo e($hospital['contact_person'] ?? ''); ?>"></div>
-            </div>
-            <button type="submit" class="btn btn-primary mt-3"><i class="bi bi-check-lg me-1"></i> Salvar</button>
-        </form>
-    </div>
-</div>
-
-<?php
-// ============================================================
-// TAB: SETORES
-// ============================================================
-else:
-?>
-<div class="alert alert-info">
-    <i class="bi bi-info-circle me-1"></i>
-    A gestão de usuários e permissões agora é feita na
-    <a href="<?php echo core_url('index.php?m=admin&a=users'); ?>" class="alert-link">administração central da plataforma</a>.
-</div>
-
-<?php if (core_can('sectors.create')): ?>
-<div class="card border-0 shadow-sm mb-3">
-    <div class="card-header bg-white fw-semibold"><i class="bi bi-plus-lg me-1"></i> Adicionar Setor</div>
-    <div class="card-body">
-        <form method="POST" action="<?php echo url('admin', ['tab'=>'sectors']); ?>" class="row g-2 align-items-end">
-            <?php echo csrfField(); ?>
-            <input type="hidden" name="action" value="add_sector">
-            <div class="col-md-5"><label class="form-label required">Nome do Setor</label><input type="text" class="form-control" name="sector_name" placeholder="Ex: UTI, Centro Cirúrgico..." required></div>
-            <div class="col-md-5"><label class="form-label">Descrição</label><input type="text" class="form-control" name="sector_desc" placeholder="Descrição (opcional)"></div>
-            <div class="col-md-2"><button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-plus-lg me-1"></i> Adicionar</button></div>
-        </form>
-    </div>
-</div>
-<?php endif; ?>
-
-<div class="card border-0 shadow-sm">
-    <div class="card-header bg-white fw-semibold"><i class="bi bi-diagram-3 me-1"></i> Setores (<?php echo count($sectorsList); ?>)</div>
-    <div class="card-body p-0">
-        <?php if (empty($sectorsList)): ?>
-            <p class="text-center text-muted py-4 mb-0">Nenhum setor cadastrado.</p>
-        <?php else: ?>
-            <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0">
-                    <thead><tr><th>Nome</th><th>Descrição</th><th>Status</th><th class="text-end">Ações</th></tr></thead>
-                    <tbody>
-                    <?php foreach ($sectorsList as $s): ?>
-                    <tr id="sector-view-<?php echo $s['id']; ?>">
-                        <td><strong><?php echo e($s['name']); ?></strong></td>
-                        <td class="text-muted"><?php echo e($s['description'] ?? '—'); ?></td>
-                        <td><span class="badge badge-<?php echo $s['status']; ?>"><?php echo $s['status'] === 'active' ? 'Ativo' : 'Inativo'; ?></span></td>
-                        <td class="text-end">
-                            <div class="d-inline-flex gap-1">
-                                <?php if (core_can('sectors.edit')): ?>
-                                <button type="button" onclick="toggleSectorEdit(<?php echo $s['id']; ?>)" class="btn btn-outline-warning btn-action" title="Editar"><i class="bi bi-pencil"></i></button>
-                                <?php endif; ?>
-                                <?php if (core_can('sectors.delete')): ?>
-                                <form method="POST" action="<?php echo url('admin', ['tab'=>'sectors']); ?>" class="d-inline">
-                                    <?php echo csrfField(); ?>
-                                    <input type="hidden" name="action" value="delete_sector">
-                                    <input type="hidden" name="sector_id" value="<?php echo $s['id']; ?>">
-                                    <button type="submit" class="btn btn-outline-danger btn-action" data-confirm="Excluir setor '<?php echo e($s['name']); ?>'?"><i class="bi bi-trash"></i></button>
-                                </form>
-                                <?php endif; ?>
-                            </div>
-                        </td>
-                    </tr>
-                    <?php if (core_can('sectors.edit')): ?>
-                    <tr id="sector-edit-<?php echo $s['id']; ?>" class="table-info" style="display:none">
-                        <td>
-                            <form id="sector-form-<?php echo $s['id']; ?>" method="POST" action="<?php echo url('admin', ['tab'=>'sectors']); ?>">
-                                <?php echo csrfField(); ?>
-                                <input type="hidden" name="action" value="edit_sector">
-                                <input type="hidden" name="sector_id" value="<?php echo $s['id']; ?>">
-                                <input type="text" class="form-control form-control-sm" name="sector_name" value="<?php echo e($s['name']); ?>" required>
-                            </form>
-                        </td>
-                        <td><input type="text" class="form-control form-control-sm" form="sector-form-<?php echo $s['id']; ?>" name="sector_desc" value="<?php echo e($s['description'] ?? ''); ?>"></td>
-                        <td><select class="form-select form-select-sm" form="sector-form-<?php echo $s['id']; ?>" name="sector_status"><option value="active" <?php echo $s['status']==='active'?'selected':''; ?>>Ativo</option><option value="inactive" <?php echo $s['status']==='inactive'?'selected':''; ?>>Inativo</option></select></td>
-                        <td class="text-end">
-                            <div class="d-inline-flex gap-1">
-                                <button type="submit" form="sector-form-<?php echo $s['id']; ?>" class="btn btn-outline-primary btn-action"><i class="bi bi-check-lg"></i></button>
-                                <button type="button" onclick="toggleSectorEdit(<?php echo $s['id']; ?>)" class="btn btn-outline-secondary btn-action"><i class="bi bi-x-lg"></i></button>
-                            </div>
-                        </td>
-                    </tr>
-                    <?php endif; ?>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        <?php endif; ?>
-    </div>
-</div>
-
-<script>
-function toggleSectorEdit(id) {
-    var v = document.getElementById('sector-view-' + id);
-    var e = document.getElementById('sector-edit-' + id);
-    if (e.style.display === 'none') { v.style.display = 'none'; e.style.display = 'table-row'; }
-    else { v.style.display = 'table-row'; e.style.display = 'none'; }
-}
-</script>
-
-<?php endif; ?>
-
-<?php
-$content = ob_get_clean();
-require __DIR__ . '/layout.php';
+core_redirect(core_admin_url(MAN_MODULE_SLUG, $tab));

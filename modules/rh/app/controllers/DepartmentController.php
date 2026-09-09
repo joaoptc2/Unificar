@@ -1,6 +1,8 @@
 <?php
 /**
- * Controller de Departamentos (Administração)
+ * Controller de Departamentos — configurado na Administração central
+ * (index.php?m=admin&a=module&slug=rh&tab=departments). As telas (GET)
+ * são servidas por admin_panel.php; os POSTs continuam em ?m=rh&page=departments.
  */
 class DepartmentController
 {
@@ -49,8 +51,7 @@ class DepartmentController
 
         if (empty($name)) {
             Session::flash('error', 'Nome é obrigatório.');
-            header('Location: index.php?m=rh&page=departments&action=create');
-            exit;
+            core_redirect(core_admin_url('rh', 'departments', ['action' => 'create']));
         }
 
         $stmt = $this->db->prepare('INSERT INTO rh_departments (name, description, active) VALUES (?, ?, ?)');
@@ -58,8 +59,7 @@ class DepartmentController
         AuditLog::log('create', 'departments', (int)$this->db->lastInsertId());
 
         Session::flash('success', 'Departamento criado com sucesso.');
-        header('Location: index.php?m=rh&page=departments');
-        exit;
+        core_redirect(core_admin_url('rh', 'departments'));
     }
 
     public function edit(): void
@@ -73,8 +73,7 @@ class DepartmentController
 
         if (!$department) {
             Session::flash('error', 'Departamento não encontrado.');
-            header('Location: index.php?m=rh&page=departments');
-            exit;
+            core_redirect(core_admin_url('rh', 'departments'));
         }
 
         $pageTitle = 'Editar Departamento';
@@ -99,8 +98,7 @@ class DepartmentController
         AuditLog::log('update', 'departments', $id);
 
         Session::flash('success', 'Departamento atualizado.');
-        header('Location: index.php?m=rh&page=departments');
-        exit;
+        core_redirect(core_admin_url('rh', 'departments'));
     }
 
     public function delete(): void
@@ -115,15 +113,13 @@ class DepartmentController
         $stmt->execute([$id]);
         if ((int)$stmt->fetchColumn() > 0) {
             Session::flash('error', 'Não é possível excluir: existem funcionários vinculados.');
-            header('Location: index.php?m=rh&page=departments');
-            exit;
+            core_redirect(core_admin_url('rh', 'departments'));
         }
 
         $this->db->prepare('DELETE FROM rh_departments WHERE id = ?')->execute([$id]);
         AuditLog::log('delete', 'departments', $id);
 
         Session::flash('success', 'Departamento excluído.');
-        header('Location: index.php?m=rh&page=departments');
-        exit;
+        core_redirect(core_admin_url('rh', 'departments'));
     }
 }

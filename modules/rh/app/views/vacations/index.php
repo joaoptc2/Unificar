@@ -8,7 +8,7 @@
 </div>
 <div class="filter-panel">
     <form class="row g-2 align-items-end">
-        <input type="hidden" name="page" value="vacations">
+        <input type="hidden" name="m" value="rh"><input type="hidden" name="page" value="vacations">
         <div class="col-md-3">
             <select name="status" class="form-select form-select-sm">
                 <option value="">Todos os status</option>

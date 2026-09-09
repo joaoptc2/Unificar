@@ -8,10 +8,12 @@
  * garantidas pelo núcleo (user_id, user_name, user_email, hospital_id, ...).
  *
  * Autorização: o núcleo define $GLOBALS['MODULE_PERMS'] por request e expõe
- * core_can('<recurso>.<ação>') / core_require('<recurso>.<ação>'). Os antigos
- * helpers de papel (níveis admin/gestor/operador) foram REMOVIDOS — cada
- * checagem usa a micropermissão específica da ação diretamente nos
- * controllers e views.
+ * core_can('<recurso>.<ação>') / core_require('<recurso>.<ação>').
+ *
+ * Contexto de SETOR: o módulo tem um seletor global (topo de todas as
+ * páginas) com a opção "Todos os setores" (id 0) e todos os setores ativos
+ * da unidade. O setor escolhido fica em $_SESSION['doc_sector_id'] e filtra
+ * listagens, dashboard, indicadores e planos de ação (0 = sem filtro).
  */
 
 /**
@@ -30,7 +32,6 @@ function is_logged_in() {
 
 /**
  * Exige autenticação — redireciona para o login central do núcleo.
- * (Troca de senha obrigatória já é tratada pelo front controller do núcleo.)
  */
 function require_login() {
     if (!is_logged_in()) {
@@ -49,32 +50,40 @@ function get_hospital_name() { return $_SESSION['hospital_name'] ?? ''; }
 
 // ── Contexto de setor (namespace doc_ na sessão compartilhada) ──────────────
 
+/** Setor em foco (0 = "Todos os setores", sem filtro). */
 function get_sector_id()    { return (int) ($_SESSION['doc_sector_id'] ?? 0); }
-function get_sector_name()  { return $_SESSION['doc_sector_name']  ?? ''; }
-function get_user_sectors() { return $_SESSION['doc_user_sectors'] ?? []; }
+function get_sector_name()  { return (string) ($_SESSION['doc_sector_name'] ?? ''); }
 
 function switch_sector_context($sector_id, $sector_name) {
     $_SESSION['doc_sector_id']   = (int) $sector_id;
-    $_SESSION['doc_sector_name'] = $sector_name;
+    $_SESSION['doc_sector_name'] = (string) $sector_name;
     return true;
 }
 
 /**
- * Carrega os setores do usuário na sessão no primeiro acesso ao módulo
- * (definindo o primeiro setor como contexto ativo).
+ * Garante que o contexto de setor da sessão é válido: se o setor escolhido
+ * foi removido/desativado, volta para "Todos os setores". Também limpa
+ * chaves legadas da sessão (doc_user_sectors).
  * Chamada no entry do módulo, após os models estarem carregados.
  */
 function doc_sectors_ensure_loaded() {
-    if (!is_logged_in() || isset($_SESSION['doc_user_sectors'])) return;
-    try {
-        $sectors = user_sector_list(get_user_id());
-    } catch (Exception $ex) {
-        $sectors = [];
+    if (!is_logged_in()) return;
+    unset($_SESSION['doc_user_sectors']);
+    $sid = get_sector_id();
+    if ($sid <= 0) {
+        $_SESSION['doc_sector_id']   = 0;
+        $_SESSION['doc_sector_name'] = '';
+        return;
     }
-    $_SESSION['doc_user_sectors'] = $sectors;
-    if (!empty($sectors) && empty($_SESSION['doc_sector_id'])) {
-        $_SESSION['doc_sector_id']   = (int) $sectors[0]['id'];
-        $_SESSION['doc_sector_name'] = $sectors[0]['name'];
+    try {
+        $s = sector_find($sid);
+    } catch (Exception $ex) {
+        $s = null;
+    }
+    if (!$s || empty($s['is_active']) || (int) $s['hospital_id'] !== get_hospital_id()) {
+        switch_sector_context(0, '');
+    } else {
+        $_SESSION['doc_sector_name'] = $s['name'];
     }
 }
 

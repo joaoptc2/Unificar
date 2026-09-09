@@ -73,6 +73,16 @@ class DownloadController
                 $row = $stmt->fetch();
                 return $row ? [$row['file_path'], $row['title']] : [null, null];
 
+            case 'announcement': // anexo de comunicado
+                core_require('announcements.view');
+                $stmt = $this->db->prepare('SELECT attachment_path, attachment_name, published_at FROM rh_announcements WHERE id = ?');
+                $stmt->execute([$id]);
+                $row = $stmt->fetch();
+                if ($row && empty($row['published_at']) && !core_can_any(['announcements.create', 'announcements.edit'])) {
+                    $this->abort(403, 'Sem permissão.');
+                }
+                return $row ? [$row['attachment_path'], $row['attachment_name']] : [null, null];
+
             case 'resume': // currículo do candidato
                 // Acesso a currículos exige permissão de recrutamento OU banco de talentos.
                 if (!core_can('recruitment.view') && !core_can('talent_pool.view')) {

@@ -1,7 +1,7 @@
 <div class="page-header">
-    <h1><i class="bi bi-building me-2"></i>Departamentos</h1>
+    <h1 class="h5"><i class="bi bi-building me-2"></i>Departamentos</h1>
     <?php if (core_can('departments.create')): ?>
-        <a href="index.php?m=rh&page=departments&action=create" class="btn btn-primary btn-sm">
+        <a href="<?= core_admin_url('rh', 'departments', ['action' => 'create']) ?>" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i> Novo Departamento
         </a>
     <?php endif; ?>
@@ -25,7 +25,7 @@
                             <td><span class="badge <?= $d['active'] ? 'bg-success' : 'bg-secondary' ?>"><?= $d['active'] ? 'Ativo' : 'Inativo' ?></span></td>
                             <td class="text-end">
                                 <?php if (core_can('departments.edit')): ?>
-                                    <a href="index.php?m=rh&page=departments&action=edit&id=<?= $d['id'] ?>" class="btn btn-outline-warning btn-action"><i class="bi bi-pencil"></i></a>
+                                    <a href="<?= core_admin_url('rh', 'departments', ['action' => 'edit', 'id' => (int)$d['id']]) ?>" class="btn btn-outline-warning btn-action"><i class="bi bi-pencil"></i></a>
                                 <?php endif; ?>
                                 <?php if (core_can('departments.delete')): ?>
                                     <form method="POST" action="index.php?m=rh&page=departments&action=delete" class="d-inline">

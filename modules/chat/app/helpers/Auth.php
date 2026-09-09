@@ -3,11 +3,12 @@
  * Adaptador de autenticação — delega ao núcleo (Core\Auth / Core\Perms).
  *
  * - Login/logout/registro saem do módulo (telas do núcleo em ?m=auth).
- * - A antiga matriz de papéis (admin/manager/member) foi REMOVIDA: o
- *   acesso agora é por MICROPERMISSÕES do núcleo (core_can/core_require,
+ * - O acesso é por MICROPERMISSÕES do núcleo (core_can/core_require,
  *   alimentados por $GLOBALS['MODULE_PERMS']). Auth::can() e
  *   Auth::requirePermission() são wrappers finos que traduzem o par
- *   legado (module, action) para a chave nova "<recurso>.<ação>".
+ *   legado (module, action) para a chave "<recurso>.<ação>" — SOMENTE
+ *   para os recursos do manifesto: chat, channels, search, categories,
+ *   emojis.
  * - user() devolve a linha global de `users` ENRIQUECIDA com a presença
  *   do chat (chat_presence) e aliases legados (title, department, status).
  */
@@ -15,28 +16,16 @@ class Auth
 {
     private static ?array $cachedUser = null;
 
+    /** Recursos válidos no manifesto do módulo. */
+    private const RESOURCES = ['chat', 'channels', 'search', 'categories', 'emojis'];
+
     /**
-     * Mapa de conversão (module, action) legado → micropermissão nova.
-     * Pares ausentes caem no padrão "<module>.<action>" (que já coincide
-     * com o catálogo do manifesto para chat/channels/tasks/meetings/
-     * teams/processes/polls/search/categories/emojis/admin).
-     *
-     * Mapeamentos não triviais (documentados):
-     *  - channels.archive   → channels.delete  (arquivar = "excluir" no catálogo);
-     *  - tasks.assign       → tasks.edit       (atribuir faz parte da edição);
-     *  - meetings.calendar  → calendar.view    (calendário é recurso próprio);
-     *  - polls.close        → polls.edit       (encerrar enquete);
-     *  - members.view/manage→ admin.view       (a gestão de usuários saiu do
-     *    módulo — resta apenas o painel administrativo do módulo);
-     *  - profile.view/edit  → chat.view        (perfil é do núcleo, ?m=auth;
-     *    qualquer usuário do módulo enxerga o próprio perfil).
+     * Mapa de conversão (module, action) legado → micropermissão do manifesto.
+     *  - channels.archive → channels.delete (arquivar = "excluir" no catálogo);
+     *  - profile.*        → chat.view (perfil é do núcleo, ?m=auth).
      */
     private const PERM_MAP = [
         'channels' => ['archive' => 'channels.delete'],
-        'tasks'    => ['assign' => 'tasks.edit'],
-        'meetings' => ['calendar' => 'calendar.view'],
-        'polls'    => ['close' => 'polls.edit'],
-        'members'  => ['view' => 'admin.view', 'manage' => 'admin.view'],
         'profile'  => ['view' => 'chat.view', 'edit' => 'chat.view'],
     ];
 
@@ -59,9 +48,20 @@ class Auth
         return core_can(self::permKey($module, $action));
     }
 
+    /**
+     * Chave de micropermissão. Recursos fora do manifesto (tasks, meetings,
+     * admin...) não existem mais: devolvem uma chave inexistente, que o
+     * núcleo sempre nega.
+     */
     private static function permKey(string $module, string $action): string
     {
-        return self::PERM_MAP[$module][$action] ?? ($module . '.' . $action);
+        if (isset(self::PERM_MAP[$module][$action])) {
+            return self::PERM_MAP[$module][$action];
+        }
+        if (in_array($module, self::RESOURCES, true)) {
+            return $module . '.' . $action;
+        }
+        return 'discontinued.' . $module . '.' . $action;
     }
 
     /**

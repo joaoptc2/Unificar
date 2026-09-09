@@ -3,17 +3,6 @@
  * Controller de API (endpoints AJAX) — módulo DOCUMENTOS.
  */
 
-function api_hospitals($param = null) {
-    if (!core_can('hospitals.view')) json_response(['error' => 'Sem permissão'], 403);
-    $hospitals = [];
-    try {
-        $hospitals = hospital_list_active();
-    } catch (Exception $ex) {
-        log_error('api_hospitals', $ex);
-    }
-    json_response($hospitals);
-}
-
 /**
  * Contagem de não lidas DESTE módulo (tabela global notifications,
  * filtrada por module='documentos').
@@ -47,6 +36,22 @@ function api_indicator_data($param = null) {
     }
 
     json_response(['indicator' => $indicator, 'data' => $data]);
+}
+
+/**
+ * Setores ativos da unidade (seletor global) + setor em foco.
+ */
+function api_sectors($param = null) {
+    if (!is_logged_in()) json_response(['error' => 'Não autenticado'], 401);
+    $sectors = [];
+    try {
+        foreach (sector_list(get_hospital_id()) as $s) {
+            $sectors[] = ['id' => (int) $s['id'], 'name' => $s['name'], 'code' => $s['code']];
+        }
+    } catch (Exception $ex) {
+        log_error('api_sectors', $ex);
+    }
+    json_response(['current' => get_sector_id(), 'sectors' => $sectors]);
 }
 
 function api_index($param = null) {

@@ -12,7 +12,7 @@
 <!-- Filtros -->
 <div class="filter-panel">
     <form method="GET" class="row g-2 align-items-end">
-        <input type="hidden" name="page" value="talent_pool">
+        <input type="hidden" name="m" value="rh"><input type="hidden" name="page" value="talent_pool">
         <div class="col-md-4">
             <label class="form-label">Buscar</label>
             <input type="text" name="search" class="form-control form-control-sm"

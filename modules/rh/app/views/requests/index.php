@@ -2,7 +2,7 @@
     <h1><i class="bi bi-envelope-paper me-2"></i>Solicitacoes</h1>
 </div>
 <div class="filter-panel">
-    <form class="row g-2 align-items-end"><input type="hidden" name="page" value="requests">
+    <form class="row g-2 align-items-end"><input type="hidden" name="m" value="rh"><input type="hidden" name="page" value="requests">
         <div class="col-md-3"><select name="status" class="form-select form-select-sm"><option value="">Todos</option><?php foreach (['pendente','em_analise','aprovada','rejeitada'] as $s): ?><option value="<?= $s ?>" <?= ($status ?? '') === $s ? 'selected' : '' ?>><?= ucfirst($s) ?></option><?php endforeach; ?></select></div>
         <div class="col-md-2"><button type="submit" class="btn btn-primary btn-sm w-100">Filtrar</button></div>
     </form>

@@ -36,7 +36,7 @@ class Upload
      * pelo .htaccess de /uploads/rh/ e só acessíveis via DownloadController
      * com autenticação/permissão.
      */
-    private static array $publicSubdirs = ['employees', 'photos'];
+    private static array $publicSubdirs = ['employees', 'photos', 'announcements', 'rewards'];
 
     /** Diretório físico base dos uploads do módulo. */
     public static function baseDir(): string
@@ -54,12 +54,13 @@ class Upload
      * Processa upload de arquivo
      *
      * @param string $fieldName Nome do campo do formulário
-     * @param string $subDir Subdiretório (employees, photos, documents, resumes, certificates)
+     * @param string $subDir Subdiretório (employees, photos, documents, resumes, certificates, announcements, rewards)
+     * @param string[]|null $onlyExtensions Restringe ainda mais as extensões (ex.: ['jpg','jpeg','png'] para imagens)
      * @return array ['success' => bool, 'path' => string, 'original_name' => string, 'size' => int, 'error' => string]
      *               `path` é armazenado no banco. Se começar com `uploads/` é público;
      *               se começar com `storage/` é privado (servir via DownloadController).
      */
-    public static function handle(string $fieldName, string $subDir = 'documents'): array
+    public static function handle(string $fieldName, string $subDir = 'documents', ?array $onlyExtensions = null): array
     {
         $result = ['success' => false, 'path' => '', 'original_name' => '', 'size' => 0, 'error' => ''];
 
@@ -84,7 +85,7 @@ class Upload
 
         // Verificar extensão
         $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        if (!in_array($ext, self::$allowedExtensions)) {
+        if (!in_array($ext, self::$allowedExtensions) || ($onlyExtensions !== null && !in_array($ext, $onlyExtensions, true))) {
             $result['error'] = 'Extensão de arquivo não permitida: .' . $ext;
             return $result;
         }

@@ -69,14 +69,14 @@ class NotificationController
     }
 
     /**
-     * Notificar os administradores do módulo RH e os administradores globais
-     * da plataforma. "Admin do módulo" = quem pode gerenciar vínculos de
-     * usuários (user_links.edit, permissão exclusiva do preset Administrador);
-     * Core\Perms::usersWith já inclui os admins globais.
+     * Notificar os responsáveis pelo módulo RH e os administradores globais
+     * da plataforma. "Responsável" = quem gerencia os acessos dos
+     * funcionários (employee_access.manage); Core\Perms::usersWith já inclui
+     * os admins globais.
      */
     public static function notifyAdmins(string $title, string $message, string $type = 'warning', string $link = ''): void
     {
-        foreach (Core\Perms::usersWith('rh', 'user_links.edit') as $userId) {
+        foreach (Core\Perms::usersWith('rh', 'employee_access.manage') as $userId) {
             self::create((int)$userId, $title, $message, $type, $link);
         }
     }

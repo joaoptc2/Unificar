@@ -1,8 +1,9 @@
 <?php
 /**
  * Adaptador de views — o layout legado (header/footer/chat_layout) foi
- * substituído pelo layout unificado da plataforma (Core\Layout).
- * As views do módulo produzem apenas o HTML do conteúdo.
+ * substituído pelo layout unificado da plataforma (Core\Layout): topbar +
+ * sidebar do núcleo em todas as telas, inclusive no chat. As views do
+ * módulo produzem apenas o HTML do conteúdo.
  */
 class View
 {
@@ -18,7 +19,11 @@ class View
         ]);
     }
 
-    /** Tela full-screen do chat (fluid, com chat.js). */
+    /**
+     * Tela do chat: mesmo layout do núcleo (topbar + sidebar), com o
+     * conteúdo "fluid" ocupando toda a área abaixo da topbar. A lista de
+     * canais/DMs é um painel esquerdo DENTRO do conteúdo.
+     */
     public static function renderChat(string $template, array $data = []): void
     {
         \Core\Layout::render([
@@ -53,6 +58,12 @@ class View
         require CHAT_PATH . '/app/views/' . $template . '.php';
     }
 
+    /** Nome exibido para o chat: nome da organização (ou do app). */
+    public static function appName(): string
+    {
+        return (string) \Core\Settings::get('org_name', core_config('app.name', 'Comunicação'));
+    }
+
     /** CSS do módulo (Bootstrap/Icons já vêm do layout do núcleo). */
     private static function head(): string
     {
@@ -60,32 +71,30 @@ class View
     }
 
     /**
-     * JS do módulo. O layout do núcleo já injeta as metatags base-url,
-     * csrf-token, user-id e module.
+     * JS do módulo (somente na tela do chat). O layout do núcleo já injeta
+     * as metatags base-url, csrf-token, user-id e module.
      */
     private static function scripts(bool $chat): string
     {
-        $js = '<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>'
-            . '<script src="' . core_asset('chat/app.js') . '"></script>';
-        if ($chat) {
-            $js .= '<script src="' . core_asset('chat/chat.js') . '"></script>';
+        if (!$chat) {
+            return '';
         }
-        return $js;
+        $cfg  = require CHAT_PATH . '/config/app.php';
+        $meta = '<meta name="chat-poll-interval" content="' . (int) ($cfg['poll_interval'] ?? 2000) . '">'
+              . '<meta name="chat-poll-idle" content="' . (int) ($cfg['poll_interval_idle'] ?? 8000) . '">';
+        return $meta . '<script src="' . core_asset('chat/chat.js') . '"></script>';
     }
 
     /** Chave do item ativo do menu lateral (manifesto). */
     private static function activeKey(): string
     {
-        $page   = preg_replace('/[^a-zA-Z0-9_-]/', '', trim($_GET['page'] ?? 'chat'));
-        $action = preg_replace('/[^a-zA-Z0-9_-]/', '', trim($_GET['action'] ?? 'index'));
+        $page = preg_replace('/[^a-zA-Z0-9_-]/', '', trim($_GET['page'] ?? 'chat'));
 
-        return match (true) {
-            $page === 'tasks' && $action === 'my'          => 'tasks-my',
-            $page === 'meetings' && $action === 'calendar' => 'meetings-calendar',
-            $page === 'admin' && $action === 'categories'  => 'admin-categories',
-            $page === 'admin' && $action === 'emojis'      => 'admin-emojis',
-            $page === 'channels', $page === 'polls'        => 'chat',
-            default                                        => $page,
+        return match ($page) {
+            'channels' => 'channels',
+            'search'   => 'search',
+            'admin'    => 'module-settings',
+            default    => 'chat',
         };
     }
 }

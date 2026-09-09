@@ -3,7 +3,7 @@
 </div>
 <div class="card border-0 shadow-sm mb-3"><div class="card-body py-2">
     <form class="row g-2 align-items-end">
-        <input type="hidden" name="page" value="shifts">
+        <input type="hidden" name="m" value="rh"><input type="hidden" name="page" value="shifts">
         <div class="col-md-4">
             <label class="form-label small">Departamento</label>
             <select name="department" class="form-select form-select-sm" onchange="this.form.submit()">

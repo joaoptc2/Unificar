@@ -1,0 +1,2 @@
+[2026-09-09 20:02:28] route:dashboard/index | Error: Call to undefined function get_user_sectors() @ /home/user/Unificar/modules/documentos/views/dashboard/index.php:6
+[2026-09-09 20:02:28] route:dashboard/index | Error: Call to undefined function get_user_sectors() @ /home/user/Unificar/modules/documentos/views/dashboard/index.php:6

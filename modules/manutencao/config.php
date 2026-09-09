@@ -70,12 +70,14 @@ function requireLogin(): void
 
 /**
  * Mapa página legada → micropermissão de visualização (recurso.view).
- * A página 'admin' é especial (sectors.view OU org_settings.edit) e é
- * tratada diretamente em canAccessModule()/requireModule().
+ * 'admin' (setores) e 'categories' são as abas do painel de configuração
+ * na Administração central (admin_panel.php).
  */
 function manPagePermission(string $page): ?string
 {
     $map = [
+        'admin'          => 'sectors.view',
+        'categories'     => 'categories.view',
         'dashboard'      => 'dashboard.view',
         'equipment'      => 'equipment.view',
         'service-orders' => 'service_orders.view',
@@ -100,9 +102,6 @@ function manPagePermission(string $page): ?string
 /** O usuário pode VER a página? (wrapper legado — delega a core_can()). */
 function canAccessModule(string $page): bool
 {
-    if ($page === 'admin') {
-        return core_can('sectors.view') || core_can('org_settings.edit');
-    }
     $perm = manPagePermission($page);
     return $perm !== null && core_can($perm);
 }
@@ -111,14 +110,6 @@ function canAccessModule(string $page): bool
 function requireModule(string $page): void
 {
     requireLogin();
-    if ($page === 'admin') {
-        if (!canAccessModule('admin')) {
-            http_response_code(403);
-            Core\Layout::renderError(403, 'Você não tem permissão para esta ação. Solicite ao administrador.');
-            exit;
-        }
-        return;
-    }
     $perm = manPagePermission($page);
     if ($perm === null) {
         http_response_code(403);
@@ -146,6 +137,31 @@ function hospitalId(): int
 {
     return (int) ($_SESSION['hospital_id'] ?? 0);
 }
+
+/**
+ * Nome da unidade/organização exibido em telas e relatórios. Vem da
+ * configuração central (Administração > Configurações → org_name); a
+ * antiga aba "Hospital / Dados da unidade" do módulo foi descontinuada.
+ */
+function manOrgName(): string
+{
+    $name = (string) ($_SESSION['hospital_name'] ?? '');
+    if ($name === '') {
+        try {
+            $name = (string) (Core\Settings::get('org_name') ?? '');
+        } catch (Throwable $ex) {
+            $name = '';
+        }
+    }
+    return $name !== '' ? $name : (string) core_config('app.name', APP_NAME);
+}
+
+// Bibliotecas do módulo: código de identificação (asset_code), código de
+// barras Code 128 e QR Code — PHP puro, sem dependências externas.
+require_once __DIR__ . '/lib/asset_code.php';
+require_once __DIR__ . '/lib/barcode.php';
+require_once __DIR__ . '/lib/qrcode.php';
+require_once __DIR__ . '/lib/admin_actions.php';
 
 // ============================================================
 // SEGURANÇA

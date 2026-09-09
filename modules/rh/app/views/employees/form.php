@@ -272,6 +272,16 @@ $formAction = $isEdit ? 'index.php?m=rh&page=employees&action=update' : 'index.p
             </div>
         </div>
 
+        <?php if (!$isEdit): ?>
+        <div class="col-12">
+            <div class="alert alert-info mb-0 py-2 small">
+                <i class="bi bi-person-lock me-1"></i>
+                Ao cadastrar, o acesso ao portal é criado automaticamente: login = <strong>CPF</strong> e senha inicial =
+                <strong>data de nascimento (ddmmaaaa)</strong>, com troca obrigatória no primeiro acesso.
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Observações -->
         <div class="col-12">
             <div class="card border-0 shadow-sm">
@@ -291,6 +301,10 @@ $formAction = $isEdit ? 'index.php?m=rh&page=employees&action=update' : 'index.p
         </div>
     </div>
 </form>
+
+<?php if ($isEdit): ?>
+    <div class="mt-3"><?php require __DIR__ . '/_access.php'; ?></div>
+<?php endif; ?>
 
 <script>
 document.getElementById('statusSelect').addEventListener('change', function() {

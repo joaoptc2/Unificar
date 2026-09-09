@@ -1,7 +1,7 @@
 <div class="page-header">
-    <h1><i class="bi bi-person-workspace me-2"></i>Cargos</h1>
+    <h1 class="h5"><i class="bi bi-person-workspace me-2"></i>Cargos</h1>
     <?php if (core_can('positions.create')): ?>
-        <a href="index.php?m=rh&page=positions&action=create" class="btn btn-primary btn-sm">
+        <a href="<?= core_admin_url('rh', 'positions', ['action' => 'create']) ?>" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg me-1"></i> Novo Cargo
         </a>
     <?php endif; ?>
@@ -25,7 +25,7 @@
                             <td><span class="badge <?= $p['active'] ? 'bg-success' : 'bg-secondary' ?>"><?= $p['active'] ? 'Ativo' : 'Inativo' ?></span></td>
                             <td class="text-end">
                                 <?php if (core_can('positions.edit')): ?>
-                                    <a href="index.php?m=rh&page=positions&action=edit&id=<?= $p['id'] ?>" class="btn btn-outline-warning btn-action"><i class="bi bi-pencil"></i></a>
+                                    <a href="<?= core_admin_url('rh', 'positions', ['action' => 'edit', 'id' => (int)$p['id']]) ?>" class="btn btn-outline-warning btn-action"><i class="bi bi-pencil"></i></a>
                                 <?php endif; ?>
                                 <?php if (core_can('positions.delete')): ?>
                                     <form method="POST" action="index.php?m=rh&page=positions&action=delete" class="d-inline">

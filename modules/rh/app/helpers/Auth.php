@@ -17,7 +17,6 @@ class Auth
     /** Recursos renomeados no catálogo de micropermissões. */
     private const RESOURCE_MAP = [
         'documents' => 'employee_documents',
-        'users'     => 'user_links',
     ];
 
     /**
