@@ -286,12 +286,15 @@ $has_page_layouts = !empty($page_layouts);
                     <i class="bi bi-send me-1"></i>Status inicial
                 </div>
                 <div class="card-body">
+                    <?php $can_approve = core_can('documents.approve'); ?>
                     <select name="status" class="form-select">
                         <option value="draft">Rascunho</option>
-                        <option value="pending_review">Enviar para revisão</option>
+                        <option value="pending_review" <?php echo $can_approve ? '' : 'selected'; ?>>Enviar para revisão</option>
+                        <?php if ($can_approve): ?>
                         <option value="approved" selected>Aprovado (publicar direto)</option>
+                        <?php endif; ?>
                     </select>
-                    <small class="text-muted">Gestores podem aprovar depois.</small>
+                    <small class="text-muted"><?php echo $can_approve ? 'Você pode publicar direto ou deixar para aprovação.' : 'A publicação depende da aprovação de um gestor.'; ?></small>
                 </div>
             </div>
             <?php endif; ?>

@@ -22,3 +22,5 @@ modules/*/storage/cache/*
 # Uploads privados (fora do webroot)
 /storage/uploads/*
 !/storage/uploads/.gitkeep
+modules/*/logs/*
+!modules/*/logs/.gitkeep

@@ -58,11 +58,13 @@ if ($mode === 'public') {
     }
     $layout = intra_find_layout((int) $doc['layout_id']);
     $author = DB::queryOne('SELECT name FROM users WHERE id = ?', [$doc['updated_by'] ?? $doc['created_by']]);
+    $cover = intra_cover_for($doc);
+    if ($cover) $cover['html'] = intra_sanitize_html((string) $cover['html']);
     intra_render_page([
         'title'        => (string) $doc['title'],
         'layout'       => $layout,
-        'content_html' => (string) $doc['content_html'],
-        'cover'        => intra_cover_for($doc),
+        'content_html' => intra_sanitize_html((string) $doc['content_html']),
+        'cover'        => $cover,
         'font_family'  => $doc['font_family'] ?? null,
         'font_size'    => $doc['font_size'] ?? null,
         'meta'         => [
@@ -117,6 +119,10 @@ if (!$layout) {
     exit;
 }
 $author = DB::queryOne('SELECT name FROM users WHERE id = ?', [$doc['updated_by'] ?? $doc['created_by']]);
+
+// Defesa em profundidade: sanitiza também na saída (conteúdo antigo/importado)
+$content = intra_sanitize_html($content);
+if ($cover) $cover['html'] = intra_sanitize_html((string) $cover['html']);
 
 $toolbar = '<strong>' . core_e($title) . '</strong> <span style="opacity:.8">v' . $version . '</span>'
     . ($version !== (int) $doc['current_version'] ? ' <span style="background:#ffc107;color:#000;border-radius:4px;padding:2px 8px;font-size:12px">versão do histórico</span>' : '')

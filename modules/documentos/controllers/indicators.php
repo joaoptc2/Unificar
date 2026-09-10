@@ -39,8 +39,9 @@ function indicators_index($param = null) {
         $users          = user_list_active();
 
         // Enriquece cada indicador com último valor, status, tendência, histórico curto
+        $all_series = indicator_data_series_many(array_column($indicators, 'id')); // 1 consulta (sem N+1)
         foreach ($indicators as &$ind) {
-            $series = indicator_data_series($ind['id']);
+            $series = $all_series[(int) $ind['id']] ?? [];
             $vals = array_map(fn($s) => (float) $s['value'], $series);
             $ind['spark_values']  = array_slice($vals, -12);
             $ind['last_value']    = end($vals) !== false ? (float) end($vals) : null;
@@ -447,7 +448,7 @@ function indicators_store_data($param = null) {
         $raw = $var_values_in[$v['code']] ?? '';
         $raw = is_string($raw) ? str_replace(',', '.', trim($raw)) : $raw;
         if ($raw === '' || !is_numeric($raw)) {
-            $errors[] = "Valor numérico obrigatório para: {$v['label']}.";
+            $errors[] = 'Valor numérico obrigatório para: ' . e($v['label']) . '.';
         } else {
             $var_values[$v['code']] = (float) $raw;
         }
@@ -459,7 +460,7 @@ function indicators_store_data($param = null) {
         try {
             $calc_value = formula_evaluate($indicator['formula'], $var_values);
         } catch (Throwable $ex) {
-            $errors[] = 'Erro na fórmula: ' . $ex->getMessage();
+            $errors[] = 'Erro na fórmula: ' . e($ex->getMessage());
         }
     } elseif (empty($variables)) {
         // Modo legado: valor direto
@@ -655,10 +656,10 @@ function _indicators_validate(array $input) {
             continue;
         }
         if (!preg_match('/^[a-zA-Z][a-zA-Z0-9_]*$/', $v['code'])) {
-            $errors[] = "Código '{$v['code']}' inválido (use letras, começando com letra).";
+            $errors[] = "Código '" . e($v['code']) . "' inválido (use letras, começando com letra).";
         }
         if (isset($codes_seen[$v['code']])) {
-            $errors[] = "Código de variável duplicado: '{$v['code']}'.";
+            $errors[] = "Código de variável duplicado: '" . e($v['code']) . "'.";
         }
         $codes_seen[$v['code']] = true;
     }
@@ -669,7 +670,7 @@ function _indicators_validate(array $input) {
             $errors[] = 'Defina ao menos uma variável para usar a fórmula.';
         } else {
             $err = formula_validate($d['formula'], array_keys($codes_seen));
-            if ($err) $errors[] = 'Fórmula inválida: ' . $err;
+            if ($err) $errors[] = 'Fórmula inválida: ' . e($err);
         }
     }
 
@@ -769,9 +770,22 @@ function indicators_action_update_status($param = null) {
     csrf_validate();
 
     $action_id    = sanitize_int(input('action_id'));
-    $indicator_id = sanitize_int(input('indicator_id'));
     $new_status   = (string) input('new_status');
     $verification = clean(input('verification'));
+
+    // A ação precisa pertencer a um indicador desta unidade (o indicator_id
+    // vem do registro, não do formulário)
+    $action_row = $action_id ? db_query_one(
+        "SELECT a.id, a.indicator_id FROM doc_indicator_actions a
+         JOIN doc_indicators i ON i.id = a.indicator_id
+         WHERE a.id = ? AND a.deleted_at IS NULL AND i.deleted_at IS NULL AND i.hospital_id = ?",
+        [$action_id, get_hospital_id()]
+    ) : null;
+    if (!$action_row) {
+        set_flash('error', 'Ação não encontrada.');
+        redirect('indicators/actions');
+    }
+    $indicator_id = (int) $action_row['indicator_id'];
 
     $valid = ['pending','in_progress','done','cancelled'];
     if (!in_array($new_status, $valid, true)) {

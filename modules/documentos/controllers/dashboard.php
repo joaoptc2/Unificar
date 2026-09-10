@@ -49,8 +49,9 @@ function dashboard_index($param = null) {
         // Conformidade dos indicadores (último valor × meta)
         $indicators = indicator_list($hospital_id, '', '', '', 500, 0, $sector_id);
         $ind_total = count($indicators);
+        $all_series = indicator_data_series_many(array_column($indicators, 'id')); // 1 consulta (sem N+1)
         foreach ($indicators as $ind) {
-            $series = indicator_data_series($ind['id']);
+            $series = $all_series[(int) $ind['id']] ?? [];
             $vals = array_column($series, 'value');
             $last = end($vals);
             $goal = $ind['goal_numeric'] ?? null;
@@ -140,9 +141,10 @@ function dashboard_switch_sector($param = null) {
     audit_log('sector_context_switch', "sector_id=$sector_id");
 
     // Volta para a página de origem (somente caminhos internos)
+    // Somente caminho absoluto interno: começa com "/" (não "//" nem "/\", que
+    // os navegadores tratam como URL protocolo-relativa) e sem quebras de linha.
     $return = (string) input('return', '');
-    if ($return !== '' && $return[0] === '/' && !str_starts_with($return, '//')
-        && !preg_match('/[\r\n]/', $return)) {
+    if ($return !== '' && preg_match('#^/(?![/\\\\])[^\r\n\\\\]*$#', $return)) {
         header('Location: ' . $return);
         exit;
     }

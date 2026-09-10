@@ -342,6 +342,29 @@ function indicator_data_series($indicator_id) {
 }
 
 /**
+ * Séries de VÁRIOS indicadores em uma única consulta (listagens/dashboard,
+ * evita N+1). Retorna [indicator_id => [linhas ordenadas por data]].
+ */
+function indicator_data_series_many(array $indicator_ids) {
+    $ids = array_values(array_unique(array_map('intval', $indicator_ids)));
+    $ids = array_filter($ids, fn($i) => $i > 0);
+    if (empty($ids)) return [];
+    $out = array_fill_keys($ids, []);
+    $ph  = implode(',', array_fill(0, count($ids), '?'));
+    $rows = db_query(
+        "SELECT id, indicator_id, reference_date, value, observations
+         FROM doc_indicator_data
+         WHERE indicator_id IN ($ph) AND deleted_at IS NULL
+         ORDER BY indicator_id ASC, reference_date ASC",
+        array_values($ids)
+    );
+    foreach ($rows as $r) {
+        $out[(int) $r['indicator_id']][] = $r;
+    }
+    return $out;
+}
+
+/**
  * Séries separadas de cada variável para gráficos individuais.
  * Retorna: ['a' => [['date' => ..., 'value' => ...]], 'b' => [...]]
  */

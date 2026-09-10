@@ -9,6 +9,8 @@
  * - Download com streaming a partir de /uploads/documentos
  */
 
+require_once __DIR__ . '/html_sanitizer.php';
+
 // ── CSRF (Core\Csrf) ────────────────────────────────────────────────────────
 
 function csrf_token() {

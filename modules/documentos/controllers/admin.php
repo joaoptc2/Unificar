@@ -38,6 +38,17 @@ function admin_categories($param = null) {
     admin_render_categories();
 }
 
+/** Rotas descontinuadas (favoritos antigos): usuários são do núcleo. */
+function admin_users($param = null) {
+    core_redirect('index.php?m=admin&a=users');
+}
+function admin_user_sectors($param = null) {
+    core_redirect(core_admin_url('documentos', 'sectors'));
+}
+function admin_hospitals($param = null) {
+    core_redirect(core_admin_url('documentos', 'sectors'));
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  Telas (renderizadas dentro do painel central — admin_panel.php)
 // ═══════════════════════════════════════════════════════════════════════════

@@ -441,7 +441,11 @@ function documents_print($param = null) {
     }
     $toolbar .= '<a href="' . core_e(url('documents/view?id=' . $id)) . '">Voltar</a>';
 
-    audit_log('document_printed', "id=$id, version=$version");
+    if ($autoprint) audit_log('document_printed', "id=$id, version=$version");
+
+    // Defesa em profundidade: sanitiza também na saída (conteúdo antigo/importado)
+    $content = doc_sanitize_html($content);
+    $cover   = doc_sanitize_html($cover);
 
     echo Core\DocLayout::renderHtml([
         'title'        => $document['title'],
@@ -654,6 +658,10 @@ function _documents_collect_form($existing = null) {
     ];
 
     if (!in_array($data['status'], ['draft', 'pending_review', 'approved'], true)) $data['status'] = 'approved';
+    // Publicar direto como 'approved' exige a permissão de aprovação (documents.approve)
+    if ($is_controlled && $data['status'] === 'approved' && !core_can('documents.approve')) {
+        $data['status'] = 'pending_review';
+    }
     if (!in_array($data['confidentiality'], ['public', 'internal', 'restricted', 'confidential'], true)) {
         $data['confidentiality'] = 'internal';
     }
@@ -686,8 +694,8 @@ function _documents_collect_form($existing = null) {
 
         $data['layout_id']       = $layout_id;
         $data['cover_layout_id'] = $cover_layout_id;
-        $data['content_html']    = Core\DocLayout::sanitizeHtml((string) input('content_html', ''));
-        $data['cover_html']      = $cover_layout_id ? Core\DocLayout::sanitizeHtml((string) input('cover_html', '')) : null;
+        $data['content_html']    = doc_sanitize_html((string) input('content_html', ''));
+        $data['cover_html']      = $cover_layout_id ? doc_sanitize_html((string) input('cover_html', '')) : null;
         $data['font_family']     = $font !== '' ? $font : ($layout['default_font'] ?? null);
         $data['font_size']       = $size !== '' ? $size : ($layout['default_font_size'] ?? null);
     } else {

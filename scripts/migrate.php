@@ -2,8 +2,10 @@
 /**
  * Aplica as migrações de banco pendentes (sql/migrations/*.sql).
  *
- * Uso: php scripts/migrate.php [--status]
- *   --status  apenas lista o estado de cada arquivo (não aplica nada)
+ * Uso: php scripts/migrate.php [--status|--mark-all]
+ *   --status    apenas lista o estado de cada arquivo (não aplica nada)
+ *   --mark-all  marca todos os arquivos como aplicados sem executá-los
+ *               (instalação manual feita com sql/schema.sql + sql/modules)
  *
  * O mesmo pode ser feito pela interface: Administração → Atualizações de banco.
  */
@@ -15,6 +17,11 @@ require dirname(__DIR__) . '/core/bootstrap.php';
 use Core\Migrations;
 
 $statusOnly = in_array('--status', $argv ?? [], true);
+if (in_array('--mark-all', $argv ?? [], true)) {
+    Migrations::markAllApplied();
+    echo "Todas as migrações foram marcadas como aplicadas.\n";
+    exit(0);
+}
 $applied    = Migrations::applied();
 
 echo "Migrações em " . Migrations::dir() . "\n";
