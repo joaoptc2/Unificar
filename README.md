@@ -305,5 +305,15 @@ equipamentos, aniversários/vencimentos do RH etc.). Use
 - Senhas bcrypt (cost 12); bloqueio de força bruta; CSRF em todos os POSTs;
 - 2FA TOTP opcional por usuário (Perfil → Senha e 2FA);
 - Sessão única com regeneração periódica de ID e expiração por inatividade;
-- Uploads bloqueados para execução; diretórios internos negados no Apache;
+- Uploads bloqueados para execução; diretórios internos negados no Apache
+  (`.htaccess` da raiz e de `storage/`). **Em Nginx** (ou Apache sem
+  `AllowOverride`), negue explicitamente os diretórios internos:
+
+  ```nginx
+  location ~ ^/(core|config|sql|storage|docs)/ { deny all; }
+  location ~ ^/uploads/.*\.(php|phar|phtml)$ { deny all; }
+  ```
+
+  Arquivos privados (anexos de comunicados, por exemplo) ficam em
+  `storage/uploads/` e só são entregues pelo download autenticado do módulo;
 - Auditoria unificada (Administração → Auditoria).

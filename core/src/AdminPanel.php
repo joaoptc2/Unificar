@@ -118,10 +118,6 @@ final class AdminPanel
 
     private static function isGlobalAdmin(int $userId): bool
     {
-        if (Auth::id() === $userId) {
-            return Auth::isGlobalAdmin();
-        }
-        $row = DB::queryOne('SELECT is_admin FROM users WHERE id = ?', [$userId]);
-        return (bool) ($row['is_admin'] ?? false);
+        return Perms::isGlobalAdmin($userId);
     }
 }
