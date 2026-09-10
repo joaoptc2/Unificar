@@ -7,7 +7,7 @@
 -- fim para removê-las manualmente quando não forem mais necessárias.
 -- ============================================================
 
--- Configurações visuais do antigo "TeamChat" não são mais usadas
+-- Configurações visuais do módulo legado não são mais usadas
 -- (o chat segue o padrão visual da plataforma e o nome da organização).
 DELETE FROM chat_settings WHERE `key` IN
     ('app_name', 'primary_color', 'sidebar_bg', 'sidebar_text', 'sidebar_hover', 'allow_registration');

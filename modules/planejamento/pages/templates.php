@@ -320,10 +320,10 @@ $showInactive = !empty($_GET['inactive']) && core_can('templates.edit');
 $conds  = [];
 $params = [];
 if ($kindF !== '') {
-    $conds[]  = 'kind = ?';
+    $conds[]  = 't.kind = ?';
     $params[] = $kindF;
 }
-$conds[] = $showInactive ? 'active = 0' : 'active = 1';
+$conds[] = $showInactive ? 't.active = 0' : 't.active = 1';
 $templates = DB::query(
     'SELECT t.*, u.name AS creator_name FROM plan_templates t LEFT JOIN users u ON u.id = t.created_by WHERE ' . implode(' AND ', $conds) . ' ORDER BY t.kind, t.sort_order, t.name',
     $params

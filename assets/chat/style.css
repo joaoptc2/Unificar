@@ -340,6 +340,7 @@ body.chat-app .portal-main > .alert {
     border-left: 1px solid var(--chat-border); background: #fff;
     display: flex; flex-direction: column;
 }
+.chat-panel[hidden], .chat-sidebar[hidden], .chat-app [hidden] { display: none !important; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; padding: .7rem 1rem; border-bottom: 1px solid var(--chat-border); font-weight: 600; min-height: 52px; }
 .panel-body { flex: 1; overflow-y: auto; padding: .85rem 1rem; }
 .thread-msg { display: flex; gap: .6rem; padding: .4rem 0; }

@@ -238,11 +238,9 @@ class ApiController
             return;
         }
 
-        Message::update($messageId, [
-            'content'   => $content,
-            'is_edited' => 1,
-            'edited_at' => date('Y-m-d H:i:s'),
-        ]);
+        // NOW() do banco: mesmo relógio de created_at (evita divergência de fuso)
+        $this->db->prepare('UPDATE chat_messages SET content = ?, is_edited = 1, edited_at = NOW() WHERE id = ?')
+            ->execute([$content, $messageId]);
 
         AuditLog::log('edit_message', 'message', $messageId, ['content' => $message['content']], ['content' => $content]);
 
@@ -358,7 +356,8 @@ class ApiController
                 $this->json(['success' => false, 'error' => "Limite de {$max} mensagens fixadas atingido neste canal."], 422);
                 return;
             }
-            Message::update($messageId, ['is_pinned' => 1, 'pinned_by' => $userId, 'pinned_at' => date('Y-m-d H:i:s')]);
+            $this->db->prepare('UPDATE chat_messages SET is_pinned = 1, pinned_by = ?, pinned_at = NOW() WHERE id = ?')
+                ->execute([$userId, $messageId]);
             $newState = true;
         }
 
