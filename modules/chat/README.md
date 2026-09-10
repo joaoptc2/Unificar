@@ -108,7 +108,7 @@ modules/chat/
     ├── controllers/         # Chat, Channel, Search, Api, Admin
     ├── models/              # Model (base), User, Channel, Message
     ├── helpers/             # Autoloader, Database, Session, Auth, Csrf, Sanitize,
-    │                        # Upload, AuditLog, Notification, Pagination, View
+    │                        # Upload, AuditLog, Notification, View
     └── views/
         ├── chat/            # index.php (tela do chat) e _message.php (parcial)
         ├── channels/        # browse.php, form.php, settings.php
