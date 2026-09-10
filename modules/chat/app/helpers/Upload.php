@@ -62,6 +62,7 @@ class Upload
         if (!is_dir($destDir) && !mkdir($destDir, 0755, true) && !is_dir($destDir)) {
             return ['success' => false, 'error' => 'Falha ao preparar a pasta de uploads.'];
         }
+        self::protectPrivateDir($subDir, $destDir);
 
         $destPath = $destDir . '/' . $name;
         if (!move_uploaded_file($file['tmp_name'], $destPath)) {
@@ -76,6 +77,34 @@ class Upload
             'file_type'     => $mime,
             'file_size'     => (int) $file['size'],
         ];
+    }
+
+    /**
+     * Pastas privadas (anexos de mensagens) nunca podem ser servidas
+     * direto pelo servidor web — a entrega é pelo endpoint autenticado
+     * downloadAttachment. O .htaccess é recriado aqui porque /uploads
+     * fica fora do versionamento (.gitignore) e some em cada implantação.
+     */
+    private static function protectPrivateDir(string $subDir, string $destDir): void
+    {
+        if ($subDir !== 'attachments') {
+            return; // emojis/avatares são públicos
+        }
+        $file = $destDir . '/.htaccess';
+        if (is_file($file)) {
+            return;
+        }
+        @file_put_contents($file, "# Anexos do chat: nunca servidos diretamente pelo servidor web.\n"
+            . "# A entrega passa pelo endpoint autenticado do módulo\n"
+            . "# (index.php?m=chat&page=api&action=downloadAttachment&id=N), que checa\n"
+            . "# se o usuário participa do canal da mensagem.\n"
+            . "<IfModule mod_authz_core.c>\n"
+            . "    Require all denied\n"
+            . "</IfModule>\n"
+            . "<IfModule !mod_authz_core.c>\n"
+            . "    Order allow,deny\n"
+            . "    Deny from all\n"
+            . "</IfModule>\n");
     }
 
     public static function delete(string $path): bool

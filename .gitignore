@@ -9,6 +9,9 @@
 /uploads/*
 !/uploads/.htaccess
 !/uploads/*/.gitkeep
+# As proteções de diretório de upload são versionadas (o servidor precisa delas)
+!/uploads/*/.htaccess
+!/uploads/*/*/.htaccess
 
 # SO / editores
 .DS_Store

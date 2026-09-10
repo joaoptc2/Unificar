@@ -90,7 +90,7 @@ function plan_diagram_color(mixed $v, ?string $default = null): ?string
     return $default;
 }
 
-/** Link seguro (http/https/mailto ou relativo). */
+/** Link seguro (http/https/mailto ou relativo ao portal). */
 function plan_diagram_link(mixed $v): ?string
 {
     if (!is_string($v)) {
@@ -100,10 +100,26 @@ function plan_diagram_link(mixed $v): ?string
     if ($v === '' || strlen($v) > 500 || preg_match('/[\x00-\x1f\x7f]/', $v)) {
         return null;
     }
+    // "//host", "\\host" e "/\host" apontam para fora do portal (protocolo relativo)
+    $p = substr(str_replace('\\', '/', $v), 0, 2);
+    if ($p === '//') {
+        return null;
+    }
     if (preg_match('#^(https?://|mailto:)#i', $v) || preg_match('#^(/|\./|index\.php|\?)#', $v)) {
         return $v;
     }
     return null;
+}
+
+/**
+ * Texto de uma única linha (títulos, nomes, notas): sem quebras de linha nem
+ * tabulações — evita quebrar atributos HTML/JS e cabeçalhos.
+ */
+function plan_diagram_line(mixed $v, int $max = 200): string
+{
+    $s = str_replace(["\n", "\t"], ' ', plan_diagram_text($v, $max * 4));
+    $s = trim((string) preg_replace('/ {2,}/', ' ', $s));
+    return mb_substr($s, 0, $max);
 }
 
 /** Texto plano: sem tags, sem caracteres de controle (exceto quebra de linha), com limite. */
@@ -742,7 +758,11 @@ function plan_diagram_svg(array $data, array $opts = []): string
     $thumb = !empty($opts['thumb']);
     $fit   = $thumb || !empty($opts['fit']);
     $pad   = (float) ($opts['padding'] ?? 20);
-    $pref  = preg_replace('/[^A-Za-z0-9_-]/', '', (string) ($opts['id'] ?? ('pd' . substr(md5(serialize($data)), 0, 6))));
+    $pref  = (string) preg_replace('/[^A-Za-z0-9_-]/', '', (string) ($opts['id'] ?? ''));
+    if ($pref === '' || !preg_match('/^[A-Za-z_]/', $pref)) {
+        // ids XML precisam começar por letra/underscore (senão os marcadores das setas somem)
+        $pref = 'pd' . $pref . substr(md5(serialize($data)), 0, 6);
+    }
     $links = $opts['links'] ?? !$thumb;
     $bg    = plan_diagram_color($opts['bg'] ?? null, $data['canvas']['bg']) ?? '#ffffff';
 

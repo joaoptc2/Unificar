@@ -408,6 +408,17 @@ body.chat-app .portal-main > .alert {
         box-shadow: -4px 0 16px rgba(0, 0, 0, .15);
     }
 }
+/* Sem mouse (celular/tablet) não há :hover — as ações da mensagem
+   (reagir, citar, thread, editar, excluir) ficam sempre visíveis, no
+   fluxo normal (à direita da mensagem), sem cobrir o texto. */
+@media (hover: none) {
+    .message-actions {
+        display: flex; position: static;
+        align-self: flex-start; margin-left: auto;
+        background: transparent; border: none; box-shadow: none; padding: 0;
+    }
+    .message-actions .btn-action-sm { width: 26px; height: 26px; }
+}
 @media (max-width: 575.98px) {
     .composer-hint { display: none; }
     .message-actions { top: -12px; right: .25rem; }

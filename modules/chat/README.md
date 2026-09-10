@@ -177,3 +177,8 @@ tem um `.htaccess` com `Require all denied` e a entrega passa por
 do canal da mensagem antes de mandar o arquivo (`Content-Disposition: attachment`
 para tudo que não é imagem, `X-Content-Type-Options: nosniff`). Emojis
 personalizados continuam públicos (não têm conteúdo sensível).
+
+Como `/uploads` está no `.gitignore`, esse `.htaccess` não viaja no
+versionamento: `Upload::handle()` o recria sozinho sempre que grava um
+anexo. Em servidores sem suporte a `.htaccess` (nginx), negue
+`/uploads/chat/attachments/` na configuração do servidor.

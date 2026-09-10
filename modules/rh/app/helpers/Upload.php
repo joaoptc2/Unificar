@@ -137,7 +137,13 @@ class Upload
             // plataforma já bloqueia /storage/ e o diretório nunca é linkado).
             $rootHt = self::privateDir() . '/.htaccess';
             if (!file_exists($rootHt)) {
-                @file_put_contents($rootHt, "Require all denied\n");
+                @file_put_contents($rootHt, "<IfModule mod_authz_core.c>\n"
+                    . "    Require all denied\n"
+                    . "</IfModule>\n"
+                    . "<IfModule !mod_authz_core.c>\n"
+                    . "    Order allow,deny\n"
+                    . "    Deny from all\n"
+                    . "</IfModule>\n");
             }
         }
 
@@ -148,16 +154,30 @@ class Upload
             if ($isPublic) {
                 @file_put_contents(
                     $htaccess,
-                    "Require all granted\n" .
+                    "<IfModule mod_authz_core.c>\n" .
+                    "    Require all granted\n" .
+                    "</IfModule>\n" .
                     "Options -ExecCGI\n" .
                     "RemoveHandler .php .phtml .php3 .php4 .php5 .phps\n" .
                     "AddType text/plain .php .phtml .php3 .php4 .php5 .phps\n" .
                     "<FilesMatch \"\\.(php|phtml|php3|php4|php5|phps)$\">\n" .
-                    "    Require all denied\n" .
+                    "    <IfModule mod_authz_core.c>\n" .
+                    "        Require all denied\n" .
+                    "    </IfModule>\n" .
+                    "    <IfModule !mod_authz_core.c>\n" .
+                    "        Order allow,deny\n" .
+                    "        Deny from all\n" .
+                    "    </IfModule>\n" .
                     "</FilesMatch>\n"
                 );
             } else {
-                @file_put_contents($htaccess, "Require all denied\n");
+                @file_put_contents($htaccess, "<IfModule mod_authz_core.c>\n"
+                    . "    Require all denied\n"
+                    . "</IfModule>\n"
+                    . "<IfModule !mod_authz_core.c>\n"
+                    . "    Order allow,deny\n"
+                    . "    Deny from all\n"
+                    . "</IfModule>\n");
             }
         }
 

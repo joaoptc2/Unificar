@@ -26,9 +26,25 @@ function core_module_url(string $module, array $params = []): string
     return BASE_URL . '/index.php?' . $query;
 }
 
+/**
+ * URL de um arquivo de assets/ com marca de versão (data da última
+ * modificação): o .htaccess pede cache longo para CSS/JS, e a marca
+ * garante que uma atualização do sistema chegue ao navegador.
+ */
 function core_asset(string $path): string
 {
-    return BASE_URL . '/assets/' . ltrim($path, '/');
+    $path = ltrim($path, '/');
+    $url  = BASE_URL . '/assets/' . $path;
+
+    static $stamps = [];
+    if (!array_key_exists($path, $stamps)) {
+        $file = BASE_PATH . '/assets/' . $path;
+        $stamps[$path] = is_file($file) ? (string) filemtime($file) : '';
+    }
+    if ($stamps[$path] === '') {
+        return $url;
+    }
+    return $url . (str_contains($url, '?') ? '&' : '?') . 'v=' . $stamps[$path];
 }
 
 function core_redirect(string $url): never

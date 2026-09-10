@@ -53,6 +53,10 @@
         if (parent) { parent.appendChild(el); }
         return el;
     }
+    /** Mapa sem protótipo: evita que ids como "constructor"/"toString" contem como existentes. */
+    function omap() { return Object.create(null); }
+    /** Definição de um tipo de forma (null quando o tipo não existe). */
+    function typeDef(t) { return Object.prototype.hasOwnProperty.call(TYPES, t) ? TYPES[t] : null; }
     function num(v, d) { var f = parseFloat(v); return isFinite(f) ? f : d; }
     function fmt(v) { return Math.round(v * 100) / 100; }
     function clone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -60,7 +64,8 @@
     function safeLink(v) {
         if (typeof v !== 'string') { return null; }
         v = v.trim();
-        if (!v || v.length > 500) { return null; }
+        if (!v || v.length > 500 || /[\x00-\x1f\x7f]/.test(v)) { return null; }
+        if (v.replace(/\\/g, '/').slice(0, 2) === '//') { return null; } // protocolo relativo = externo
         if (/^(https?:\/\/|mailto:)/i.test(v) || /^(\/|\.\/|index\.php|\?)/.test(v)) { return v; }
         return null;
     }
@@ -108,7 +113,7 @@
             return lines;
         },
         style: function (n) {
-            var d = TYPES[n.type] || TYPES.process;
+            var d = typeDef(n.type) || TYPES.process;
             return {
                 fill: n.fill || d.fill, stroke: n.stroke || d.stroke, color: n.color || '#212529',
                 fontSize: num(n.fontSize, 14), bold: !!n.bold || n.type === 'lane',
@@ -223,10 +228,10 @@
             canvas: { w: Math.round(Math.min(20000, Math.max(200, num(c.w, 1600)))), h: Math.round(Math.min(20000, Math.max(200, num(c.h, 1000)))), grid: Math.round(Math.min(200, Math.max(0, num(c.grid, 20)))), bg: isColor(c.bg) ? c.bg : '#ffffff' },
             nodes: [], edges: []
         };
-        var ids = {}, seq = 0;
+        var ids = omap(), seq = 0;
         (Array.isArray(data.nodes) ? data.nodes : []).forEach(function (n) {
             if (!n || typeof n !== 'object') { return; }
-            var type = TYPES[n.type] ? n.type : 'process', d = TYPES[type];
+            var type = typeDef(n.type) ? n.type : 'process', d = TYPES[type];
             var id = typeof n.id === 'string' && /^[A-Za-z0-9_\-]{1,40}$/.test(n.id) ? n.id : '';
             while (id === '' || ids[id]) { id = 'n' + (++seq); }
             ids[id] = true;
@@ -240,7 +245,7 @@
             if (link) { node.link = link; }
             doc.nodes.push(node);
         });
-        var eids = {}, eseq = 0;
+        var eids = omap(), eseq = 0;
         (Array.isArray(data.edges) ? data.edges : []).forEach(function (e) {
             if (!e || typeof e !== 'object' || !ids[e.from] || !ids[e.to]) { return; }
             var id = typeof e.id === 'string' && /^[A-Za-z0-9_\-]{1,40}$/.test(e.id) ? e.id : '';
@@ -374,7 +379,7 @@
             if (opts.width !== undefined) { svg.setAttribute('width', opts.width); } else { svg.setAttribute('width', fmt(vw)); }
             if (opts.height !== undefined) { svg.setAttribute('height', opts.height); } else { svg.setAttribute('height', fmt(vh)); }
         }
-        var defs = svgEl('defs', null, svg), colors = {};
+        var defs = svgEl('defs', null, svg), colors = omap();
         doc.edges.forEach(function (e) { colors[e.color || '#495057'] = true; });
         Object.keys(colors).forEach(function (c) {
             var m = svgEl('marker', { id: markerId(prefix, c, false), markerWidth: 11, markerHeight: 11, refX: 10, refY: 5.5, orient: 'auto', markerUnits: 'userSpaceOnUse' }, defs);
@@ -387,7 +392,7 @@
         if (!opts.interactive && bg && bg !== 'none') {
             svgEl('rect', { x: fmt(vx), y: fmt(vy), width: fmt(vw), height: fmt(vh), fill: bg }, root);
         }
-        var byId = {};
+        var byId = omap();
         doc.nodes.forEach(function (n) { byId[n.id] = n; });
 
         function nodeGroup(n, parent) {
@@ -909,7 +914,7 @@
                 nodes.forEach(function (n) {
                     switch (key) {
                         case 'text': if (nodes.length === 1) { n.text = v.slice(0, 2000); } break;
-                        case 'type': if (TYPES[v]) { n.type = v; } break;
+                        case 'type': if (typeDef(v)) { n.type = v; } break;
                         case 'fill': n.fill = v; break;
                         case 'noFill': if (inp.checked) { n.fill = 'none'; } else { delete n.fill; } break;
                         case 'stroke': n.stroke = v; break;
@@ -1077,7 +1082,7 @@
                 if (ev.shiftKey) { this.select(id, true); }
                 else if (!this.isSel(id)) { this.select(id, false); }
                 if (this.readOnly) { return; }
-                var self = this, moving = {};
+                var self = this, moving = omap();
                 this.selNodes().forEach(function (n) {
                     moving[n.id] = { x: n.x, y: n.y };
                     if (n.type === 'lane') {
@@ -1210,8 +1215,8 @@
                     if (!d.moved) {
                         this.insertNode(d.nodeType, null);
                     } else if (ev.clientX >= rect.left && ev.clientX <= rect.right && ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
-                        var w = this.toWorld(ev.clientX, ev.clientY), t = TYPES[d.nodeType];
-                        this.insertNode(d.nodeType, [w[0] - t.w / 2, w[1] - t.h / 2]);
+                        var w = this.toWorld(ev.clientX, ev.clientY), t = typeDef(d.nodeType);
+                        if (t) { this.insertNode(d.nodeType, [w[0] - t.w / 2, w[1] - t.h / 2]); }
                     }
                     break;
             }
@@ -1305,8 +1310,9 @@
             this.renderOverlay(); this.updateProps();
         },
         insertNode: function (type, pos) {
-            if (this.readOnly || !TYPES[type]) { return null; }
-            var before = this.snapshot(), t = TYPES[type], x, y;
+            var t = typeDef(type);
+            if (this.readOnly || !t) { return null; }
+            var before = this.snapshot(), x, y;
             if (pos) { x = this.snapV(pos[0]); y = this.snapV(pos[1]); }
             else {
                 var r = this.svg.getBoundingClientRect();
@@ -1324,7 +1330,7 @@
         deleteSelection: function () {
             if (!this.sel.length) { return; }
             var before = this.snapshot(), sel = this.sel, self = this;
-            var removedNodes = {};
+            var removedNodes = omap();
             this.doc.nodes = this.doc.nodes.filter(function (n) { if (sel.indexOf(n.id) >= 0) { removedNodes[n.id] = true; return false; } return true; });
             this.doc.edges = this.doc.edges.filter(function (e) { return sel.indexOf(e.id) < 0 && !removedNodes[e.from] && !removedNodes[e.to]; });
             this.sel = [];
@@ -1340,14 +1346,14 @@
         },
         paste: function () {
             if (!this.clipboard || this.readOnly) { return; }
-            var before = this.snapshot(), map = {}, self = this, off = 20 * (++this.pasteCount), newSel = [];
+            var before = this.snapshot(), map = omap(), self = this, off = 20 * (++this.pasteCount), newSel = [];
             var data = clone(this.clipboard);
             data.nodes.forEach(function (n) {
                 var nid = self.uid('n'); map[n.id] = nid; n.id = nid; n.x += off; n.y += off;
                 if (n.type === 'lane') { self.doc.nodes.unshift(n); } else { self.doc.nodes.push(n); }
                 newSel.push(nid);
             });
-            data.edges.forEach(function (e) { e.id = self.uid('e'); e.from = map[e.from]; e.to = map[e.to]; if (e.points) { e.points.forEach(function (p) { p.x += off; p.y += off; }); } self.doc.edges.push(e); newSel.push(e.id); });
+            data.edges.forEach(function (e) { e.id = self.uid('e'); e.from = map[e.from]; e.to = map[e.to]; if (!e.from || !e.to) { return; } if (e.points) { e.points.forEach(function (p) { p.x += off; p.y += off; }); } self.doc.edges.push(e); newSel.push(e.id); });
             this.sel = newSel;
             this.render();
             this.pushUndo(before);

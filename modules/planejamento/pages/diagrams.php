@@ -56,6 +56,7 @@ function pdg_json(array $data, int $status = 200): never
 {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
     header('Cache-Control: no-store');
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
@@ -156,13 +157,18 @@ function pdg_add_version(int $diagramId, int $version, string $title, string $js
     );
 }
 
+/** Limite da miniatura gravada: até 120 cards são embutidos na lista. */
+const PDG_THUMB_MAX_BYTES = 262144; // 256 KB
+
 function pdg_thumb(array $data, int $id): ?string
 {
     try {
-        return plan_diagram_svg($data, ['thumb' => true, 'links' => false, 'id' => 'pdt' . $id]);
+        $svg = plan_diagram_svg($data, ['thumb' => true, 'links' => false, 'id' => 'pdt' . $id]);
     } catch (\Throwable) {
         return null;
     }
+    // diagramas enormes gerariam uma lista de vários MB — melhor não guardar miniatura
+    return strlen($svg) > PDG_THUMB_MAX_BYTES ? null : $svg;
 }
 
 function pdg_file_name(string $title, string $ext): string
@@ -204,11 +210,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
     if (!pdg_can_view($d)) {
         pdg_json(['ok' => false, 'error' => 'Este diagrama é privado.'], 403);
     }
-    $title = mb_substr(trim(plan_diagram_text($payload['title'] ?? $d['title'], 200)), 0, 200);
+    $title = plan_diagram_line($payload['title'] ?? $d['title'], 200);
     if ($title === '') {
         $title = (string) $d['title'];
     }
-    $note = trim(plan_diagram_text($payload['note'] ?? '', 255));
+    $note = plan_diagram_line($payload['note'] ?? '', 255);
     $data = plan_diagram_validate(is_array($payload['data'] ?? null) ? $payload['data'] : []);
     $newJson = plan_diagram_encode($data);
     $curJson = plan_diagram_encode(plan_diagram_decode((string) $d['data']));
@@ -250,7 +256,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create') {
         core_require('diagrams.create');
         $kinds = plan_diagram_kinds();
-        $title = mb_substr(trim(plan_diagram_text($_POST['title'] ?? '', 200)), 0, 200);
+        $title = plan_diagram_line($_POST['title'] ?? '', 200);
         $kind  = isset($kinds[$_POST['kind'] ?? '']) ? (string) $_POST['kind'] : 'flowchart';
         $desc  = trim(plan_diagram_text($_POST['description'] ?? '', 5000));
         $tplId = (int) ($_POST['template_id'] ?? 0);
@@ -333,7 +339,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'meta') {
         core_require('diagrams.edit');
         $kinds = plan_diagram_kinds();
-        $title = mb_substr(trim(plan_diagram_text($_POST['title'] ?? $d['title'], 200)), 0, 200) ?: (string) $d['title'];
+        $title = plan_diagram_line($_POST['title'] ?? $d['title'], 200) ?: (string) $d['title'];
         $kind  = isset($kinds[$_POST['kind'] ?? '']) ? (string) $_POST['kind'] : (string) $d['kind'];
         $desc  = trim(plan_diagram_text($_POST['description'] ?? '', 5000));
         $plan  = (int) ($_POST['plan_id'] ?? 0);
@@ -354,8 +360,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ---- salvar como modelo -----------------------------------------------
     if ($action === 'save_template') {
         core_require('templates.create');
-        $name  = mb_substr(trim(plan_diagram_text($_POST['name'] ?? '', 150)), 0, 150);
-        $desc  = mb_substr(trim(plan_diagram_text($_POST['description'] ?? '', 500)), 0, 500);
+        $name  = plan_diagram_line($_POST['name'] ?? '', 150);
+        $desc  = plan_diagram_line($_POST['description'] ?? '', 500);
         $tplId = (int) ($_POST['template_id'] ?? 0);
         $rawData = (string) ($_POST['data'] ?? '');
         if ($name === '') {
@@ -872,6 +878,7 @@ if ($action === 'export') {
         header('Content-Disposition: attachment; filename="' . pdg_file_name((string) $d['title'] . $suffix, 'svg') . '"');
     }
     header('Content-Length: ' . strlen((string) $body));
+    header('X-Content-Type-Options: nosniff');
     header('Cache-Control: no-store');
     echo $body;
     exit;
@@ -916,6 +923,16 @@ $rows = DB::query(
     $params
 );
 $canEdit = core_can('diagrams.edit');
+// miniaturas ainda não gravadas: uma única consulta para todas (evita N+1)
+$lateThumbs = [];
+$missing    = array_values(array_map('intval', array_column(array_filter($rows, static fn (array $r): bool => (string) ($r['thumbnail_svg'] ?? '') === ''), 'id')));
+if ($missing) {
+    $missing = array_slice($missing, 0, 40); // segurança: não renderizar dezenas de SVGs por página
+    $rowsD   = DB::query('SELECT id, data FROM plan_diagrams WHERE id IN (' . implode(',', array_fill(0, count($missing), '?')) . ')', $missing);
+    foreach ($rowsD as $rd) {
+        $lateThumbs[(int) $rd['id']] = pdg_thumb(plan_diagram_decode((string) $rd['data']), (int) $rd['id']) ?? '';
+    }
+}
 ob_start(); ?>
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <h1 class="h4 mb-0"><i class="bi bi-diagram-3 me-2"></i>Fluxogramas e diagramas</h1>
@@ -956,10 +973,10 @@ ob_start(); ?>
 <?php else: ?>
 <div class="row g-3">
     <?php foreach ($rows as $r):
-        $open = pdg_url(['action' => $canEdit ? 'edit' : 'view', 'id' => $r['id']]);
+        $open  = pdg_url(['action' => $canEdit ? 'edit' : 'view', 'id' => $r['id']]);
         $thumb = (string) ($r['thumbnail_svg'] ?? '');
         if ($thumb === '') {
-            $thumb = pdg_thumb(plan_diagram_decode(DB::queryOne('SELECT data FROM plan_diagrams WHERE id = ?', [$r['id']])['data'] ?? ''), (int) $r['id']) ?? '';
+            $thumb = $lateThumbs[(int) $r['id']] ?? '';
         } ?>
     <div class="col-sm-6 col-lg-4 col-xxl-3">
         <div class="card h-100 pdg-card">
@@ -977,7 +994,7 @@ ob_start(); ?>
                 <?php if ($canEdit): ?><a class="btn btn-sm btn-outline-primary" title="Editar" href="<?= pdg_url(['action' => 'edit', 'id' => $r['id']]) ?>"><i class="bi bi-pencil"></i></a><?php endif; ?>
                 <a class="btn btn-sm btn-outline-secondary" title="Versões" href="<?= pdg_url(['action' => 'versions', 'id' => $r['id']]) ?>"><i class="bi bi-clock-history"></i></a>
                 <?php if (core_can('diagrams.delete')): ?>
-                <form method="post" action="<?= pdg_url(['action' => 'delete']) ?>" class="d-inline" onsubmit="return confirm('Excluir o diagrama \'<?= core_e(addslashes((string) $r['title'])) ?>\'?')"><?= Csrf::field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
+                <form method="post" action="<?= pdg_url(['action' => 'delete']) ?>" class="d-inline" data-pdg-confirm="Excluir o diagrama &quot;<?= core_e($r['title']) ?>&quot;?"><?= Csrf::field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
                     <button class="btn btn-sm btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button></form>
                 <?php endif; ?>
             </div>
@@ -985,6 +1002,11 @@ ob_start(); ?>
     </div>
     <?php endforeach; ?>
 </div>
+<script>
+document.querySelectorAll('form[data-pdg-confirm]').forEach(function (f) {
+    f.addEventListener('submit', function (ev) { if (!confirm(f.dataset.pdgConfirm)) { ev.preventDefault(); } });
+});
+</script>
 <?php endif; ?>
 <?php
 pdg_page(['title' => 'Fluxogramas e diagramas', 'content' => (string) ob_get_clean()]);

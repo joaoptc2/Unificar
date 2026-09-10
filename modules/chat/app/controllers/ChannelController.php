@@ -239,7 +239,7 @@ class ChannelController
             return;
         }
 
-        if (!$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
+        if (!$this->canManageMembers($channel, Session::userId())) {
             $this->jsonResponse(false, 'Sem permissão para gerenciar membros deste canal.', 403);
             return;
         }
@@ -285,7 +285,7 @@ class ChannelController
             return;
         }
 
-        if (!$this->canManageChannel($channel, Session::userId(), 'channels.edit')) {
+        if (!$this->canManageMembers($channel, Session::userId())) {
             $this->jsonResponse(false, 'Sem permissão para gerenciar membros deste canal.', 403);
             return;
         }
@@ -474,6 +474,23 @@ class ChannelController
     private function categories(): array
     {
         return $this->db->query('SELECT id, name FROM chat_channel_categories ORDER BY order_num ASC, name ASC')->fetchAll();
+    }
+
+    /**
+     * Pode gerir os MEMBROS do canal? Além da gestão normal, em canais
+     * privados (e DMs) é preciso participar do canal — senão quem tem
+     * channels.edit poderia se auto-adicionar a qualquer conversa privada
+     * e ler todo o histórico.
+     */
+    private function canManageMembers(array $channel, int $userId): bool
+    {
+        if (!$this->canManageChannel($channel, $userId, 'channels.edit')) {
+            return false;
+        }
+        if (($channel['type'] ?? '') === 'public') {
+            return true;
+        }
+        return Channel::isMember((int) $channel['id'], $userId);
     }
 
     /**
