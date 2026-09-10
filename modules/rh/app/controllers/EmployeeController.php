@@ -161,7 +161,8 @@ class EmployeeController
             $this->db->commit();
         } catch (\Throwable $e) {
             $this->db->rollBack();
-            Session::flash('error', 'Falha ao cadastrar funcionário: ' . Sanitize::e($e->getMessage()));
+            error_log('RH employees.store: ' . $e->getMessage());
+            Session::flash('error', 'Falha ao cadastrar funcionário. Verifique os dados e tente novamente.');
             header('Location: index.php?m=rh&page=employees&action=create');
             exit;
         }

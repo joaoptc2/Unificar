@@ -198,7 +198,8 @@ class RewardController
             $this->db->commit();
         } catch (\Throwable $e) {
             $this->db->rollBack();
-            Session::flash('error', Sanitize::e($e->getMessage()));
+            error_log('RH rewards: ' . $e->getMessage());
+            Session::flash('error', 'Não foi possível concluir a operação. Tente novamente.');
             header('Location: index.php?m=rh&page=rewards'); exit;
         }
         AuditLog::log('respond', 'reward_redemptions', $id, ['status' => $red['status']], ['status' => $new]);

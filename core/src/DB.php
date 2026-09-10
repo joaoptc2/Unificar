@@ -30,8 +30,40 @@ final class DB
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES   => false,
             ]);
+
+            // O banco passa a usar o mesmo fuso do PHP: assim NOW()/CURDATE()
+            // (usados pelos módulos) e date() marcam a mesma hora, sem
+            // depender do fuso do servidor de banco.
+            self::applyTimezone(self::$pdo);
         }
         return self::$pdo;
+    }
+
+    /**
+     * Fuso da sessão do banco (config db.timezone):
+     *   'app'    → mesmo fuso do PHP, para que NOW() e date() coincidam;
+     *   'server' → não mexe (fuso do servidor de banco);
+     *   '-03:00' → deslocamento fixo.
+     */
+    private static function applyTimezone(PDO $pdo): void
+    {
+        $mode = (string) Config::get('db.timezone', 'app');
+        if ($mode === 'server' || $mode === '') {
+            return;
+        }
+        try {
+            $offset = $mode === 'app'
+                ? (new \DateTime('now', new \DateTimeZone(date_default_timezone_get())))->format('P')
+                : $mode;
+            if (!preg_match('/^[+-]\d{2}:\d{2}$/', $offset)) {
+                return;
+            }
+            $pdo->exec("SET time_zone = '{$offset}'");
+        } catch (\Throwable $e) {
+            // Banco sem permissão para trocar o fuso da sessão: segue com o
+            // fuso do servidor (comportamento anterior).
+            error_log('DB: não foi possível alinhar o fuso da sessão: ' . $e->getMessage());
+        }
     }
 
     /** @return array<int, array<string, mixed>> */

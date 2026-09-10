@@ -60,7 +60,7 @@ if (manPostIsValid()) {
                 flash('success', 'Rota atualizada.');
             }
         } catch (\Throwable $ex) {
-            flash('error', 'Erro ao salvar rota: ' . $ex->getMessage());
+            error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Erro ao salvar rota. Verifique os dados e tente novamente.');
         }
         redirect(url('inspections', ['action' => 'routes']));
     }
@@ -136,7 +136,7 @@ if (manPostIsValid()) {
             auditLog('create', 'inspection_executions', (int)db()->lastInsertId());
             flash('success', 'Inspeção registrada com sucesso!');
         } catch (\Throwable $ex) {
-            flash('error', 'Erro ao registrar inspeção: ' . $ex->getMessage());
+            error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Erro ao registrar inspeção. Verifique os dados e tente novamente.');
         }
         redirect(url('inspections'));
     }

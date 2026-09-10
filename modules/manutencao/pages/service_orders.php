@@ -45,7 +45,7 @@ if (manPostIsValid()) {
                 addOsHistory($newId, 'OS criada', "Tipo: {$type}, Prioridade: {$priority}");
                 flash('success', "OS {$osNumber} criada com sucesso!");
             } catch (Exception $ex) {
-                flash('error', 'Erro ao criar OS: ' . $ex->getMessage());
+                error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Erro ao criar OS. Verifique os dados e tente novamente.');
             }
         }
         redirect(url('service-orders'));
@@ -97,7 +97,7 @@ if (manPostIsValid()) {
                 addOsHistory($id, 'OS editada', "Título: {$title}");
                 flash('success', 'OS atualizada!');
             } catch (Exception $ex) {
-                flash('error', 'Erro: ' . $ex->getMessage());
+                error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Não foi possível concluir a operação. Tente novamente.');
             }
         }
         redirect(url('service-orders'));
@@ -147,7 +147,7 @@ if (manPostIsValid()) {
                 addOsHistory($id, 'Status alterado', 'Novo status: ' . ($statusLabelsHist[$status] ?? $status));
                 flash('success', 'Status atualizado!');
             } catch (Exception $ex) {
-                flash('error', 'Erro: ' . $ex->getMessage());
+                error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Não foi possível concluir a operação. Tente novamente.');
             }
         }
         redirect(url('service-orders'));
@@ -162,7 +162,7 @@ if (manPostIsValid()) {
             auditLog('delete', 'service_orders', $id);
             flash('success', 'OS excluída.');
         } catch (Exception $ex) {
-            flash('error', 'Erro ao excluir: ' . $ex->getMessage());
+            error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Erro ao excluir. Verifique os dados e tente novamente.');
         }
         redirect(url('service-orders'));
     }
@@ -212,7 +212,7 @@ if (manPostIsValid()) {
             } catch (\Throwable $ignored) {}
 
             flash('success', 'Peça adicionada.');
-        } catch (\Throwable $ex) { flash('error', 'Erro ao adicionar peça: ' . $ex->getMessage()); }
+        } catch (\Throwable $ex) { error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Erro ao adicionar peça. Verifique os dados e tente novamente.'); }
         redirect(url('service-orders', ['action'=>'edit','id'=>$osId]));
     }
 
@@ -238,7 +238,7 @@ if (manPostIsValid()) {
 
                 flash('success', 'Peça removida.');
             }
-        } catch (\Throwable $ex) { flash('error', 'Erro ao remover peça: ' . $ex->getMessage()); }
+        } catch (\Throwable $ex) { error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Erro ao remover peça. Verifique os dados e tente novamente.'); }
         redirect(url('service-orders', ['action'=>'edit','id'=>$osId]));
     }
 
@@ -253,7 +253,7 @@ if (manPostIsValid()) {
             } else {
                 flash('error', 'Assinatura inválida.');
             }
-        } catch (\Throwable $ex) { flash('error', 'Erro ao salvar assinatura: ' . $ex->getMessage()); }
+        } catch (\Throwable $ex) { error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Erro ao salvar assinatura. Verifique os dados e tente novamente.'); }
         redirect(url('service-orders', ['action'=>'edit','id'=>$osId]));
     }
 }

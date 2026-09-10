@@ -14,7 +14,10 @@
  */
 requireLogin();
 
-$tab = ($_GET['tab'] ?? $_POST['tab'] ?? '') === 'categories' ? 'categories' : 'sectors';
+// Aceita também o parâmetro legado ?action=categories (links e favoritos
+// antigos), para cair na aba certa do painel central.
+$tabParam = (string) ($_GET['tab'] ?? $_POST['tab'] ?? $_GET['action'] ?? '');
+$tab = str_contains($tabParam, 'categor') ? 'categories' : 'sectors';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     core_redirect(core_admin_url(MAN_MODULE_SLUG, $tab));

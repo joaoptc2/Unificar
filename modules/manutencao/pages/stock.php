@@ -46,7 +46,7 @@ if (manPostIsValid()) {
                 auditLog('create', 'parts', $partId);
                 flash('success', 'Peça adicionada ao estoque!');
             } catch (Exception $ex) {
-                flash('error', 'Erro: ' . $ex->getMessage());
+                error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Não foi possível concluir a operação. Tente novamente.');
             }
         }
         redirect(url('stock'));
@@ -76,7 +76,7 @@ if (manPostIsValid()) {
                 auditLog('update', 'parts', $id);
                 flash('success', 'Peça atualizada!');
             } catch (Exception $ex) {
-                flash('error', 'Erro: ' . $ex->getMessage());
+                error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Não foi possível concluir a operação. Tente novamente.');
             }
         }
         redirect(url('stock'));
@@ -113,7 +113,7 @@ if (manPostIsValid()) {
                 flash('success', 'Movimentação registrada!');
             } catch (Exception $ex) {
                 if (db()->inTransaction()) db()->rollBack();
-                flash('error', 'Erro: ' . $ex->getMessage());
+                error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Não foi possível concluir a operação. Tente novamente.');
             }
         }
         redirect(url('stock'));
@@ -128,7 +128,7 @@ if (manPostIsValid()) {
             auditLog('delete', 'parts', $id);
             flash('success', 'Peça removida do estoque.');
         } catch (Exception $ex) {
-            flash('error', 'Erro: ' . $ex->getMessage());
+            error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Não foi possível concluir a operação. Tente novamente.');
         }
         redirect(url('stock'));
     }

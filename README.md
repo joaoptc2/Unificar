@@ -56,6 +56,11 @@ aplicadas: `php scripts/migrate.php --mark-all` (ou execute
    reaplicadas sem risco (o executor tolera "já existe"). Nada é apagado
    automaticamente — tabelas descontinuadas ficam no banco e a remoção,
    quando desejada, está documentada em comentários no próprio arquivo.
+4. **Fuso do banco**: a plataforma passa a alinhar o fuso da sessão do MySQL
+   ao do PHP (`app.timezone`), para que as datas gravadas pelos módulos e
+   pelo banco (`NOW()`) marquem a mesma hora. Se a base já tiver histórico
+   gravado em outro fuso e você preferir não misturar, use
+   `'timezone' => 'server'` no bloco `db` do `config/config.php`.
 
 ## Estrutura
 

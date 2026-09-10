@@ -167,7 +167,8 @@ class VacationController
             $this->db->commit();
         } catch (\Throwable $e) {
             $this->db->rollBack();
-            Session::flash('error', 'Não foi possível registrar a solicitação: ' . Sanitize::e($e->getMessage()));
+            error_log('RH vacations.request: ' . $e->getMessage());
+            Session::flash('error', 'Não foi possível registrar a solicitação. Tente novamente.');
             header("Location: $back"); exit;
         }
         AuditLog::log('request', 'vacations', $vacId, null, ['request_id' => $reqId]);
