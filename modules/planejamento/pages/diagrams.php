@@ -662,7 +662,7 @@ if ($action === 'edit') {
         'title'   => $d['title'],
         'content' => (string) ob_get_clean(),
         'fluid'   => true,
-        'scripts' => '<script src="' . core_asset('planejamento/diagram-editor.js') . '?v=1"></script>',
+        'head'    => '<script src="' . core_asset('planejamento/diagram-editor.js') . '?v=1"></script>',
     ]);
     exit;
 }
@@ -724,7 +724,7 @@ if ($action === 'view') {
     pdg_page([
         'title'   => $d['title'],
         'content' => (string) ob_get_clean(),
-        'scripts' => core_can('diagrams.export') ? '<script src="' . core_asset('planejamento/diagram-editor.js') . '?v=1"></script>' : '',
+        'head'    => core_can('diagrams.export') ? '<script src="' . core_asset('planejamento/diagram-editor.js') . '?v=1"></script>' : '',
     ]);
     exit;
 }

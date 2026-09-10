@@ -111,7 +111,7 @@ function _documents_layouts_data() {
     return [
         'page_layouts'  => $page_layouts,
         'cover_layouts' => $cover_layouts,
-        'layouts_json'  => json_encode($map, JSON_UNESCAPED_UNICODE | JSON_FORCE_OBJECT),
+        'layouts_json'  => json_encode((object) $map, JSON_UNESCAPED_UNICODE),
     ];
 }
 

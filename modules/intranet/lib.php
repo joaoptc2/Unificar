@@ -120,7 +120,7 @@ function intra_layouts_editor_json(array $layouts): string
     foreach ($layouts as $l) {
         $map[(int) $l['id']] = Core\DocLayout::editorConfig($l, ['name' => $l['name'], 'kind' => $l['kind'] ?? 'both']);
     }
-    return (string) json_encode($map, JSON_UNESCAPED_UNICODE | JSON_FORCE_OBJECT);
+    return (string) json_encode((object) $map, JSON_UNESCAPED_UNICODE);
 }
 
 /**

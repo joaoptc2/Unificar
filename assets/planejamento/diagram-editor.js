@@ -544,7 +544,7 @@
             }
             function sep() { htmlEl('span', { 'class': 'pde-sep' }, tb); }
             if (!this.readOnly) {
-                this.btnSave = btn('save', 'save', 'Salvar', 'Salvar (Ctrl+S)', 'pde-btn-primary');
+                this.btnSave = btn('save', 'save', ICONS.save, 'Salvar (Ctrl+S)', 'pde-btn-primary');
                 this.btnSave.innerHTML += '<span class="pde-btn-label">Salvar</span>';
                 sep();
                 btn('undo', 'arrow-counterclockwise', ICONS.undo, 'Desfazer (Ctrl+Z)');

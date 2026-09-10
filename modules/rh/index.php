@@ -86,7 +86,7 @@ $routes = [
     'scores'             => ['ScoreController',             null], // gates por ação (scores.create/.delete)
     'compliments'        => ['ComplimentController',        null], // gates por ação (compliments.create/.delete)
     'my'                 => ['MyController',                'my.view'],
-    'vacations'          => ['VacationController',          'vacations.view'],
+    'vacations'          => ['VacationController',          null], // gates por ação (vacations.view/.create/.edit/.delete; request = my.view — portal)
     'shifts'             => ['ShiftController',             'shifts.view'],
     'onboarding'         => ['OnboardingController',        'onboarding.view'],
     'announcements'      => ['AnnouncementController',      'announcements.view'],
