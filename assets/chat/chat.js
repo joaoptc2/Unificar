@@ -1191,7 +1191,16 @@ class ChatApp {
 
     autoGrow(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; }
     scrollToBottom() { if (this.container) this.container.scrollTop = this.container.scrollHeight; }
-    esc(str) { const d = document.createElement('div'); d.textContent = str == null ? '' : String(str); return d.innerHTML; }
+    /**
+     * Escapa para HTML — inclusive aspas, pois o resultado também é usado
+     * DENTRO de atributos (data-raw, title, alt, href). Sem isso, um
+     * conteúdo com aspas escaparia do atributo (XSS armazenado).
+     */
+    esc(str) {
+        return String(str == null ? '' : str).replace(/[&<>"'`]/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;',
+        })[c]);
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

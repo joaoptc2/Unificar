@@ -25,7 +25,9 @@ $overdue     = $canPlans ? (int) (DB::queryOne(
        AND i.status IN ('pending','in_progress') AND i.due_date IS NOT NULL AND i.due_date < ?",
     [$today]
 )['n'] ?? 0) : 0;
-$boardsCount = $canBoards ? count(plan_boards_visible(false, 'all')) : 0;
+// uma única consulta de quadros visíveis (usada na contagem e nos recentes)
+$visibleBoards = $canBoards ? plan_boards_visible(false, 'all') : [];
+$boardsCount   = count($visibleBoards);
 $diagramsCount = 0;
 if ($canDiagrams) {
     $params = [];
@@ -104,7 +106,7 @@ $recentPlans = $canPlans ? DB::query(
      FROM plan_plans p LEFT JOIN users o ON o.id = p.owner_id
      WHERE p.deleted_at IS NULL AND p.status IN ('draft','active') ORDER BY p.updated_at DESC LIMIT 6"
 ) : [];
-$recentBoards = $canBoards ? array_slice(plan_boards_visible(false, 'all'), 0, 6) : [];
+$recentBoards = array_slice($visibleBoards, 0, 6);
 
 $kinds = plan_item_kinds();
 $stat = function (string $icon, string $bg, int|string $value, string $label, ?string $url): string {

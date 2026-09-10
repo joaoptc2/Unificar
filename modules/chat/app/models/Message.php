@@ -139,6 +139,31 @@ class Message extends Model
         unset($m);
     }
 
+    /**
+     * URL de download de um anexo — SEMPRE pelo endpoint autenticado
+     * (page=api&action=downloadAttachment), nunca o caminho público em
+     * uploads/, para que anexos de canais privados/DMs não fiquem
+     * acessíveis a quem não participa do canal.
+     */
+    public static function attachmentUrl(int $attachmentId): string
+    {
+        return BASE_URL . '/index.php?m=chat&page=api&action=downloadAttachment&id=' . $attachmentId;
+    }
+
+    /** Anexo + canal a que pertence (checagem de acesso no download). */
+    public static function attachmentWithChannel(int $attachmentId): ?array
+    {
+        $db   = Database::getInstance();
+        $stmt = $db->prepare(
+            'SELECT a.*, m.channel_id, m.deleted_at AS message_deleted_at
+             FROM chat_message_attachments a
+             INNER JOIN chat_messages m ON m.id = a.message_id
+             WHERE a.id = ? LIMIT 1'
+        );
+        $stmt->execute([$attachmentId]);
+        return $stmt->fetch() ?: null;
+    }
+
     /** @return array<int, array[]> message_id => anexos (com url/is_image) */
     public static function attachmentsFor(array $ids): array
     {
@@ -152,7 +177,7 @@ class Message extends Model
         $stmt->execute($ids);
         $out = [];
         foreach ($stmt->fetchAll() as $a) {
-            $a['url']       = Upload::url($a['file_path']);
+            $a['url']       = self::attachmentUrl((int) $a['id']);
             $a['is_image']  = Upload::isImage((string) $a['file_type']);
             $a['size_text'] = Upload::formatSize((int) $a['file_size']);
             $out[(int) $a['message_id']][] = $a;

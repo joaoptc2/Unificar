@@ -34,6 +34,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'save') {
         core_require($board ? 'boards.edit' : 'boards.create');
+        if ($board && !empty($board['archived_at'])) {
+            Flash::set('error', 'Quadro arquivado: desarquive para alterar as configurações.');
+            core_redirect(plan_url('boards', ['action' => 'view', 'id' => $board['id']]));
+        }
         $name = trim((string) ($_POST['name'] ?? ''));
         if ($name === '') {
             Flash::set('error', 'Informe o nome do quadro.');
@@ -50,8 +54,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($planId && !plan_find_plan($planId)) {
             $planId = null;
         }
-        $members = array_values(array_unique(array_map('intval', (array) ($_POST['members'] ?? []))));
-        $members = array_filter($members, fn ($m) => $m > 0);
+        $members = plan_id_list($_POST['members'] ?? [], 200);
+
+        // Modelo escolhido (só na criação). Quando o formulário enviado não
+        // refletia este modelo (campo tpl_applied), as configurações do modelo
+        // — tipo, pontos, sprint e etiquetas — prevalecem sobre os padrões.
+        $tpl = null;
+        $tplData = null;
+        if (!$board) {
+            $tpl = plan_find_template((int) ($_POST['template_id'] ?? 0));
+            if ($tpl && ($tpl['kind'] !== 'board' || !$tpl['active'])) {
+                $tpl = null;
+            }
+            $tplData = $tpl ? plan_normalize_board_template(plan_json_decode((string) $tpl['data'])) : null;
+            if ($tplData && (int) ($_POST['tpl_applied'] ?? 0) !== (int) $tpl['id']) {
+                $kind       = $tplData['kind'];
+                $points     = !empty($tplData['points']) ? 1 : 0;
+                $sprintDays = !empty($tplData['sprint_days']) ? (int) $tplData['sprint_days'] : $sprintDays;
+                $labels     = $labels ?: $tplData['labels'];
+            }
+        }
         $fields  = [mb_substr($name, 0, 150), trim((string) ($_POST['description'] ?? '')) ?: null, $kind, $private, $points, $sprintDays, $sprintStart, $labels ? implode(',', $labels) : null, $planId];
 
         $saveMembers = function (int $boardId, array $members, int $ownerId): void {
@@ -74,11 +96,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Flash::set('success', 'Quadro atualizado.');
             core_redirect(plan_url('boards', ['action' => 'view', 'id' => $board['id']]));
         }
-        $tpl = plan_find_template((int) ($_POST['template_id'] ?? 0));
-        if ($tpl && ($tpl['kind'] !== 'board' || !$tpl['active'])) {
-            $tpl = null;
-        }
-        $tplData = $tpl ? plan_normalize_board_template(plan_json_decode((string) $tpl['data'])) : null;
         $newId = DB::transaction(function () use ($fields, $tpl, $tplData, $uid, $members, $saveMembers): int {
             DB::execute(
                 'INSERT INTO plan_boards (name, description, kind, is_private, use_points, sprint_days, sprint_start, labels, plan_id, template_id, created_by)
@@ -125,6 +142,10 @@ if ($action === 'create' || $action === 'edit') {
         core_redirect(plan_url('boards'));
     }
     core_require($board ? 'boards.edit' : 'boards.create');
+    if ($board && !empty($board['archived_at'])) {
+        Flash::set('warning', 'Quadro arquivado: desarquive para alterar as configurações.');
+        core_redirect(plan_url('boards', ['action' => 'view', 'id' => $board['id']]));
+    }
     $templates  = $board ? [] : plan_templates_active('board');
     $selectedTp = (int) ($_GET['template'] ?? 0);
     $tplSel     = $selectedTp ? plan_find_template($selectedTp) : null;
@@ -134,15 +155,28 @@ if ($action === 'create' || $action === 'edit') {
     $users      = plan_users_active();
     $plans      = DB::query("SELECT id, title FROM plan_plans WHERE deleted_at IS NULL AND status <> 'archived' ORDER BY title LIMIT 300");
     $v = fn (string $k, $default = '') => $board[$k] ?? ($tplData[$k] ?? $default);
+    // dados dos modelos disponíveis, para o JS aplicar ao trocar o rádio
+    $tplJs = [];
+    foreach ($templates as $t) {
+        $d = plan_normalize_board_template(plan_json_decode((string) $t['data']));
+        $tplJs[(int) $t['id']] = [
+            'name'        => (string) $t['name'],
+            'kind'        => $d['kind'],
+            'labels'      => implode(', ', $d['labels']),
+            'points'      => !empty($d['points']),
+            'sprint_days' => (int) ($d['sprint_days'] ?? 0),
+        ];
+    }
     ob_start(); ?>
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <h1 class="h4 mb-0"><i class="bi bi-kanban me-2"></i><?= $board ? 'Configurar quadro' : 'Novo quadro' ?></h1>
         <a class="btn btn-outline-secondary btn-sm" href="<?= $board ? plan_url('boards', ['action' => 'view', 'id' => $board['id']]) : plan_url('boards') ?>">Voltar</a>
     </div>
-    <form method="post" action="<?= plan_url('boards') ?>" class="row g-3">
+    <form method="post" action="<?= plan_url('boards') ?>" class="row g-3" id="boardForm">
         <?= Csrf::field() ?>
         <input type="hidden" name="action" value="save">
         <input type="hidden" name="id" value="<?= (int) ($board['id'] ?? 0) ?>">
+        <?php if (!$board): ?><input type="hidden" name="tpl_applied" id="tplApplied" value="<?= $tplData ? (int) $selectedTp : 0 ?>"><?php endif; ?>
         <div class="col-12 col-xl-8">
             <div class="card mb-3"><div class="card-body row g-3">
                 <div class="col-md-8"><label class="form-label">Nome *</label><input class="form-control" name="name" required maxlength="150" value="<?= core_e($board['name'] ?? ($tplSel ? $tplSel['name'] : '')) ?>"></div>
@@ -198,6 +232,28 @@ if ($action === 'create' || $action === 'edit') {
             <button class="btn btn-primary w-100"><i class="bi bi-check-lg me-1"></i><?= $board ? 'Salvar configurações' : 'Criar quadro' ?></button>
         </div>
     </form>
+    <?php if (!$board): ?>
+    <script>
+    (function () {
+        var TPL = <?= json_encode($tplJs, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+        var form = document.getElementById('boardForm');
+        var applied = document.getElementById('tplApplied');
+        if (!form || !applied) { return; }
+        form.querySelectorAll('input[name=template_id]').forEach(function (r) {
+            r.addEventListener('change', function () {
+                var t = TPL[r.value];
+                applied.value = t ? r.value : 0;
+                if (!t) { return; }
+                if (!form.name.value.trim()) { form.name.value = t.name; }
+                form.kind.value = t.kind;
+                form.labels.value = t.labels;
+                form.use_points.checked = !!t.points;
+                form.sprint_days.value = t.sprint_days || '';
+            });
+        });
+    })();
+    </script>
+    <?php endif; ?>
     <?php
     plan_page(['title' => $board ? 'Configurar quadro' : 'Novo quadro', 'content' => (string) ob_get_clean(), 'active' => 'boards']);
     exit;
@@ -219,6 +275,8 @@ if ($action === 'view') {
     $members  = plan_board_members((int) $board['id']);
     $labels   = plan_labels_list($board['labels'] ?? '');
     $isScrum  = $board['kind'] === 'scrum';
+    // vincular cartão a ação de plano exige enxergar planos
+    $canLinkPlan = core_can('plans.view');
 
     // Scrum: pontos e burndown
     $totalPoints = 0;
@@ -285,7 +343,9 @@ if ($action === 'view') {
         'users'     => plan_users_active(),
         'labels'    => $labels,
         'priorities' => plan_card_priorities(),
-        'planItems' => array_map(fn ($i) => ['id' => (int) $i['id'], 'title' => $i['title'], 'plan' => $i['plan_title'], 'kind' => $i['kind']], plan_linkable_items($board['plan_id'] ? (int) $board['plan_id'] : null)),
+        'planItems' => $canLinkPlan
+            ? array_map(fn ($i) => ['id' => (int) $i['id'], 'title' => $i['title'], 'plan' => $i['plan_title'], 'kind' => $i['kind']], plan_linkable_items($board['plan_id'] ? (int) $board['plan_id'] : null))
+            : [],
         'canCards'  => $canCards,
         'canEdit'   => $canEdit,
         'apiUrl'    => plan_url('api'),
@@ -377,7 +437,7 @@ if ($action === 'view') {
                             <input class="form-control" name="labels_text" placeholder="separadas por vírgula" maxlength="255">
                         <?php endif; ?>
                     </div>
-                    <div class="col-md-<?= $board['use_points'] ? '5' : '6' ?>"><label class="form-label small mb-0">Ação do plano vinculada</label><select class="form-select" name="plan_item_id" id="cardPlanItem"><option value="">—</option></select></div>
+                    <?php if ($canLinkPlan): ?><div class="col-md-<?= $board['use_points'] ? '5' : '6' ?>"><label class="form-label small mb-0">Ação do plano vinculada</label><select class="form-select" name="plan_item_id" id="cardPlanItem"><option value="">—</option></select></div><?php endif; ?>
                     <div class="col-12"><label class="form-label small mb-0">Checklist</label>
                         <div class="plan-checklist" id="cardChecklist"></div>
                         <div class="input-group input-group-sm mt-1"><input class="form-control" id="cardChecklistNew" placeholder="Novo item da checklist"><button type="button" class="btn btn-outline-secondary" id="cardChecklistAdd"><i class="bi bi-plus"></i></button></div>

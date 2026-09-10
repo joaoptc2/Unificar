@@ -35,6 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Flash::set('error', 'Plano não encontrado.');
             core_redirect(plan_url('plans'));
         }
+        if ($plan && $plan['status'] === 'archived') {
+            Flash::set('error', 'Plano arquivado: desarquive para editar.');
+            core_redirect(plan_url('plans', ['action' => 'view', 'id' => $plan['id']]));
+        }
         $title = trim((string) ($_POST['title'] ?? ''));
         $kind  = in_array($_POST['kind'] ?? '', array_keys(plan_plan_kinds()), true) ? $_POST['kind'] : 'work_plan';
         $status = in_array($_POST['status'] ?? '', ['draft', 'active', 'completed'], true) ? $_POST['status'] : ($plan['status'] ?? 'draft');
@@ -55,9 +59,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $fields = [mb_substr($title, 0, 200), trim((string) ($_POST['description'] ?? '')) ?: null, $kind,
                    mb_substr(trim((string) ($_POST['sector'] ?? '')), 0, 150) ?: null, $owner, $start, $end];
         if ($plan) {
-            if ($plan['status'] === 'archived') {
-                $status = 'archived';
-            }
             DB::execute(
                 'UPDATE plan_plans SET title = ?, description = ?, kind = ?, sector = ?, owner_id = ?, start_date = ?, end_date = ?, status = ?, updated_by = ? WHERE id = ?',
                 array_merge($fields, [$status, $uid, $plan['id']])
@@ -70,7 +71,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($tpl && ($tpl['kind'] !== 'plan' || !$tpl['active'])) {
             $tpl = null;
         }
-        $newId = DB::transaction(function () use ($fields, $status, $uid, $tpl): int {
+        $tplData = $tpl ? plan_json_decode((string) $tpl['data']) : [];
+        // Quando o formulário enviado não refletia este modelo (tpl_applied),
+        // o tipo de plano definido no modelo prevalece sobre o padrão.
+        if ($tpl && (int) ($_POST['tpl_applied'] ?? 0) !== (int) $tpl['id']
+            && in_array($tplData['kind'] ?? '', array_keys(plan_plan_kinds()), true)) {
+            $fields[2] = (string) $tplData['kind'];
+        }
+        $newId = DB::transaction(function () use ($fields, $status, $uid, $tpl, $tplData): int {
             DB::execute(
                 'INSERT INTO plan_plans (title, description, kind, sector, owner_id, start_date, end_date, status, template_id, created_by, updated_by)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -78,8 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             $newId = DB::lastId();
             if ($tpl) {
-                $data = plan_json_decode((string) $tpl['data']);
-                plan_instantiate_items($newId, (array) ($data['items'] ?? []));
+                plan_instantiate_items($newId, (array) ($tplData['items'] ?? []));
             }
             return $newId;
         });
@@ -236,18 +243,33 @@ if ($action === 'create' || $action === 'edit') {
         core_redirect(plan_url('plans'));
     }
     core_require($plan ? 'plans.edit' : 'plans.create');
+    if ($plan && $plan['status'] === 'archived') {
+        Flash::set('warning', 'Plano arquivado: desarquive para editar.');
+        core_redirect(plan_url('plans', ['action' => 'view', 'id' => $plan['id']]));
+    }
     $templates  = $plan ? [] : plan_templates_active('plan');
     $selectedTp = (int) ($_GET['template'] ?? 0);
     $users      = plan_users_active();
+    // tipo de plano de cada modelo, para o JS aplicar ao trocar o rádio
+    $tplJs = [];
+    foreach ($templates as $t) {
+        $d = plan_json_decode((string) $t['data']);
+        $tplJs[(int) $t['id']] = [
+            'name' => (string) $t['name'],
+            'kind' => in_array($d['kind'] ?? '', array_keys(plan_plan_kinds()), true) ? (string) $d['kind'] : 'work_plan',
+        ];
+    }
+    $tplSelValid = $selectedTp > 0 && isset($tplJs[$selectedTp]);
     ob_start(); ?>
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <h1 class="h4 mb-0"><i class="bi bi-clipboard2-check me-2"></i><?= $plan ? 'Editar plano' : 'Novo plano' ?></h1>
         <a class="btn btn-outline-secondary btn-sm" href="<?= $plan ? plan_url('plans', ['action' => 'view', 'id' => $plan['id']]) : plan_url('plans') ?>">Voltar</a>
     </div>
-    <form method="post" action="<?= plan_url('plans') ?>" class="row g-3">
+    <form method="post" action="<?= plan_url('plans') ?>" class="row g-3" id="planForm">
         <?= Csrf::field() ?>
         <input type="hidden" name="action" value="save">
         <input type="hidden" name="id" value="<?= (int) ($plan['id'] ?? 0) ?>">
+        <?php if (!$plan): ?><input type="hidden" name="tpl_applied" id="tplApplied" value="<?= $tplSelValid ? $selectedTp : 0 ?>"><?php endif; ?>
         <div class="col-12 col-xl-8">
             <div class="card">
                 <div class="card-body row g-3">
@@ -259,7 +281,7 @@ if ($action === 'create' || $action === 'edit') {
                         <label class="form-label">Tipo</label>
                         <select class="form-select" name="kind">
                             <?php foreach (plan_plan_kinds() as $k => $lbl): ?>
-                                <option value="<?= $k ?>" <?= ($plan['kind'] ?? 'work_plan') === $k ? 'selected' : '' ?>><?= core_e($lbl) ?></option>
+                                <option value="<?= $k ?>" <?= ($plan['kind'] ?? ($tplSelValid ? $tplJs[$selectedTp]['kind'] : 'work_plan')) === $k ? 'selected' : '' ?>><?= core_e($lbl) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -327,6 +349,25 @@ if ($action === 'create' || $action === 'edit') {
             <button class="btn btn-primary w-100"><i class="bi bi-check-lg me-1"></i><?= $plan ? 'Salvar alterações' : 'Criar plano' ?></button>
         </div>
     </form>
+    <?php if (!$plan): ?>
+    <script>
+    (function () {
+        var TPL = <?= json_encode($tplJs, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+        var form = document.getElementById('planForm');
+        var applied = document.getElementById('tplApplied');
+        if (!form || !applied) { return; }
+        form.querySelectorAll('input[name=template_id]').forEach(function (r) {
+            r.addEventListener('change', function () {
+                var t = TPL[r.value];
+                applied.value = t ? r.value : 0;
+                if (!t) { return; }
+                if (!form.title.value.trim()) { form.title.value = t.name; }
+                form.kind.value = t.kind;
+            });
+        });
+    })();
+    </script>
+    <?php endif; ?>
     <?php
     plan_page(['title' => $plan ? 'Editar plano' : 'Novo plano', 'content' => (string) ob_get_clean(), 'active' => 'plans']);
     exit;

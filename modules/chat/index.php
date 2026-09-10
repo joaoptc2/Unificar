@@ -27,11 +27,12 @@ date_default_timezone_set($config['timezone'] ?? 'America/Sao_Paulo');
 // Autoloader das classes globais do módulo (helpers, models, controllers)
 require CHAT_PATH . '/app/helpers/Autoloader.php';
 
-$page   = trim($_GET['page'] ?? 'chat');
-$action = trim($_GET['action'] ?? 'index');
+// is_string(): `?page[]=x` chegaria como array e derrubaria trim() (TypeError)
+$page   = is_string($_GET['page']   ?? null) ? trim($_GET['page'])   : 'chat';
+$action = is_string($_GET['action'] ?? null) ? trim($_GET['action']) : 'index';
 
-$page   = preg_replace('/[^a-zA-Z0-9_-]/', '', $page);
-$action = preg_replace('/[^a-zA-Z0-9_-]/', '', $action);
+$page   = preg_replace('/[^a-zA-Z0-9_-]/', '', $page) ?: 'chat';
+$action = preg_replace('/[^a-zA-Z0-9_-]/', '', $action) ?: 'index';
 
 // Login/registro/logout saem do módulo — núcleo cuida (?m=auth).
 // Perfil do usuário também é do núcleo.
@@ -63,13 +64,17 @@ if (!isset($routes[$page])) {
 }
 
 // Configuração (categorias/emojis) fica na Administração central: qualquer
-// GET em page=admin abre o painel central; os POSTs continuam aqui.
-if ($page === 'admin' && $_SERVER['REQUEST_METHOD'] !== 'POST') {
-    $tab = in_array($action, ['categories', 'emojis'], true) ? $action : '';
-    if (in_array($action, ['index', 'settings', 'audit', 'export', 'updateSettings', 'doExport', 'generateExport'], true)) {
-        \Core\Flash::set('warning', 'Função descontinuada: o módulo Comunicação agora é somente chat.');
+// GET em page=admin abre o painel central. Pelo módulo só passam os POSTs
+// que alteram dados (as telas são renderizadas por admin_panel.php).
+if ($page === 'admin') {
+    $adminPosts = ['saveCategory', 'deleteCategory', 'addEmoji', 'storeEmoji', 'deleteEmoji'];
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !in_array($action, $adminPosts, true)) {
+        $tab = in_array($action, ['categories', 'emojis'], true) ? $action : '';
+        if (in_array($action, ['index', 'settings', 'audit', 'export', 'updateSettings', 'doExport', 'generateExport'], true)) {
+            \Core\Flash::set('warning', 'Função descontinuada: o módulo Comunicação agora é somente chat.');
+        }
+        core_redirect(core_admin_url('chat', $tab));
     }
-    core_redirect(core_admin_url('chat', $tab));
 }
 
 $controllerName = $routes[$page];

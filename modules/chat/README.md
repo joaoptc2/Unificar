@@ -48,10 +48,10 @@ Front controller da plataforma: `index.php?m=chat&page=<página>&action=<ação>
 | `sendMessage` (`channel_id`, `content`, `parent_id?`, `attachment?`) | POST | `chat.create` |
 | `getMessages` (`channel_id`, `after_id`) — polling | GET | `chat.view` |
 | `getOlderMessages` (`channel_id`, `before_id`) | GET | `chat.view` |
-| `editMessage` (`message_id`, `content`) | POST | `chat.edit` (autor) |
-| `deleteMessage` (`message_id`) | POST | `chat.delete` (autor) ou `chat.moderate` |
+| `editMessage` (`message_id`, `content`) | POST | `chat.edit` (autor, membro do canal) |
+| `deleteMessage` (`message_id`) | POST | `chat.delete` (autor, até 1 min) ou `chat.moderate` — sempre limitado aos canais de que participa (ou públicos) |
 | `toggleReaction` (`message_id`, `emoji`) | POST | `chat.view` |
-| `pinMessage` (`message_id`) | POST | `chat.moderate` ou gestão do canal |
+| `pinMessage` (`message_id`) | POST | `chat.moderate` + membro do canal |
 | `getPinnedMessages` (`channel_id`) | GET | `chat.view` |
 | `getThread` (`message_id`) | GET | `chat.view` |
 | `heartbeat` — não lidas por canal, presença, contador de notificações | GET | `chat.view` |
@@ -60,7 +60,7 @@ Front controller da plataforma: `index.php?m=chat&page=<página>&action=<ação>
 | `markChannelRead` (`channel_id`) | POST | `chat.view` |
 | `toggleFavorite` (`channel_id`) | POST | `chat.view` |
 | `typing` (`channel_id`, `typing`) | POST | `chat.view` |
-| `linkPreview` (`url`) | GET | `chat.view` |
+| `downloadAttachment` (`id`) | GET | `chat.view` + membro do canal |
 | `getCustomEmojis` | GET | `chat.view` |
 
 Todo POST exige o token CSRF do núcleo (`_csrf_token` no corpo ou
@@ -170,3 +170,10 @@ temporários em `STORAGE_PATH/cache/chat_typing_<canal>_<usuário>.json`.
 `Upload::handle()` valida extensão **e** MIME (lista em `config/app.php`),
 gera nome aleatório e grava em `uploads/chat/<subpasta>/`. Anexos de
 mensagem: `attachments/`; emojis personalizados: `emojis/` (PNG/GIF/JPG/WEBP).
+
+Os **anexos nunca são servidos pelo caminho público**: `uploads/chat/attachments/`
+tem um `.htaccess` com `Require all denied` e a entrega passa por
+`page=api&action=downloadAttachment&id=N`, que confirma se o usuário participa
+do canal da mensagem antes de mandar o arquivo (`Content-Disposition: attachment`
+para tudo que não é imagem, `X-Content-Type-Options: nosniff`). Emojis
+personalizados continuam públicos (não têm conteúdo sensível).

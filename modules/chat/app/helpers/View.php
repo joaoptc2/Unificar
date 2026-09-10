@@ -88,7 +88,8 @@ class View
     /** Chave do item ativo do menu lateral (manifesto). */
     private static function activeKey(): string
     {
-        $page = preg_replace('/[^a-zA-Z0-9_-]/', '', trim($_GET['page'] ?? 'chat'));
+        $raw  = is_string($_GET['page'] ?? null) ? trim($_GET['page']) : 'chat';
+        $page = preg_replace('/[^a-zA-Z0-9_-]/', '', $raw);
 
         return match ($page) {
             'channels' => 'channels',

@@ -145,6 +145,13 @@ function plan_color_or_null(mixed $value): ?string
     return preg_match('/^#[0-9a-f]{6}$/', $v) ? $v : null;
 }
 
+/** Lista de IDs inteiros positivos, únicos e limitada (reordenações via API). @return int[] */
+function plan_id_list(mixed $value, int $max = 500): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', (array) $value), fn (int $i) => $i > 0)));
+    return array_slice($ids, 0, $max);
+}
+
 /** Normaliza lista de etiquetas (texto separado por vírgula ou array) → array de strings únicas. */
 function plan_labels_list(mixed $value): array
 {
@@ -635,12 +642,6 @@ function plan_board_can_view(array $board): bool
         return true;
     }
     return plan_can_see_private((int) ($board['created_by'] ?? 0), 'boards', plan_board_member_ids((int) $board['id']));
-}
-
-/** O usuário pode configurar o quadro (boards.edit e acesso ao quadro). */
-function plan_board_can_manage(array $board): bool
-{
-    return core_can('boards.edit') && plan_board_can_view($board);
 }
 
 function plan_board_columns(int $boardId): array

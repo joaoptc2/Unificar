@@ -267,6 +267,7 @@
     }
     function fillPlanItems(selected) {
         var sel = document.getElementById('cardPlanItem');
+        if (!sel) { return; } // sem permissão para ver planos: campo não renderizado
         sel.innerHTML = '<option value="">—</option>';
         (D.planItems || []).forEach(function (i) {
             var o = document.createElement('option');
@@ -400,8 +401,9 @@
             id: cardForm.id.value, board_id: D.board.id, title: cardForm.title.value, column_id: cardForm.column_id.value,
             description: cardForm.description.value, assignee_id: cardForm.assignee_id.value, priority: cardForm.priority.value,
             due_date: cardForm.due_date.value, color: document.getElementById('cardNoColor').checked ? '' : cardForm.color.value,
-            labels: getLabels(), plan_item_id: cardForm.plan_item_id.value, checklist: JSON.stringify(checklist)
+            labels: getLabels(), checklist: JSON.stringify(checklist)
         };
+        if (cardForm.plan_item_id) { data.plan_item_id = cardForm.plan_item_id.value; }
         if (cardForm.points) { data.points = cardForm.points.value; }
         api('card_save', data).then(function () { closeModals(); render(); notify('Cartão salvo.'); }).catch(function (err) { notify(err.message, 'error'); });
     });

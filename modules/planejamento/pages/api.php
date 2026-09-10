@@ -17,6 +17,14 @@ $isPost = $_SERVER['REQUEST_METHOD'] === 'POST';
 $uid    = (int) core_user_id();
 
 $readOnly = ['plan_tree', 'board_state', 'card_get'];
+$writable = [
+    'item_add', 'item_update', 'item_done', 'item_delete', 'item_move', 'item_reorder',
+    'card_save', 'card_move', 'card_delete', 'checklist_toggle', 'comment_add',
+    'column_add', 'column_update', 'column_delete', 'column_reorder',
+];
+if (!in_array($action, $readOnly, true) && !in_array($action, $writable, true)) {
+    plan_api_error('Ação inválida.', 404);
+}
 if (!in_array($action, $readOnly, true)) {
     if (!$isPost) {
         plan_api_error('Método não permitido.', 405);
@@ -94,10 +102,14 @@ function plan_api_board_response(int $boardId, array $extra = []): never
     plan_json_response(['ok' => true] + plan_board_state($board) + $extra);
 }
 
-/** Sincroniza a ação do plano vinculada ao cartão ao entrar/sair da coluna concluída. */
+/**
+ * Sincroniza a ação do plano vinculada ao cartão ao entrar/sair da coluna
+ * concluída. Só escreve no plano quem tem a permissão de editar planos —
+ * caso contrário o vínculo é apenas informativo.
+ */
 function plan_api_sync_linked_item(array $card, bool $nowDone): void
 {
-    if (empty($card['plan_item_id'])) {
+    if (empty($card['plan_item_id']) || !core_can('plans.edit')) {
         return;
     }
     $item = DB::queryOne('SELECT id, plan_id, status FROM plan_plan_items WHERE id = ?', [(int) $card['plan_item_id']]);
@@ -252,7 +264,7 @@ switch ($action) {
     case 'item_reorder':
         $plan     = plan_api_plan_editable((int) ($_POST['plan_id'] ?? 0));
         $parentId = (int) ($_POST['parent_id'] ?? 0) ?: null;
-        $ids      = array_values(array_unique(array_map('intval', (array) ($_POST['ids'] ?? []))));
+        $ids      = plan_id_list($_POST['ids'] ?? []);
         foreach ($ids as $i => $id) {
             DB::execute(
                 'UPDATE plan_plan_items SET sort_order = ? WHERE id = ? AND plan_id = ? AND ' . ($parentId ? 'parent_id = ?' : 'parent_id IS NULL'),
@@ -297,6 +309,11 @@ switch ($action) {
         }
         $columnId = (int) ($_POST['column_id'] ?? ($current['column_id'] ?? 0));
         $column   = DB::queryOne('SELECT * FROM plan_board_columns WHERE id = ? AND board_id = ?', [$columnId, $board['id']]);
+        if (!$column && $current) {
+            // coluna inexistente/estranha ao quadro: mantém a coluna atual do
+            // cartão em vez de movê-lo silenciosamente para a primeira.
+            $column = DB::queryOne('SELECT * FROM plan_board_columns WHERE id = ? AND board_id = ?', [(int) $current['column_id'], $board['id']]);
+        }
         if (!$column) {
             $column = DB::queryOne('SELECT * FROM plan_board_columns WHERE board_id = ? ORDER BY sort_order, id LIMIT 1', [$board['id']]);
             if (!$column) {
@@ -311,9 +328,15 @@ switch ($action) {
         $points   = trim((string) ($_POST['points'] ?? ''));
         $points   = $points !== '' && !empty($board['use_points']) ? max(0, min(999, (int) $points)) : null;
         $labels   = plan_labels_list($_POST['labels'] ?? '');
-        $planItem = (int) ($_POST['plan_item_id'] ?? 0) ?: null;
-        if ($planItem && !DB::queryOne('SELECT i.id FROM plan_plan_items i JOIN plan_plans p ON p.id = i.plan_id WHERE i.id = ? AND p.deleted_at IS NULL', [$planItem])) {
-            $planItem = null;
+        // O vínculo com a ação do plano só pode ser definido por quem enxerga
+        // planos; sem essa permissão o vínculo existente é preservado.
+        if (core_can('plans.view')) {
+            $planItem = (int) ($_POST['plan_item_id'] ?? 0) ?: null;
+            if ($planItem && !DB::queryOne('SELECT i.id FROM plan_plan_items i JOIN plan_plans p ON p.id = i.plan_id WHERE i.id = ? AND p.deleted_at IS NULL', [$planItem])) {
+                $planItem = null;
+            }
+        } else {
+            $planItem = $current && $current['plan_item_id'] !== null ? (int) $current['plan_item_id'] : null;
         }
         $checklist = [];
         foreach (plan_json_decode((string) ($_POST['checklist'] ?? '')) as $ck) {
@@ -366,7 +389,7 @@ switch ($action) {
         if (!$column) {
             plan_api_error('Coluna inválida.');
         }
-        $ids = array_values(array_unique(array_map('intval', (array) ($_POST['ids'] ?? []))));
+        $ids = plan_id_list($_POST['ids'] ?? []);
         if (!in_array((int) $card['id'], $ids, true)) {
             $ids[] = (int) $card['id'];
         }
@@ -480,7 +503,7 @@ switch ($action) {
 
     case 'column_reorder':
         $board = plan_api_board((int) ($_POST['board_id'] ?? 0), 'boards.edit');
-        $ids   = array_values(array_unique(array_map('intval', (array) ($_POST['ids'] ?? []))));
+        $ids   = plan_id_list($_POST['ids'] ?? []);
         foreach ($ids as $i => $id) {
             DB::execute('UPDATE plan_board_columns SET sort_order = ? WHERE id = ? AND board_id = ?', [$i, $id, $board['id']]);
         }

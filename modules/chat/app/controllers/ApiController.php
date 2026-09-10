@@ -8,8 +8,12 @@
  *
  * Endpoints: sendMessage, getMessages, getOlderMessages, editMessage, deleteMessage,
  * toggleReaction, pinMessage, getThread, getPinnedMessages, heartbeat,
- * userStatus, searchUsers, markChannelRead, typing, linkPreview,
+ * userStatus, searchUsers, markChannelRead, typing, downloadAttachment,
  * getCustomEmojis, toggleFavorite.
+ *
+ * Regra geral: nenhuma ação (ler, enviar, editar, excluir, reagir, fixar,
+ * baixar anexo) é permitida em canal do qual o usuário não participa —
+ * nem para quem tem chat.moderate, exceto em canais públicos.
  */
 class ApiController
 {
@@ -237,6 +241,11 @@ class ApiController
             $this->json(['success' => false, 'error' => 'Sem permissão para editar.'], 403);
             return;
         }
+        // Deixou o canal? Não edita mais o histórico dele.
+        if (!Channel::isMember((int) $message['channel_id'], $userId)) {
+            $this->json(['success' => false, 'error' => 'Você não é membro deste canal.'], 403);
+            return;
+        }
 
         // NOW() do banco: mesmo relógio de created_at (evita divergência de fuso)
         $this->db->prepare('UPDATE chat_messages SET content = ?, is_edited = 1, edited_at = NOW() WHERE id = ?')
@@ -262,11 +271,13 @@ class ApiController
             return;
         }
 
-        $isOwner = (int) $message['user_id'] === $userId;
+        $isOwner   = (int) $message['user_id'] === $userId;
+        $channelId = (int) $message['channel_id'];
+        $isMember  = Channel::isMember($channelId, $userId);
 
-        if (core_can('chat.moderate')) {
-            // Moderador exclui qualquer mensagem, sem janela de tempo.
-        } elseif ($isOwner && core_can('chat.delete')) {
+        if (core_can('chat.moderate') && $this->canModerateChannel($channelId, $isMember)) {
+            // Moderador exclui qualquer mensagem do canal, sem janela de tempo.
+        } elseif ($isOwner && $isMember && core_can('chat.delete')) {
             if ((time() - strtotime($message['created_at'])) > 60) {
                 $this->json(['success' => false, 'error' => 'Só é possível excluir mensagens até 1 minuto após o envio.'], 403);
                 return;
@@ -297,8 +308,14 @@ class ApiController
         $messageId = Sanitize::int($_POST['message_id'] ?? 0);
         $emoji     = mb_substr(Sanitize::string($_POST['emoji'] ?? ''), 0, 50);
 
-        if ($messageId <= 0 || $emoji === '' || preg_match('/[<>"\'\s]/u', $emoji)) {
-            $this->json(['success' => false, 'error' => 'Dados inválidos.'], 422);
+        // Só um emoji de verdade (poucos code points, sem letras/dígitos) ou
+        // um emoji personalizado :nome: — senão a reação vira texto livre.
+        $isCustom = (bool) preg_match('/^:[a-z0-9_]{1,48}:$/', $emoji);
+        $isEmoji  = $emoji !== '' && mb_strlen($emoji) <= 12
+                 && !preg_match('/[<>"\'\s A-Za-z0-9]/u', $emoji);
+
+        if ($messageId <= 0 || (!$isCustom && !$isEmoji)) {
+            $this->json(['success' => false, 'error' => 'Emoji inválido.'], 422);
             return;
         }
 
@@ -593,80 +610,61 @@ class ApiController
     }
 
     /* ==================================================================
-     *  Pré-visualização de links (cache 1h)
+     *  Download de anexos (somente membros do canal)
      * ================================================================*/
 
-    /** GET linkPreview — url */
-    public function linkPreview(): void
+    /**
+     * GET downloadAttachment — id
+     * Entrega o arquivo apenas a quem participa do canal da mensagem.
+     * Os arquivos ficam fora do alcance direto do servidor web
+     * (uploads/chat/attachments/.htaccess), então este é o único caminho.
+     */
+    public function downloadAttachment(): void
     {
         $this->requireAuth();
         $this->requirePerm('chat.view');
 
-        $url = Sanitize::string($_GET['url'] ?? '');
-        if (!$this->isSafeUrl($url)) {
-            $this->json(['title' => null]);
+        $id  = Sanitize::int($_GET['id'] ?? 0);
+        $att = $id > 0 ? Message::attachmentWithChannel($id) : null;
+
+        if (!$att || $att['message_deleted_at'] !== null) {
+            $this->json(['success' => false, 'error' => 'Anexo não encontrado.'], 404);
+            return;
+        }
+        if (!Channel::isMember((int) $att['channel_id'], Session::userId())) {
+            $this->json(['success' => false, 'error' => 'Acesso negado.'], 403);
             return;
         }
 
-        $cacheFile = STORAGE_PATH . '/cache/chat_link_' . md5($url) . '.json';
-        if (is_file($cacheFile) && (time() - filemtime($cacheFile)) < 3600) {
-            $this->json(json_decode((string) file_get_contents($cacheFile), true) ?: ['title' => null]);
+        $path = ltrim((string) $att['file_path'], '/');
+        if (!str_starts_with($path, 'uploads/chat/') || str_contains($path, '..')) {
+            $this->json(['success' => false, 'error' => 'Anexo inválido.'], 400);
+            return;
+        }
+        $full = BASE_PATH . '/' . $path;
+        if (!is_file($full)) {
+            $this->json(['success' => false, 'error' => 'Arquivo indisponível.'], 404);
             return;
         }
 
-        $result = ['title' => null, 'description' => null, 'image' => null, 'domain' => parse_url($url, PHP_URL_HOST)];
+        // Só tipos da lista branca; imagens abrem no navegador, o resto baixa.
+        $cfg     = (require CHAT_PATH . '/config/app.php')['upload'];
+        $mime    = (string) $att['file_type'];
+        $known   = isset($cfg['allowed_files'][$mime]);
+        $isImage = $known && Upload::isImage($mime);
+        $name    = preg_replace('/[\r\n"\\\\]+/', '_', (string) $att['original_name']) ?: 'anexo';
 
-        $ctx = stream_context_create([
-            'http' => ['timeout' => 3, 'user_agent' => 'Comunicacao-Chat/1.0', 'follow_location' => 1, 'max_redirects' => 2],
-        ]);
-        $html = @file_get_contents($url, false, $ctx, 0, 60000);
-        if ($html) {
-            if (preg_match('/<meta\s+(?:property|name)=["\']og:title["\']\s+content=["\']([^"\']+)["\']/i', $html, $m)) {
-                $result['title'] = html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
-            } elseif (preg_match('/<title[^>]*>([^<]+)<\/title>/i', $html, $m)) {
-                $result['title'] = html_entity_decode(trim($m[1]), ENT_QUOTES, 'UTF-8');
-            }
-            if (preg_match('/<meta\s+(?:property|name)=["\']og:description["\']\s+content=["\']([^"\']+)["\']/i', $html, $m)) {
-                $result['description'] = html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
-            }
-            if (preg_match('/<meta\s+(?:property|name)=["\']og:image["\']\s+content=["\'](https?:[^"\']+)["\']/i', $html, $m)) {
-                $result['image'] = $m[1];
-            }
+        while (ob_get_level() > 0) {
+            ob_end_clean();
         }
-
-        $dir = dirname($cacheFile);
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0755, true);
-        }
-        @file_put_contents($cacheFile, json_encode($result));
-
-        $this->json($result);
-    }
-
-    /** Só http(s) para hosts públicos (evita SSRF para a rede interna). */
-    private function isSafeUrl(string $url): bool
-    {
-        if ($url === '' || mb_strlen($url) > 2000 || !filter_var($url, FILTER_VALIDATE_URL)) {
-            return false;
-        }
-        $parts = parse_url($url);
-        if (!in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true) || empty($parts['host'])) {
-            return false;
-        }
-        $host = strtolower($parts['host']);
-        if ($host === 'localhost' || str_ends_with($host, '.local') || str_ends_with($host, '.internal')) {
-            return false;
-        }
-        $ips = filter_var($host, FILTER_VALIDATE_IP) ? [$host] : (array) @gethostbynamel($host);
-        if (!$ips) {
-            return false;
-        }
-        foreach ($ips as $ip) {
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
-                return false;
-            }
-        }
-        return true;
+        header('Content-Type: ' . ($known ? $mime : 'application/octet-stream'));
+        header('Content-Length: ' . filesize($full));
+        header('Content-Disposition: ' . ($isImage ? 'inline' : 'attachment')
+            . '; filename="' . $name . '"; filename*=UTF-8\'\'' . rawurlencode((string) $att['original_name']));
+        header('X-Content-Type-Options: nosniff');
+        header('Content-Security-Policy: default-src \'none\'; img-src \'self\'; style-src \'unsafe-inline\'');
+        header('Cache-Control: private, max-age=600');
+        readfile($full);
     }
 
     /* ==================================================================
@@ -686,6 +684,21 @@ class ApiController
     /* ==================================================================
      *  Helpers
      * ================================================================*/
+
+    /**
+     * Moderação em um canal: só vale onde o moderador participa ou, no
+     * máximo, em canais públicos (aos quais ele pode entrar de qualquer
+     * forma). Canais privados e mensagens diretas ficam fora do alcance
+     * de quem não é membro.
+     */
+    private function canModerateChannel(int $channelId, bool $isMember): bool
+    {
+        if ($isMember) {
+            return true;
+        }
+        $channel = Channel::find($channelId);
+        return $channel !== null && $channel['type'] === 'public';
+    }
 
     private function requireAuth(): void
     {
@@ -709,6 +722,15 @@ class ApiController
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->json(['success' => false, 'error' => 'Método não permitido.'], 405);
+            exit;
+        }
+        // Envio maior que post_max_size: o PHP descarta $_POST/$_FILES e o
+        // erro sairia como "CSRF inválido" — mensagem clara no lugar.
+        if (empty($_POST) && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+            $this->json([
+                'success' => false,
+                'error'   => 'Envio maior que o limite do servidor (' . ini_get('post_max_size') . '). Reduza o arquivo.',
+            ], 413);
             exit;
         }
         if (!Csrf::checkAjax()) {

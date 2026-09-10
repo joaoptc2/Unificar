@@ -21,10 +21,19 @@ $action = preg_replace('/[^a-z_]/', '', (string) ($_GET['action'] ?? $_POST['act
 $uid    = (int) core_user_id();
 $kinds  = plan_template_kinds();
 
+/** Tamanho máximo do JSON de um modelo (bruto e normalizado). */
+const PLAN_TPL_MAX_BYTES = 524288; // 512 KB
+/** Limites estruturais do JSON de diagrama. */
+const PLAN_TPL_MAX_NODES = 400;
+const PLAN_TPL_MAX_EDGES = 800;
+
 /** Valida e normaliza o JSON do modelo conforme o tipo. Retorna [json, erro]. */
 function plan_template_validate(string $kind, string $raw): array
 {
-    $data = json_decode($raw, true);
+    if (strlen($raw) > PLAN_TPL_MAX_BYTES) {
+        return ['', 'O conteúdo do modelo é grande demais (máximo de ' . (int) (PLAN_TPL_MAX_BYTES / 1024) . ' KB).'];
+    }
+    $data = json_decode($raw, true, 64);
     if (!is_array($data)) {
         return ['', 'O conteúdo do modelo não é um JSON válido.'];
     }
@@ -44,6 +53,22 @@ function plan_template_validate(string $kind, string $raw): array
         if (!isset($data['nodes']) || !is_array($data['nodes'])) {
             return ['', 'O JSON do diagrama deve conter a lista "nodes" (e opcionalmente "edges" e "canvas").'];
         }
+        if (count($data['nodes']) > PLAN_TPL_MAX_NODES) {
+            return ['', 'O diagrama tem ' . count($data['nodes']) . ' elementos — o máximo por modelo é ' . PLAN_TPL_MAX_NODES . '.'];
+        }
+        if (count((array) ($data['edges'] ?? [])) > PLAN_TPL_MAX_EDGES) {
+            return ['', 'O diagrama tem conexões demais — o máximo por modelo é ' . PLAN_TPL_MAX_EDGES . '.'];
+        }
+        foreach ($data['nodes'] as $i => $n) {
+            if (!is_array($n)) {
+                return ['', 'O elemento nº ' . ((int) $i + 1) . ' do diagrama é inválido.'];
+            }
+        }
+        foreach ((array) ($data['edges'] ?? []) as $i => $e) {
+            if (!is_array($e)) {
+                return ['', 'A conexão nº ' . ((int) $i + 1) . ' do diagrama é inválida.'];
+            }
+        }
         if (plan_diagram_lib() && function_exists('plan_diagram_validate')) {
             try {
                 $out = plan_diagram_validate($data);
@@ -55,7 +80,11 @@ function plan_template_validate(string $kind, string $raw): array
                     'nodes' => array_values($data['nodes']), 'edges' => array_values((array) ($data['edges'] ?? []))];
         }
     }
-    return [(string) json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ''];
+    $json = (string) json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (strlen($json) > PLAN_TPL_MAX_BYTES) {
+        return ['', 'O conteúdo do modelo é grande demais (máximo de ' . (int) (PLAN_TPL_MAX_BYTES / 1024) . ' KB).'];
+    }
+    return [$json, ''];
 }
 
 /** Resumo curto do conteúdo do modelo (para os cards). */
@@ -87,7 +116,8 @@ function plan_template_summary(array $t): string
             . ($b['labels'] ? ' · ' . core_e(implode(', ', $b['labels'])) : '') . '</div>';
         return $h;
     }
-    $svg = plan_diagram_thumb($data, ['thumb' => true, 'id' => 'tpl' . (int) $t['id']]);
+    $nodes = count((array) ($data['nodes'] ?? []));
+    $svg   = $nodes > 0 && $nodes <= 120 ? plan_diagram_thumb($data, ['thumb' => true, 'id' => 'tpl' . (int) $t['id']]) : null;
     if ($svg) {
         return '<div class="plan-tpl-thumb mb-1">' . $svg . '</div>';
     }
