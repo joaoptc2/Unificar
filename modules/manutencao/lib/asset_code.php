@@ -126,10 +126,31 @@ function man_asset_code_ensure(int $equipmentId): string
     throw new RuntimeException('Não foi possível atribuir código ao equipamento #' . $equipmentId);
 }
 
-/** Preenche o código de TODOS os equipamentos sem código. Devolve quantos foram preenchidos. */
-function man_asset_code_ensure_all(): int
+/** Limite padrão de códigos atribuídos por execução (ver man_asset_code_ensure_all). */
+if (!defined('MAN_ASSET_CODE_BATCH')) {
+    define('MAN_ASSET_CODE_BATCH', 200);
+}
+
+/**
+ * Preenche o código dos equipamentos que ainda não têm, NO MÁXIMO $limit
+ * por execução. Devolve quantos foram preenchidos.
+ *
+ * O limite é essencial: cada equipamento custa ~3 consultas (SELECT +
+ * geração + UPDATE) e a chamada acontece dentro do request da lista de
+ * equipamentos — sem teto, uma base grande (milhares de equipamentos sem
+ * código) faria a primeira abertura da tela demorar dezenas de segundos ou
+ * estourar o tempo limite. Com o teto, cada visita converte um lote e o
+ * cron do módulo (limite maior) termina o serviço em segundo plano.
+ *
+ * @param int $limit 0 ou negativo = sem limite (use apenas em CLI/cron).
+ */
+function man_asset_code_ensure_all(int $limit = MAN_ASSET_CODE_BATCH): int
 {
-    $ids = db()->query("SELECT id FROM man_equipment WHERE asset_code IS NULL OR asset_code = '' ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
+    $sql = "SELECT id FROM man_equipment WHERE asset_code IS NULL OR asset_code = '' ORDER BY id";
+    if ($limit > 0) {
+        $sql .= ' LIMIT ' . (int) $limit; // inteiro forçado — seguro na interpolação
+    }
+    $ids = db()->query($sql)->fetchAll(PDO::FETCH_COLUMN);
     $n = 0;
     foreach ($ids as $id) {
         try {
@@ -140,6 +161,43 @@ function man_asset_code_ensure_all(): int
         }
     }
     return $n;
+}
+
+/**
+ * Executa $insert($code) com um código novo e único, repetindo com outro
+ * código se o banco recusar por violação da chave única de asset_code
+ * (duas requisições simultâneas podem sortear o mesmo número entre a
+ * verificação de unicidade e o INSERT — a checagem prévia NÃO é atômica,
+ * só a chave única do banco é).
+ *
+ * @template T
+ * @param callable(string):T $insert
+ * @return T
+ */
+function man_asset_code_with_new_code(callable $insert, int $attempts = 5)
+{
+    $last = null;
+    for ($i = 0; $i < max(1, $attempts); $i++) {
+        $code = man_asset_code_generate();
+        try {
+            return $insert($code);
+        } catch (PDOException $ex) {
+            if (!man_asset_code_is_duplicate_error($ex)) {
+                throw $ex;
+            }
+            $last = $ex;
+        }
+    }
+    throw $last ?? new RuntimeException('Não foi possível gerar um código de identificação único.');
+}
+
+/** A exceção é uma violação de unicidade do asset_code (erro 1062)? */
+function man_asset_code_is_duplicate_error(Throwable $ex): bool
+{
+    if ($ex instanceof PDOException && (int) ($ex->errorInfo[1] ?? 0) === 1062) {
+        return stripos($ex->getMessage(), 'asset_code') !== false;
+    }
+    return false;
 }
 
 /** Quantos equipamentos ainda estão sem código (para decidir se vale chamar ensure_all). */

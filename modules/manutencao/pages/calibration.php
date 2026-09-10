@@ -19,7 +19,7 @@ $hid = hospitalId();
 // ============================================================
 // PROCESSAR POST
 // ============================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
+if (manPostIsValid()) {
     $act = $_POST['action'] ?? '';
 
     if ($act === 'add' || $act === 'edit') {

@@ -10,10 +10,14 @@
 /** Setores da unidade (com contagem de equipamentos vinculados). */
 function manSectorsWithCounts(int $hid): array
 {
+    // Contagem por JOIN agregado (uma varredura), não por subconsulta
+    // correlacionada executada uma vez por setor.
     $st = db()->prepare("
-        SELECT s.*, (SELECT COUNT(*) FROM man_equipment e WHERE e.sector_id = s.id) AS equipment_count
+        SELECT s.*, COUNT(e.id) AS equipment_count
         FROM man_sectors s
+        LEFT JOIN man_equipment e ON e.sector_id = s.id
         WHERE s.hospital_id = ?
+        GROUP BY s.id
         ORDER BY s.name
     ");
     $st->execute([$hid]);
@@ -24,9 +28,11 @@ function manSectorsWithCounts(int $hid): array
 function manCategoriesWithCounts(int $hid): array
 {
     $st = db()->prepare("
-        SELECT c.*, (SELECT COUNT(*) FROM man_equipment e WHERE e.category_id = c.id) AS equipment_count
+        SELECT c.*, COUNT(e.id) AS equipment_count
         FROM man_equipment_categories c
+        LEFT JOIN man_equipment e ON e.category_id = c.id
         WHERE c.hospital_id = ?
+        GROUP BY c.id
         ORDER BY c.name
     ");
     $st->execute([$hid]);

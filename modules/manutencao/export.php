@@ -37,7 +37,10 @@ function csvHeaders(string $filename): void
 
 function writeCsvRow($fh, array $row): void
 {
-    fputcsv($fh, $row, ';', '"');
+    // O 5º parâmetro ($escape) é obrigatório a partir do PHP 8.4 (omiti-lo
+    // emite Deprecated e o aviso corrompe o CSV). "" = sem escape de
+    // barra invertida, que é o comportamento correto de CSV (RFC 4180).
+    fputcsv($fh, $row, ';', '"', '');
 }
 
 function renderPrint(string $title, array $columns, array $rows): void

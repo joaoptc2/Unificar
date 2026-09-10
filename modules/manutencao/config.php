@@ -99,13 +99,6 @@ function manPagePermission(string $page): ?string
     return $map[$page] ?? null;
 }
 
-/** O usuário pode VER a página? (wrapper legado — delega a core_can()). */
-function canAccessModule(string $page): bool
-{
-    $perm = manPagePermission($page);
-    return $perm !== null && core_can($perm);
-}
-
 /** Interrompe com 403 quando o usuário não pode ver a página (via núcleo). */
 function requireModule(string $page): void
 {
@@ -125,12 +118,6 @@ function addOsHistory(int $osId, string $action, string $details = ''): void
         db()->prepare("INSERT INTO man_os_history (os_id, user_id, user_name, action, details) VALUES (?, ?, ?, ?, ?)")
             ->execute([$osId, $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? 'Sistema', $action, $details ?: null]);
     } catch (Exception $ex) {}
-}
-
-/** Usuário logado (linha da tabela GLOBAL users do núcleo). */
-function currentUser(): ?array
-{
-    return Core\Auth::user();
 }
 
 function hospitalId(): int
@@ -172,11 +159,6 @@ function e($str): string
     return htmlspecialchars((string) ($str ?? ''), ENT_QUOTES, 'UTF-8');
 }
 
-function sanitize($input): string
-{
-    return e(trim((string) $input));
-}
-
 /** Token CSRF único da plataforma (Core\Csrf). */
 function csrfToken(): string
 {
@@ -195,6 +177,48 @@ function verifyCsrf(): bool
     // Core\Csrf::validate() preserva a semântica booleana legada
     // (as pages usam "if ($_POST && verifyCsrf())").
     return Core\Csrf::validate();
+}
+
+/**
+ * Este request é um POST com token CSRF VÁLIDO?
+ *
+ * Substitui o padrão legado `if ($_SERVER['REQUEST_METHOD'] === 'POST' &&
+ * verifyCsrf())`, que descartava em SILÊNCIO qualquer POST sem token — o
+ * usuário via a página recarregada como se nada tivesse acontecido e não
+ * havia registro do descarte. Agora um POST sem token válido é REJEITADO
+ * com mensagem explícita, registro em auditoria e redirecionamento para a
+ * mesma tela (padrão POST → Redirect → GET, sem reenvio do formulário).
+ */
+function manPostIsValid(): bool
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+        return false;
+    }
+    if (verifyCsrf()) {
+        return true;
+    }
+    manRejectInvalidCsrf();
+}
+
+/** Rejeita o POST atual (token CSRF ausente/inválido) e encerra o request. */
+function manRejectInvalidCsrf(): never
+{
+    flash('error', 'Sessão expirada ou token de segurança inválido: o formulário não foi enviado. Recarregue a página e tente novamente.');
+    try {
+        auditLog('csrf_rejected', 'request', null, (string) ($_SERVER['REQUEST_URI'] ?? ''));
+    } catch (Throwable $ignored) {
+    }
+
+    // Volta para a MESMA tela em GET. Só aceita um caminho local: uma
+    // barra inicial seguida de algo que não seja outra barra (senão
+    // "//evil.com" viraria redirecionamento externo) e sem CR/LF (que
+    // permitiria injeção de cabeçalho).
+    $back = (string) ($_SERVER['REQUEST_URI'] ?? '');
+    if (!preg_match('#^/(?![/\\\\])[^\r\n]*$#', $back)) {
+        $back = MODULE_URL;
+    }
+    header('Location: ' . $back, true, 303);
+    exit;
 }
 
 function generateToken(int $length = 32): string
@@ -482,17 +506,39 @@ function calcNextDate(string $currentDate, string $frequency): string
     return $dt->format('Y-m-d');
 }
 
+/**
+ * Links de paginação com JANELA em torno da página atual (± 2), mais a
+ * primeira e a última. Antes eram impressos TODOS os números — em uma base
+ * grande (ex.: 4.000 equipamentos = 201 páginas) o rodapé virava uma parede
+ * de links, pesando a página e o HTML.
+ */
 function paginationLinks(int $currentPage, int $lastPage, string $baseUrl): string
 {
     if ($lastPage <= 1) {
         return '';
     }
-    $html = '<nav class="pagination">';
-    for ($i = 1; $i <= $lastPage; $i++) {
-        $sep  = strpos($baseUrl, '?') !== false ? '&' : '?';
-        $link = $baseUrl . $sep . 'pg=' . $i;
+    $currentPage = max(1, min($lastPage, $currentPage));
+    $sep = strpos($baseUrl, '?') !== false ? '&' : '?';
+
+    $pages = [1, $lastPage];
+    for ($i = $currentPage - 2; $i <= $currentPage + 2; $i++) {
+        if ($i >= 1 && $i <= $lastPage) {
+            $pages[] = $i;
+        }
+    }
+    $pages = array_values(array_unique($pages));
+    sort($pages);
+
+    $html = '<nav class="pagination" aria-label="Paginação">';
+    $prev = 0;
+    foreach ($pages as $i) {
+        if ($prev > 0 && $i > $prev + 1) {
+            $html .= '<span class="px-1 text-muted">…</span> ';
+        }
+        $link = e($baseUrl . $sep . 'pg=' . $i);
         $cls  = $i === $currentPage ? 'class="active"' : '';
         $html .= "<a href=\"{$link}\" {$cls}>{$i}</a> ";
+        $prev = $i;
     }
     $html .= '</nav>';
     return $html;

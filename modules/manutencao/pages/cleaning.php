@@ -22,7 +22,7 @@ $action = $_GET['action'] ?? 'list';
 // ============================================================
 // PROCESSAR POST
 // ============================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
+if (manPostIsValid()) {
     $act = $_POST['action'] ?? '';
 
     /* ----- Templates/agendamentos ---------------------------- */

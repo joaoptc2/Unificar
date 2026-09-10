@@ -30,7 +30,7 @@ if ($action === 'detail' || $action === 'view') {
 // ============================================================
 // PROCESSAR POST
 // ============================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
+if (manPostIsValid()) {
     $act = $_POST['action'] ?? '';
 
     if ($act === 'add' || $act === 'edit') {
@@ -67,11 +67,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
         try {
             if ($act === 'add') {
-                $assetCode = $assetInput !== '' ? $assetInput : man_asset_code_generate();
-                $qrToken   = generateToken(16);
-                db()->prepare("INSERT INTO man_equipment (hospital_id, sector_id, category_id, code, asset_code, name, manufacturer, model, serial_number, acquisition_date, criticality, status, description, qr_token, installation_date, useful_life_years) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                    ->execute([$hid, $sectorId, $categoryId, $code, $assetCode, $name, $manufacturer, $model, $serialNumber, $acqDate, $criticality, $status, $description, $qrToken, $installationDate, $usefulLifeYears]);
-                $newId = (int)db()->lastInsertId();
+                $qrToken = generateToken(16);
+                $insert  = function (string $assetCode) use ($hid, $sectorId, $categoryId, $code, $name, $manufacturer, $model, $serialNumber, $acqDate, $criticality, $status, $description, $qrToken, $installationDate, $usefulLifeYears): array {
+                    db()->prepare("INSERT INTO man_equipment (hospital_id, sector_id, category_id, code, asset_code, name, manufacturer, model, serial_number, acquisition_date, criticality, status, description, qr_token, installation_date, useful_life_years) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                        ->execute([$hid, $sectorId, $categoryId, $code, $assetCode, $name, $manufacturer, $model, $serialNumber, $acqDate, $criticality, $status, $description, $qrToken, $installationDate, $usefulLifeYears]);
+                    return [(int) db()->lastInsertId(), $assetCode];
+                };
+                // Código informado à mão: usa exatamente ele. Automático: gera
+                // com repetição se outra requisição levar o número primeiro.
+                if ($assetInput !== '') {
+                    [$newId, $assetCode] = $insert($assetInput);
+                } else {
+                    [$newId, $assetCode] = man_asset_code_with_new_code($insert);
+                }
                 auditLog('create', 'equipment', $newId, 'asset_code=' . $assetCode);
                 flash('success', 'Equipamento adicionado! Código de identificação: ' . man_asset_code_format($assetCode));
                 redirect(url('equipment', ['action' => 'history', 'id' => $newId]));
@@ -92,8 +100,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             auditLog('update', 'equipment', $id, $assetCode !== $current ? 'asset_code=' . $assetCode : '');
             flash('success', 'Equipamento atualizado!');
             redirect(url('equipment', ['action' => 'history', 'id' => $id]));
-        } catch (Exception $ex) {
-            flash('error', 'Erro: ' . $ex->getMessage());
+        } catch (Throwable $ex) {
+            // Detalhe técnico só no log — a tela não expõe mensagem do banco.
+            error_log('manutencao equipment ' . $act . ': ' . $ex->getMessage());
+            flash('error', 'Não foi possível salvar o equipamento. Tente novamente; se persistir, avise o suporte.');
             redirect(url('equipment'));
         }
     }
@@ -106,7 +116,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
                 ->execute([$deactivationReason ?: null, $id, $hid]);
             auditLog('deactivate', 'equipment', $id);
             flash('success', 'Equipamento desativado.');
-        } catch (\Throwable $ex) { flash('error', 'Erro ao desativar: ' . $ex->getMessage()); }
+        } catch (\Throwable $ex) {
+            error_log('manutencao equipment delete: ' . $ex->getMessage());
+            flash('error', 'Não foi possível desativar o equipamento. Tente novamente.');
+        }
         redirect(url('equipment'));
     }
 }
@@ -298,9 +311,13 @@ elseif ($action === 'edit'):
 // VIEW: LISTA
 // ============================================================
 else:
-    // Equipamentos antigos sem código de identificação recebem um agora
-    if (man_asset_code_missing_count() > 0) {
-        man_asset_code_ensure_all();
+    // Equipamentos antigos sem código de identificação recebem um agora —
+    // no MÁXIMO um lote por abertura da tela (MAN_ASSET_CODE_BATCH), para
+    // que uma base grande não trave o request. O cron do módulo conclui o
+    // restante; o aviso abaixo informa quantos ainda faltam.
+    $missingCodes = man_asset_code_missing_count();
+    if ($missingCodes > 0) {
+        $missingCodes -= man_asset_code_ensure_all();
     }
 
     $filter       = trim($_GET['filter'] ?? '');
@@ -341,6 +358,13 @@ else:
         <?php endif; ?>
     </div>
 </div>
+
+<?php if ($missingCodes > 0): ?>
+<div class="alert alert-info d-flex align-items-center gap-2">
+    <i class="bi bi-hourglass-split"></i>
+    <span>Ainda faltam <strong><?php echo (int) $missingCodes; ?></strong> equipamento(s) sem código de identificação. Eles recebem o código em lotes a cada abertura desta tela e pela rotina automática do módulo.</span>
+</div>
+<?php endif; ?>
 
 <div class="filter-panel">
     <form method="GET" class="row g-2 align-items-end">

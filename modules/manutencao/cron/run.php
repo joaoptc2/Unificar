@@ -256,9 +256,17 @@ try {
 $codesAssigned = 0;
 try {
     if (man_asset_code_missing_count() > 0) {
-        $codesAssigned = man_asset_code_ensure_all();
+        // Teto por execução também aqui: em uma base muito grande a rotina
+        // converte 5.000 por rodada em vez de segurar o cron indefinidamente
+        // (as execuções seguintes continuam de onde parou).
+        $codesAssigned = man_asset_code_ensure_all(5000);
     }
-    man_cron_log(sprintf('Códigos de identificação atribuídos: %d.', $codesAssigned));
+    $stillMissing = man_asset_code_missing_count();
+    man_cron_log(sprintf(
+        'Códigos de identificação atribuídos: %d.%s',
+        $codesAssigned,
+        $stillMissing > 0 ? sprintf(' Restam %d para a próxima execução.', $stillMissing) : ''
+    ));
 } catch (Throwable $ex) {
     man_cron_log('ERRO ao atribuir códigos de identificação: ' . $ex->getMessage());
 }
