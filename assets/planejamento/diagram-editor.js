@@ -66,6 +66,7 @@
         v = v.trim();
         if (!v || v.length > 500 || /[\x00-\x1f\x7f]/.test(v)) { return null; }
         if (v.replace(/\\/g, '/').slice(0, 2) === '//') { return null; } // protocolo relativo = externo
+        if (/["'<>`]/.test(v)) { return null; }
         if (/^(https?:\/\/|mailto:)/i.test(v) || /^(\/|\.\/|index\.php|\?)/.test(v)) { return v; }
         return null;
     }

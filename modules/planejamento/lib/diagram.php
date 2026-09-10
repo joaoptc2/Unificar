@@ -105,6 +105,10 @@ function plan_diagram_link(mixed $v): ?string
     if ($p === '//') {
         return null;
     }
+    // aspas e sinais de marcação não fazem parte de uma URL utilizável aqui
+    if (strpbrk($v, "\"'<>`") !== false) {
+        return null;
+    }
     if (preg_match('#^(https?://|mailto:)#i', $v) || preg_match('#^(/|\./|index\.php|\?)#', $v)) {
         return $v;
     }
