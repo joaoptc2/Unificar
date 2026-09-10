@@ -375,10 +375,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $icon    = $iconMap[$d['kind']] ?? 'bi-diagram-3';
         if ($tplId > 0) {
             core_require('templates.edit');
-            $tpl = DB::queryOne("SELECT id FROM plan_templates WHERE id = ? AND kind = 'diagram'", [$tplId]);
+            $tpl = DB::queryOne("SELECT id, description FROM plan_templates WHERE id = ? AND kind = 'diagram'", [$tplId]);
             if (!$tpl) {
                 Flash::set('error', 'Modelo não encontrado.');
                 core_redirect(pdg_url(['action' => 'edit', 'id' => $d['id']]));
+            }
+            if ($desc === '') {
+                $desc = (string) ($tpl['description'] ?? '');
             }
             DB::execute('UPDATE plan_templates SET name = ?, description = ?, data = ? WHERE id = ?', [$name, $desc !== '' ? $desc : null, $json, $tplId]);
             Audit::log('planejamento.template_update', 'plan_templates', (string) $tplId, ['name' => $name, 'from_diagram' => $d['id']]);

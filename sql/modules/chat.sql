@@ -1,6 +1,6 @@
 -- ================================================================
 -- MÓDULO COMUNICAÇÃO (chat) — Schema consolidado
--- Porte do TeamChat legado (schema.sql + migrations 001/002).
+-- Porte do chat interno legado (schema.sql + migrations 001/002).
 --
 -- Regras do porte:
 --   * Todas as tabelas do módulo com prefixo chat_.

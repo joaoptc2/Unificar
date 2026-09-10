@@ -254,9 +254,9 @@ function csv_response($filename, $headers, $rows) {
     echo "\xEF\xBB\xBF";
 
     $out = fopen('php://output', 'w');
-    fputcsv($out, $headers, ';');
+    fputcsv($out, $headers, ';', '"', '\\');
     foreach ($rows as $row) {
-        fputcsv($out, array_values($row), ';');
+        fputcsv($out, array_values($row), ';', '"', '\\');
     }
     fclose($out);
     exit;

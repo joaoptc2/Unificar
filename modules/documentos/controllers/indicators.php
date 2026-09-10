@@ -883,7 +883,7 @@ function _import_csv($indicator, $variables) {
     $handle = fopen($file, 'r');
     if (!$handle) return ['ok' => false, 'error' => 'Erro ao abrir arquivo.'];
 
-    $header = fgetcsv($handle, 0, ';');
+    $header = fgetcsv($handle, 0, ';', '"', '\\');
     if (!$header) { fclose($handle); return ['ok' => false, 'error' => 'Arquivo vazio ou formato inválido.']; }
 
     $header = array_map(function($h) { return trim(mb_strtolower($h)); }, $header);
@@ -907,7 +907,7 @@ function _import_csv($indicator, $variables) {
     if ($obs_col === false) $obs_col = array_search('observations', $header);
 
     $imported = 0; $errors = []; $line = 1;
-    while (($row = fgetcsv($handle, 0, ';')) !== false) {
+    while (($row = fgetcsv($handle, 0, ';', '"', '\\')) !== false) {
         $line++;
         $ref_date = trim($row[$date_col] ?? '');
 

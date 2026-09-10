@@ -52,7 +52,7 @@ if ($page === 'logout') {
 // ── 5. Mapa de rotas ────────────────────────────────────────────────────────
 $routes = [
     ''              => ['dashboard',     'index'],
-    'dashboard'     => ['dashboard',     'index'],
+    'dashboard'     => ['dashboard',     $action],
     'documents'     => ['documents',     $action],
     'indicators'    => ['indicators',    $action],
     'notifications' => ['notifications', $action],
