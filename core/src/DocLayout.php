@@ -142,16 +142,13 @@ final class DocLayout
     // ------------------------------------------------------------------
 
     /**
-     * Sanitização do HTML do editor: remove scripts, iframes, objetos,
-     * formulários e handlers on* (o conteúdo pode ir para páginas públicas).
+     * Sanitização do HTML do editor (conteúdo, capa, cabeçalho/rodapé de
+     * layouts): lista de permissão por DOM — ver Core\HtmlSanitizer.
+     * O conteúdo pode ir para páginas públicas e para a impressão.
      */
     public static function sanitizeHtml(string $html): string
     {
-        $html = preg_replace('#<\s*(script|iframe|object|embed|form|style)\b[^>]*>.*?<\s*/\s*\1\s*>#is', '', $html) ?? $html;
-        $html = preg_replace('#<\s*(script|iframe|object|embed|form)\b[^>]*/?\s*>#i', '', $html) ?? $html;
-        $html = preg_replace('/\son\w+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $html) ?? $html;
-        $html = preg_replace('/\s(href|src)\s*=\s*(["\']?)\s*javascript:[^"\'>\s]*\2/i', ' $1="#"', $html) ?? $html;
-        return $html;
+        return HtmlSanitizer::clean($html);
     }
 
     /** Substitui os placeholders do cabeçalho/rodapé/capa. */

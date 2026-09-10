@@ -40,18 +40,8 @@ function intra_active_layouts(?string $kind = null): array
 
 function intra_sanitize_html(string $html): string
 {
-    // Sanitizador por lista de permissão (DOM) compartilhado com o módulo
-    // Documentos — arquivo sem dependências; cai para o filtro do núcleo se
-    // o módulo não estiver instalado.
-    if (!function_exists('doc_sanitize_html')) {
-        $shared = dirname(__DIR__) . '/documentos/includes/html_sanitizer.php';
-        if (is_file($shared)) {
-            require_once $shared;
-        }
-    }
-    return function_exists('doc_sanitize_html')
-        ? (string) doc_sanitize_html($html)
-        : Core\DocLayout::sanitizeHtml($html);
+    // Sanitizador por lista de permissão (DOM) do núcleo — Core\HtmlSanitizer.
+    return Core\DocLayout::sanitizeHtml($html);
 }
 
 function intra_placeholders(string $html, array $layout, array $meta): string
