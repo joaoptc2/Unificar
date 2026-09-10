@@ -486,7 +486,7 @@ if ($action === 'view') {
         'content' => (string) ob_get_clean(),
         'active'  => 'boards',
         'fluid'   => true,
-        'scripts' => '<script src="' . core_asset('planejamento/boards.js') . '?v=1"></script>',
+        'scripts' => '<script src="' . core_asset('planejamento/boards.js') . '"></script>',
     ]);
     exit;
 }

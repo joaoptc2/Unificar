@@ -337,7 +337,7 @@ if ($action === 'create' || $action === 'edit') {
         'title'   => $tpl ? 'Editar modelo' : 'Novo modelo',
         'content' => (string) ob_get_clean(),
         'active'  => 'templates',
-        'scripts' => '<script src="' . core_asset('planejamento/plans.js') . '?v=2"></script>',
+        'scripts' => '<script src="' . core_asset('planejamento/plans.js') . '"></script>',
     ]);
     exit;
 }

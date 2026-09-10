@@ -610,7 +610,7 @@ if ($action === 'view') {
         'content' => (string) ob_get_clean(),
         'active'  => 'plans',
         'fluid'   => true,
-        'scripts' => '<script src="' . core_asset('planejamento/plans.js') . '?v=1"></script>',
+        'scripts' => '<script src="' . core_asset('planejamento/plans.js') . '"></script>',
     ]);
     exit;
 }

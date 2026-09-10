@@ -41,7 +41,8 @@ function asset($path) {
             break;
         }
     }
-    return core_asset('documentos/' . $path) . '?v=' . ASSETS_VERSION;
+    // core_asset() já anexa a marca de versão (data do arquivo).
+    return core_asset('documentos/' . $path);
 }
 
 // ── Views ───────────────────────────────────────────────────────────────────

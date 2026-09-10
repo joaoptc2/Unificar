@@ -43,7 +43,7 @@ function pdg_url(array $params = []): string
 
 function pdg_page(array $opts): void
 {
-    $opts['head']   = '<link rel="stylesheet" href="' . core_asset('planejamento/diagram-editor.css') . '?v=1">' . ($opts['head'] ?? '');
+    $opts['head']   = '<link rel="stylesheet" href="' . core_asset('planejamento/diagram-editor.css') . '">' . ($opts['head'] ?? '');
     $opts['active'] = $opts['active'] ?? 'diagrams';
     if (function_exists('plan_page')) {
         plan_page($opts);
@@ -668,7 +668,7 @@ if ($action === 'edit') {
         'title'   => $d['title'],
         'content' => (string) ob_get_clean(),
         'fluid'   => true,
-        'head'    => '<script src="' . core_asset('planejamento/diagram-editor.js') . '?v=1"></script>',
+        'head'    => '<script src="' . core_asset('planejamento/diagram-editor.js') . '"></script>',
     ]);
     exit;
 }
@@ -730,7 +730,7 @@ if ($action === 'view') {
     pdg_page([
         'title'   => $d['title'],
         'content' => (string) ob_get_clean(),
-        'head'    => core_can('diagrams.export') ? '<script src="' . core_asset('planejamento/diagram-editor.js') . '?v=1"></script>' : '',
+        'head'    => core_can('diagrams.export') ? '<script src="' . core_asset('planejamento/diagram-editor.js') . '"></script>' : '',
     ]);
     exit;
 }
