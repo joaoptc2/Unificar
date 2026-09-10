@@ -114,6 +114,7 @@ $published = !empty($item['published_at']);
                         <label class="form-check-label" for="showPortal"><i class="bi bi-person-badge me-1"></i>Exibir na Minha Área (portal)</label>
                     </div>
                     <div class="form-check form-switch mb-2">
+                        <?php if (!empty($item['emailed_at'])): ?><input type="hidden" name="send_email" value="<?= (int)$item['send_email'] ?>"><?php endif; ?>
                         <input class="form-check-input" type="checkbox" name="send_email" value="1" id="sendEmail" <?= !empty($item['send_email']) ? 'checked' : '' ?> <?= !empty($item['emailed_at']) ? 'disabled' : '' ?>>
                         <label class="form-check-label" for="sendEmail"><i class="bi bi-envelope me-1"></i>Enviar por e-mail ao publicar</label>
                         <?php if (!empty($item['emailed_at'])): ?>

@@ -7,13 +7,18 @@ class Announcement extends Model
     protected static string $table = 'rh_announcements';
     protected static array $fillable = [
         'title', 'summary', 'body', 'body_html', 'type', 'department_id', 'published_at', 'expires_at', 'pinned',
-        'image_path', 'attachment_path', 'attachment_name', 'show_in_portal', 'send_email', 'emailed_at', 'created_by',
+        'image_path', 'attachment_path', 'attachment_name', 'show_in_portal', 'send_email', 'emailed_at', 'notified_at', 'created_by',
     ];
 
     public const TYPES = ['informativo' => 'Informativo', 'urgente' => 'Urgente', 'celebracao' => 'Celebração'];
 
-    /** Comunicados publicados e vigentes (listagem do RH), com flag de leitura do usuário — 1 consulta. */
-    public static function published(?int $deptId = null, int $userId = 0, bool $includeDrafts = false): array
+    /**
+     * Listagem do módulo com flag de leitura do usuário — 1 consulta.
+     *  - $includeDrafts=true (quem gerencia): tudo, inclusive rascunhos/expirados.
+     *  - senão: publicados e vigentes; com $deptId (ou $restrict) só os gerais
+     *    ou do departamento informado e marcados "exibir no portal".
+     */
+    public static function published(?int $deptId = null, int $userId = 0, bool $includeDrafts = false, bool $restrict = false): array
     {
         $sql = "SELECT a.*, u.name AS author_name, d.name AS department_name,
                        (r.user_id IS NOT NULL) AS is_read,
@@ -27,9 +32,12 @@ class Announcement extends Model
         if (!$includeDrafts) {
             $conds[] = 'a.published_at IS NOT NULL AND a.published_at <= NOW() AND (a.expires_at IS NULL OR a.expires_at >= CURDATE())';
         }
-        if ($deptId) {
+        if ($deptId || $restrict) {
             $conds[] = '(a.department_id IS NULL OR a.department_id = ?)';
-            $params[] = $deptId;
+            $params[] = (int)$deptId;
+        }
+        if ($restrict) {
+            $conds[] = 'a.show_in_portal = 1';
         }
         if ($conds) {
             $sql .= ' WHERE ' . implode(' AND ', $conds);
@@ -64,16 +72,20 @@ class Announcement extends Model
         return empty($a['department_id']) || (int)$a['department_id'] === (int)$deptId;
     }
 
+    /**
+     * O usuário pode LER este comunicado? Quem gerencia (create/edit) lê
+     * tudo; os demais só o que está publicado, vigente, marcado para o
+     * portal e dirigido ao seu departamento (ou a todos).
+     */
+    public static function readableBy(array $a, int $userId): bool
+    {
+        if (core_can_any(['announcements.create', 'announcements.edit'])) return true;
+        return (int)($a['show_in_portal'] ?? 0) === 1 && self::visibleTo($a, EmployeeAccess::departmentOf($userId));
+    }
+
     public static function markRead(int $announcementId, int $userId): void
     {
         self::db()->prepare('INSERT IGNORE INTO rh_announcement_reads (announcement_id, user_id) VALUES (?, ?)')->execute([$announcementId, $userId]);
-    }
-
-    public static function isRead(int $announcementId, int $userId): bool
-    {
-        $stmt = self::db()->prepare('SELECT 1 FROM rh_announcement_reads WHERE announcement_id = ? AND user_id = ?');
-        $stmt->execute([$announcementId, $userId]);
-        return (bool)$stmt->fetchColumn();
     }
 
     /**
@@ -105,8 +117,10 @@ class Announcement extends Model
     }
 
     /**
-     * Ao publicar: notificação in-app para o público-alvo e, se send_email e
-     * ainda não enviado, enfileira o e-mail (Core\MailQueue) e grava emailed_at.
+     * Ao publicar: notificação in-app para o público-alvo (uma única vez —
+     * grava notified_at) e, se send_email e ainda não enviado, enfileira o
+     * e-mail (Core\MailQueue) e grava emailed_at. Edições posteriores não
+     * reenviam nada.
      * @return array{notified:int, queued:int}
      */
     public static function dispatch(int $id): array
@@ -118,7 +132,7 @@ class Announcement extends Model
         }
         $audience = self::audience($a['department_id'] ? (int)$a['department_id'] : null);
 
-        if ((int)$a['show_in_portal'] === 1) {
+        if ((int)$a['show_in_portal'] === 1 && empty($a['notified_at'])) {
             foreach ($audience as $r) {
                 if (!empty($r['user_id'])) {
                     Core\Notifications::add((int)$r['user_id'], 'Comunicado: ' . $a['title'],
@@ -127,6 +141,7 @@ class Announcement extends Model
                     $stats['notified']++;
                 }
             }
+            self::db()->prepare('UPDATE rh_announcements SET notified_at = NOW() WHERE id = ?')->execute([$id]);
         }
 
         if ((int)$a['send_email'] === 1 && empty($a['emailed_at'])) {

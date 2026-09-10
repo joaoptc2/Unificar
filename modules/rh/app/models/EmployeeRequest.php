@@ -12,6 +12,14 @@ class EmployeeRequest extends Model
         'outro'               => 'Outro',
     ];
 
+    /** Rótulos dos status (pt-BR). */
+    public const STATUS_LABELS = [
+        'pendente'   => 'Pendente',
+        'em_analise' => 'Em análise',
+        'aprovada'   => 'Aprovada',
+        'rejeitada'  => 'Rejeitada',
+    ];
+
     public static function pendingCount(): int
     {
         return self::count("status = 'pendente'");

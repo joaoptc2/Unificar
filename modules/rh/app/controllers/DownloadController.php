@@ -1,7 +1,8 @@
 <?php
 /**
  * DownloadController — serve arquivos privados (documentos, atestados, CVs,
- * arquivos de vencimentos) armazenados em `storage/uploads/`, fora do webroot.
+ * arquivos de vencimentos, anexos de comunicados) armazenados em
+ * `storage/uploads/rh/` (fora da área pública; ver Upload::privateDir()).
  *
  * Requer autenticação e valida a permissão baseada no tipo de recurso.
  * Rota: index.php?m=rh&page=files&action=get&type=<tipo>&id=<id>
@@ -75,10 +76,12 @@ class DownloadController
 
             case 'announcement': // anexo de comunicado
                 core_require('announcements.view');
-                $stmt = $this->db->prepare('SELECT attachment_path, attachment_name, published_at FROM rh_announcements WHERE id = ?');
+                $stmt = $this->db->prepare('SELECT attachment_path, attachment_name, published_at, expires_at, department_id, show_in_portal FROM rh_announcements WHERE id = ?');
                 $stmt->execute([$id]);
                 $row = $stmt->fetch();
-                if ($row && empty($row['published_at']) && !core_can_any(['announcements.create', 'announcements.edit'])) {
+                // Mesma regra da leitura: quem não gerencia só baixa o que pode ler
+                // (publicado, vigente, no portal e do seu departamento/geral).
+                if ($row && !Announcement::readableBy($row, (int)Session::userId())) {
                     $this->abort(403, 'Sem permissão.');
                 }
                 return $row ? [$row['attachment_path'], $row['attachment_name']] : [null, null];

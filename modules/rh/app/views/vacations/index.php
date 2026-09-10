@@ -1,5 +1,5 @@
 <div class="page-header">
-    <h1><i class="bi bi-sun me-2"></i>Ferias</h1>
+    <h1><i class="bi bi-sun me-2"></i>Férias</h1>
     <div class="d-flex gap-2">
         <?php if (core_can('vacations.create')): ?>
             <a href="index.php?m=rh&page=vacations&action=create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nova</a>
@@ -35,7 +35,7 @@
                         <td><?= Sanitize::formatDate($v['start_date']) ?></td>
                         <td><?= Sanitize::formatDate($v['end_date']) ?></td>
                         <td><?= (int)$v['days'] ?></td>
-                        <td><span class="badge <?= match($v['status']) { 'aprovada','em_gozo','concluida' => 'bg-success', 'rejeitada' => 'bg-danger', 'solicitada' => 'bg-warning text-dark', default => 'bg-secondary' } ?>"><?= ucfirst($v['status']) ?></span></td>
+                        <td><span class="badge <?= match($v['status']) { 'aprovada','em_gozo','concluida' => 'bg-success', 'rejeitada' => 'bg-danger', 'solicitada' => 'bg-warning text-dark', default => 'bg-secondary' } ?>"><?= Sanitize::e(Vacation::STATUS_LABELS[$v['status']] ?? ucfirst(str_replace('_', ' ', $v['status']))) ?></span></td>
                         <td class="text-end">
                             <?php if (core_can('vacations.edit') && in_array($v['status'], ['planejada','solicitada'])): ?>
                                 <a href="index.php?m=rh&page=vacations&action=edit&id=<?= $v['id'] ?>" class="btn btn-outline-warning btn-action"><i class="bi bi-pencil"></i></a>

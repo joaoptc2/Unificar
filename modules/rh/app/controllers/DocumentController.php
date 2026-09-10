@@ -58,7 +58,7 @@ class DocumentController
 
         $upload = Upload::handle('file', 'documents');
         if (!$upload['success']) {
-            Session::flash('error', 'Erro no upload: ' . $upload['error']);
+            Session::flash('error', 'Erro no upload: ' . Sanitize::e($upload['error']));
             header('Location: index.php?m=rh&page=documents&action=create&employee_id=' . $employeeId);
             exit;
         }

@@ -4,7 +4,7 @@
  *
  *   page=requests                      lista (requests.view; quem não responde vê só as próprias)
  *   page=requests&action=respond       POST aprovar/rejeitar (requests.respond) — férias sincronizam rh_vacations
- *   page=requests&action=create|store  nova solicitação pelo portal (requests.create)
+ *   page=requests&action=store         POST de nova solicitação (formulário na aba Solicitações da Minha Área; requests.create)
  */
 class RequestController
 {
@@ -66,23 +66,17 @@ class RequestController
                 $userId = (int)($st->fetchColumn() ?: 0);
             }
             if ($userId) {
-                Core\Notifications::add($userId, 'Solicitação ' . str_replace('_', ' ', $status) . ': ' . $req['subject'],
+                Core\Notifications::add($userId, 'Solicitação ' . mb_strtolower(EmployeeRequest::STATUS_LABELS[$status] ?? $status) . ': ' . $req['subject'],
                     $response !== '' ? $response : 'O RH respondeu à sua solicitação.',
                     'index.php?m=rh&page=my#solicitacoes', $status === 'aprovada' ? 'success' : ($status === 'rejeitada' ? 'warning' : 'info'), 'rh');
             }
         }
         AuditLog::log('respond', 'requests', $id, null, ['status' => $status]);
-        Session::flash('success', 'Solicitação ' . str_replace('_', ' ', $status) . '.');
+        Session::flash('success', 'Solicitação ' . mb_strtolower(EmployeeRequest::STATUS_LABELS[$status] ?? $status) . '.');
         header('Location: index.php?m=rh&page=requests'); exit;
     }
 
-    // Portal do funcionário
-    public function create(): void
-    {
-        core_require('requests.create');
-        View::renderRaw('requests/create', ['pageTitle' => 'Nova Solicitação', 'hospitalName' => Core\Settings::get('org_name', 'Portal')]);
-    }
-
+    /** Portal do funcionário — o formulário fica na aba Solicitações da Minha Área. */
     public function store(): void
     {
         core_require('requests.create'); Csrf::check();

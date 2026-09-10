@@ -18,7 +18,7 @@ class Survey extends Model
     protected static string $table = 'rh_surveys';
     protected static array $fillable = [
         'title', 'description', 'type', 'anonymous', 'department_id', 'show_in_portal', 'send_email', 'emailed_at',
-        'status', 'starts_at', 'ends_at', 'created_by',
+        'notified_at', 'status', 'starts_at', 'ends_at', 'created_by',
     ];
 
     public const QUESTION_TYPES = [
@@ -85,14 +85,15 @@ class Survey extends Model
         return $order;
     }
 
-    /** Listagem com contagem de participações — 1 consulta. */
-    public static function listAll(): array
+    /** Listagem com contagem de participações — 1 consulta. $includeDrafts=false oculta rascunhos. */
+    public static function listAll(bool $includeDrafts = true): array
     {
         return self::db()->query(
             "SELECT s.*, d.name AS department_name,
                     (SELECT COUNT(*) FROM rh_survey_participations p WHERE p.survey_id = s.id) AS participants,
                     (SELECT COUNT(*) FROM rh_survey_questions q WHERE q.survey_id = s.id) AS question_count
              FROM rh_surveys s LEFT JOIN rh_departments d ON d.id = s.department_id
+             " . ($includeDrafts ? '' : "WHERE s.status <> 'rascunho'") . "
              ORDER BY FIELD(s.status,'ativa','rascunho','encerrada'), s.created_at DESC"
         )->fetchAll();
     }
@@ -144,12 +145,6 @@ class Survey extends Model
         $stmt = self::db()->prepare('SELECT COUNT(*) FROM rh_survey_participations WHERE survey_id = ?');
         $stmt->execute([$surveyId]);
         return (int)$stmt->fetchColumn();
-    }
-
-    /** Compat: número de respondentes. */
-    public static function responseCount(int $surveyId): int
-    {
-        return self::participantCount($surveyId);
     }
 
     /** Tamanho do público-alvo (funcionários ativos com usuário vinculado). */
@@ -228,8 +223,10 @@ class Survey extends Model
     }
 
     /**
-     * Ao ativar: notificação in-app ao público-alvo e, se send_email e ainda
-     * não enviado, e-mail com link direto para responder.
+     * Ao ativar: notificação in-app ao público-alvo (uma única vez — grava
+     * notified_at) e, se send_email e ainda não enviado, e-mail com link
+     * direto para responder (grava emailed_at). Edições posteriores não
+     * reenviam nada.
      * @return array{notified:int, queued:int}
      */
     public static function dispatch(int $id): array
@@ -240,7 +237,7 @@ class Survey extends Model
         $audience = Announcement::audience($s['department_id'] ? (int)$s['department_id'] : null);
         $link = 'index.php?m=rh&page=my&action=survey&id=' . $id;
 
-        if ((int)$s['show_in_portal'] === 1) {
+        if ((int)$s['show_in_portal'] === 1 && empty($s['notified_at'])) {
             foreach ($audience as $r) {
                 if (!empty($r['user_id'])) {
                     Core\Notifications::add((int)$r['user_id'], 'Nova pesquisa: ' . $s['title'],
@@ -248,6 +245,7 @@ class Survey extends Model
                     $stats['notified']++;
                 }
             }
+            self::db()->prepare('UPDATE rh_surveys SET notified_at = NOW() WHERE id = ?')->execute([$id]);
         }
         if ((int)$s['send_email'] === 1 && empty($s['emailed_at'])) {
             $recipients = [];

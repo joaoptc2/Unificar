@@ -4,6 +4,16 @@ class Vacation extends Model
     protected static string $table = 'rh_vacations';
     protected static array $fillable = ['employee_id','period_start','period_end','start_date','end_date','days','sold_days','installment','status','approved_by','approved_at','notes','created_by'];
 
+    /** Rótulos dos status (pt-BR). */
+    public const STATUS_LABELS = [
+        'planejada'  => 'Planejada',
+        'solicitada' => 'Solicitada',
+        'aprovada'   => 'Aprovada',
+        'rejeitada'  => 'Rejeitada',
+        'em_gozo'    => 'Em gozo',
+        'concluida'  => 'Concluída',
+    ];
+
     public static function forEmployee(int $empId): array
     {
         $stmt = self::db()->prepare(

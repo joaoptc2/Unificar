@@ -1,4 +1,5 @@
-<?php /** Lista de pesquisas. Variáveis: $surveys (com participants, question_count, department_name). */ ?>
+<?php /** Lista de pesquisas. Variáveis: $surveys (com participants, question_count, department_name), $manage (vê resultados/rascunhos). */
+$manage = !empty($manage); ?>
 <div class="page-header">
     <h1><i class="bi bi-clipboard-data me-2"></i>Pesquisas</h1>
     <div class="d-flex gap-2">
@@ -26,7 +27,8 @@
             <?php if ($s['starts_at'] || $s['ends_at']): ?><small class="text-muted d-block"><?= Sanitize::formatDate($s['starts_at']) ?> – <?= Sanitize::formatDate($s['ends_at']) ?></small><?php endif; ?>
         </div>
         <div class="card-footer bg-transparent d-flex gap-1">
-            <a href="index.php?m=rh&page=surveys&action=show&id=<?= (int)$s['id'] ?>" class="btn btn-outline-primary btn-sm flex-grow-1"><i class="bi bi-bar-chart me-1"></i>Resultados</a>
+            <?php if ($manage): ?><a href="index.php?m=rh&page=surveys&action=show&id=<?= (int)$s['id'] ?>" class="btn btn-outline-primary btn-sm flex-grow-1"><i class="bi bi-bar-chart me-1"></i>Resultados</a>
+            <?php else: ?><span class="text-muted small flex-grow-1 align-self-center"><?= $open ? 'Aberta para respostas' : 'Encerrada' ?></span><?php endif; ?>
             <?php if ($open && core_can('my.view')): ?><a href="index.php?m=rh&page=my&action=survey&id=<?= (int)$s['id'] ?>" class="btn btn-primary btn-sm" title="Responder pelo portal"><i class="bi bi-pencil-square"></i></a><?php endif; ?>
             <?php if (core_can('surveys.edit')): ?><a href="index.php?m=rh&page=surveys&action=edit&id=<?= (int)$s['id'] ?>" class="btn btn-outline-warning btn-sm" title="Editar"><i class="bi bi-pencil"></i></a><?php endif; ?>
             <?php if (core_can('surveys.delete')): ?>

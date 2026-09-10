@@ -72,7 +72,22 @@ class Lgpd
                  WHERE employee_id = ?"
             )->execute([$employeeId]);
 
+            // Usuário global vinculado (login = CPF, nome, e-mail): desativa e
+            // anonimiza — o ex-funcionário não pode continuar entrando no portal
+            // (administradores globais só são desativados manualmente).
+            $userStmt = $db->prepare('SELECT u.id, u.is_admin FROM rh_user_profile p JOIN users u ON u.id = p.user_id WHERE p.employee_id = ?');
+            $userStmt->execute([$employeeId]);
+            $user = $userStmt->fetch();
+            if ($user && empty($user['is_admin'])) {
+                $db->prepare(
+                    'UPDATE users SET active = 0, name = ?, username = ?, email = ?, force_password_change = 1 WHERE id = ?'
+                )->execute([$placeholderName, 'anon_' . $employeeId . '_' . (int)$user['id'], 'anon_' . $employeeId . '_' . (int)$user['id'] . EmployeeAccess::NO_EMAIL_DOMAIN, (int)$user['id']]);
+            }
+
             $db->commit();
+            if ($user && empty($user['is_admin'])) {
+                Core\Audit::log('employee_access.anonymize', 'users', (string)$user['id'], ['employee_id' => $employeeId], null, 'rh');
+            }
             AuditLog::log('lgpd_anonymize', 'employees', $employeeId, $emp);
             return true;
         } catch (\Throwable $e) {

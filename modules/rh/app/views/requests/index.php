@@ -9,7 +9,7 @@ $canRespond = core_can('requests.respond');
     <form class="row g-2 align-items-end"><input type="hidden" name="m" value="rh"><input type="hidden" name="page" value="requests">
         <div class="col-md-3">
             <label class="form-label">Status</label>
-            <select name="status" class="form-select form-select-sm"><option value="">Todos</option><?php foreach (['pendente','em_analise','aprovada','rejeitada'] as $s): ?><option value="<?= $s ?>" <?= ($status ?? '') === $s ? 'selected' : '' ?>><?= ucfirst(str_replace('_', ' ', $s)) ?></option><?php endforeach; ?></select>
+            <select name="status" class="form-select form-select-sm"><option value="">Todos</option><?php foreach (EmployeeRequest::STATUS_LABELS as $s => $lbl): ?><option value="<?= $s ?>" <?= ($status ?? '') === $s ? 'selected' : '' ?>><?= Sanitize::e($lbl) ?></option><?php endforeach; ?></select>
         </div>
         <div class="col-md-3">
             <label class="form-label">Tipo</label>
@@ -42,7 +42,7 @@ $canRespond = core_can('requests.respond');
             <small class="text-primary d-block"><i class="bi bi-reply me-1"></i><?= Sanitize::e($r['response']) ?><?= $r['responded_by_name'] ? ' — ' . Sanitize::e($r['responded_by_name']) : '' ?></small>
         <?php endif; ?>
     </td>
-    <td><span class="badge <?= match($r['status']) { 'aprovada' => 'bg-success', 'rejeitada' => 'bg-danger', 'em_analise' => 'bg-info text-dark', default => 'bg-warning text-dark' } ?>"><?= ucfirst(str_replace('_', ' ', $r['status'])) ?></span>
+    <td><span class="badge <?= match($r['status']) { 'aprovada' => 'bg-success', 'rejeitada' => 'bg-danger', 'em_analise' => 'bg-info text-dark', default => 'bg-warning text-dark' } ?>"><?= Sanitize::e(EmployeeRequest::STATUS_LABELS[$r['status']] ?? ucfirst(str_replace('_', ' ', $r['status']))) ?></span>
         <?php if ($r['responded_at']): ?><small class="text-muted d-block"><?= Sanitize::formatDateTime($r['responded_at']) ?></small><?php endif; ?></td>
     <td class="small text-muted text-nowrap"><?= Sanitize::formatDateTime($r['created_at']) ?></td>
     <td class="text-end text-nowrap">

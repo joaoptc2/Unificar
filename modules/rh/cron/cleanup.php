@@ -7,7 +7,7 @@
  *  - notificações do módulo (module='rh') já lidas e antigas;
  *  - flags de notificação de vencimentos renovados;
  *  - rate-limit do formulário público (rh_public_submissions);
- *  - arquivos órfãos em /uploads/rh/;
+ *  - arquivos órfãos em /storage/uploads/rh/ (privados) e /uploads/rh/ (legado);
  *  - cache em arquivo expirado.
  *
  * login_attempts / password_resets / audit_log são do núcleo — a limpeza
@@ -15,13 +15,14 @@
  */
 
 /**
- * Remove arquivos em /uploads/rh/{sub}/ que não são referenciados no banco.
- * Arquivos com menos de 24h são preservados (margem para uploads pendentes).
+ * Remove arquivos em {storage/uploads/rh | uploads/rh}/{sub}/ que não são
+ * referenciados no banco. Arquivos com menos de 24h são preservados (margem
+ * para uploads pendentes).
  */
 function rh_cleanup_orphan_files(PDO $db): int
 {
     $count = 0;
-    $storageBase = rtrim(Upload::baseDir(), '/') . '/';
+    $roots = array_unique([rtrim(Upload::privateDir(), '/') . '/', rtrim(Upload::baseDir(), '/') . '/']);
     $map = [
         'documents'    => ['table' => 'rh_employee_documents',   'col' => 'file_path'],
         'certificates' => ['table' => 'rh_medical_certificates', 'col' => 'file_path'],
@@ -33,9 +34,6 @@ function rh_cleanup_orphan_files(PDO $db): int
     $expirationPaths = array_map(fn($r) => basename($r['file_path']), $expStmt->fetchAll());
 
     foreach ($map as $sub => $cfg) {
-        $dir = $storageBase . $sub . '/';
-        if (!is_dir($dir)) continue;
-
         $referenced = [];
         $stmt = $db->query("SELECT {$cfg['col']} FROM {$cfg['table']} WHERE {$cfg['col']} IS NOT NULL");
         foreach ($stmt->fetchAll() as $row) {
@@ -44,14 +42,18 @@ function rh_cleanup_orphan_files(PDO $db): int
         }
         foreach ($expirationPaths as $b) $referenced[$b] = true;
 
-        foreach (glob($dir . '*') ?: [] as $file) {
-            if (!is_file($file)) continue;
-            $base = basename($file);
-            if ($base === '.htaccess' || $base === '.gitkeep') continue;
-            if (filemtime($file) > time() - 86400) continue;
-            if (!isset($referenced[$base])) {
-                @unlink($file);
-                $count++;
+        foreach ($roots as $root) {
+            $dir = $root . $sub . '/';
+            if (!is_dir($dir)) continue;
+            foreach (glob($dir . '*') ?: [] as $file) {
+                if (!is_file($file)) continue;
+                $base = basename($file);
+                if ($base === '.htaccess' || $base === '.gitkeep') continue;
+                if (filemtime($file) > time() - 86400) continue;
+                if (!isset($referenced[$base])) {
+                    @unlink($file);
+                    $count++;
+                }
             }
         }
     }
@@ -85,7 +87,7 @@ try {
     $stmt->execute();
     echo "  Registros de rate-limit removidos: {$stmt->rowCount()}\n";
 
-    // 4. Arquivos órfãos em /uploads/rh/
+    // 4. Arquivos órfãos em /storage/uploads/rh/ e /uploads/rh/
     $orphans = rh_cleanup_orphan_files($db);
     echo "  Arquivos órfãos removidos: {$orphans}\n";
 

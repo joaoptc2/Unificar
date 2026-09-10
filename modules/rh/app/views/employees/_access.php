@@ -18,6 +18,9 @@ $senhaPadrao = EmployeeAccess::defaultPassword($employee);
         <?php endif; ?>
     </div>
     <div class="card-body">
+        <?php if ($portalUser && ($employee['status'] ?? '') === 'desligado' && (int)$portalUser['active']): ?>
+            <div class="alert alert-warning py-2 small mb-3"><i class="bi bi-exclamation-triangle me-1"></i> Funcionário <strong>desligado</strong> com usuário ainda <strong>ativo</strong> — o acesso ao portal continua funcionando. Ao salvar o desligamento pela ficha o usuário é desativado automaticamente; se necessário, desative-o na administração central.</div>
+        <?php endif; ?>
         <?php if ($portalUser): ?>
             <div class="row g-2 mb-3">
                 <div class="col-md-4"><small class="text-muted">Usuário (login)</small><div><code><?= Sanitize::e($portalUser['username']) ?></code></div></div>

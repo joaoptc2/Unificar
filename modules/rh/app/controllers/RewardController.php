@@ -105,7 +105,7 @@ class RewardController
         ];
         if (!empty($_FILES['image']['name'])) {
             $up = Upload::handle('image', 'rewards', ['jpg', 'jpeg', 'png']);
-            if (!$up['success']) { Session::flash('error', 'Imagem: ' . $up['error']); return null; }
+            if (!$up['success']) { Session::flash('error', 'Imagem: ' . Sanitize::e($up['error'])); return null; }
             if (!empty($old['image_path'])) { Upload::delete($old['image_path']); }
             $data['image_path'] = $up['path'];
         } elseif (!empty($_POST['remove_image']) && !empty($old['image_path'])) {
@@ -125,7 +125,12 @@ class RewardController
 
         $reward = Reward::find(Sanitize::int($_POST['reward_id'] ?? 0));
         if (!$reward || !(int)$reward['active']) { Session::flash('error', 'Brinde indisponível.'); header("Location: $back"); exit; }
-        if ($reward['stock'] !== null && (int)$reward['stock'] <= 0) { Session::flash('error', 'Brinde esgotado.'); header("Location: $back"); exit; }
+        // Estoque disponível desconta os resgates pendentes (já reservam uma unidade).
+        $availableStock = Reward::availableStock((int)$reward['id']);
+        if ($availableStock !== null && $availableStock <= 0) {
+            Session::flash('error', (int)$reward['stock'] > 0 ? 'Brinde esgotado: as unidades restantes já estão reservadas por resgates pendentes.' : 'Brinde esgotado.');
+            header("Location: $back"); exit;
+        }
         $cost = (int)$reward['points_cost'];
         $available = RewardRedemption::availableFor($empId);
         if ($available < $cost) {

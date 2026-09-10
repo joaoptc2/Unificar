@@ -160,7 +160,7 @@ require __DIR__ . '/_top.php';
                                             <td><?= (int)$v['sold_days'] ?></td>
                                             <td class="small text-muted text-nowrap"><?= Sanitize::formatDate($v['period_start']) ?> – <?= Sanitize::formatDate($v['period_end']) ?></td>
                                             <td>
-                                                <span class="badge <?= $vacBadge($v['status']) ?>"><?= ucfirst(str_replace('_', ' ', $v['status'])) ?></span>
+                                                <span class="badge <?= $vacBadge($v['status']) ?>"><?= Sanitize::e(Vacation::STATUS_LABELS[$v['status']] ?? ucfirst(str_replace('_', ' ', $v['status']))) ?></span>
                                                 <?php if ($v['approved_by_name'] && in_array($v['status'], ['aprovada', 'rejeitada'], true)): ?>
                                                     <small class="text-muted d-block">por <?= Sanitize::e($v['approved_by_name']) ?> em <?= Sanitize::formatDateTime($v['approved_at']) ?></small>
                                                 <?php endif; ?>
@@ -219,7 +219,7 @@ require __DIR__ . '/_top.php';
                                                 <strong class="ms-1"><?= Sanitize::e($r['subject']) ?></strong>
                                                 <small class="text-muted d-block"><?= Sanitize::formatDateTime($r['created_at']) ?></small>
                                             </div>
-                                            <span class="badge <?= $reqBadge($r['status']) ?>"><?= ucfirst(str_replace('_', ' ', $r['status'])) ?></span>
+                                            <span class="badge <?= $reqBadge($r['status']) ?>"><?= Sanitize::e(EmployeeRequest::STATUS_LABELS[$r['status']] ?? ucfirst(str_replace('_', ' ', $r['status']))) ?></span>
                                         </div>
                                         <?php if ($r['type'] === 'ferias' && $r['vac_start']): ?>
                                             <small class="text-muted d-block mt-1"><i class="bi bi-sun me-1"></i><?= Sanitize::formatDate($r['vac_start']) ?> a <?= Sanitize::formatDate($r['vac_end']) ?> (<?= (int)$r['vac_days'] ?> dias) · férias: <?= ucfirst((string)$r['vac_status']) ?></small>
@@ -384,7 +384,7 @@ require __DIR__ . '/_top.php';
                                 <?php if ($rw['description']): ?><p class="small text-muted mb-2"><?= Sanitize::e(mb_substr((string)$rw['description'], 0, 120)) ?></p><?php endif; ?>
                                 <div class="d-flex justify-content-between align-items-center">
                                     <span class="badge bg-primary fs-6"><?= $cost ?> pts</span>
-                                    <?php if ($rw['stock'] !== null): ?><small class="text-muted"><?= (int)$rw['stock'] ?> em estoque</small><?php endif; ?>
+                                    <?php if ($rw['stock'] !== null): ?><small class="text-muted"><?= (int)($rw['available_stock'] ?? $rw['stock']) ?> disponível(is)</small><?php endif; ?>
                                 </div>
                             </div>
                             <div class="card-footer bg-transparent">

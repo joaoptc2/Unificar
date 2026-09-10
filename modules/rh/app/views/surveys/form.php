@@ -75,6 +75,7 @@ $qJson = array_map(fn ($q) => [
                         <label class="form-check-label" for="showPortal"><i class="bi bi-person-badge me-1"></i>Exibir na Minha Área (portal)</label>
                     </div>
                     <div class="form-check form-switch">
+                        <?php if (!empty($survey['emailed_at'])): ?><input type="hidden" name="send_email" value="<?= (int)$survey['send_email'] ?>"><?php endif; ?>
                         <input class="form-check-input" type="checkbox" name="send_email" value="1" id="sendEmail" <?= !empty($survey['send_email']) ? 'checked' : '' ?> <?= !empty($survey['emailed_at']) ? 'disabled' : '' ?>>
                         <label class="form-check-label" for="sendEmail"><i class="bi bi-envelope me-1"></i>Enviar por e-mail ao ativar</label>
                         <?php if (!empty($survey['emailed_at'])): ?><div class="form-text text-success">E-mails enfileirados em <?= Sanitize::formatDateTime($survey['emailed_at']) ?>.</div>

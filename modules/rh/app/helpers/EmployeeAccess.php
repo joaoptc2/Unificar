@@ -76,9 +76,9 @@ class EmployeeAccess
     {
         $employeeId = (int)$employee['id'];
         $cpf        = self::defaultUsername($employee);
-        if (strlen($cpf) !== 11) {
+        if (!Sanitize::isValidCpf($cpf)) {
             return ['status' => 'error', 'user_id' => 0, 'username' => $cpf, 'password' => null,
-                    'message' => 'CPF inválido — acesso não criado.'];
+                    'message' => 'CPF inválido (' . ($cpf !== '' ? Sanitize::formatCpf($cpf) : 'vazio') . ') — acesso não criado. Corrija o CPF na ficha do funcionário.'];
         }
 
         $linked = self::linkedUser($employeeId);
@@ -185,6 +185,72 @@ class EmployeeAccess
     public static function syncDepartment(int $employeeId, ?int $departmentId): void
     {
         Core\DB::execute('UPDATE rh_user_profile SET department_id = ? WHERE employee_id = ?', [$departmentId, $employeeId]);
+    }
+
+    /**
+     * Departamento efetivo do usuário (o do funcionário vinculado; senão o
+     * gravado em rh_user_profile). null = sem departamento.
+     */
+    public static function departmentOf(?int $userId): ?int
+    {
+        if (!$userId) {
+            return null;
+        }
+        $row = Core\DB::queryOne(
+            'SELECT p.department_id, e.department_id AS emp_dept
+             FROM rh_user_profile p LEFT JOIN rh_employees e ON e.id = p.employee_id
+             WHERE p.user_id = ?',
+            [$userId]
+        );
+        $d = (int)($row['emp_dept'] ?? $row['department_id'] ?? 0);
+        return $d ?: null;
+    }
+
+    /**
+     * Desativa (ou reativa) o usuário vinculado ao funcionário — usado no
+     * desligamento e na anonimização. Administradores globais não são
+     * desativados automaticamente (evita bloquear a administração).
+     * @return string|null mensagem para a flash (null = nada feito)
+     */
+    public static function setLinkedUserActive(int $employeeId, bool $active, ?int $by): ?string
+    {
+        $linked = self::linkedUser($employeeId);
+        if (!$linked || (int)$linked['active'] === (int)$active) {
+            return null;
+        }
+        if (!empty($linked['is_admin']) && !$active) {
+            return 'O usuário vinculado (' . $linked['username'] . ') é administrador global e NÃO foi desativado automaticamente — revise na administração central.';
+        }
+        Core\DB::execute('UPDATE users SET active = ? WHERE id = ?', [$active ? 1 : 0, (int)$linked['id']]);
+        Core\Audit::log($active ? 'employee_access.activate' : 'employee_access.deactivate', 'users', (string)$linked['id'], ['employee_id' => $employeeId], $by, 'rh');
+        return $active
+            ? 'Acesso ao sistema do usuário ' . $linked['username'] . ' reativado.'
+            : 'Acesso ao sistema do usuário ' . $linked['username'] . ' desativado.';
+    }
+
+    /**
+     * Mantém o login (username = CPF) sincronizado quando o CPF do
+     * funcionário muda. Só altera se o username atual era o CPF antigo.
+     * @return string|null mensagem para a flash (null = nada feito)
+     */
+    public static function syncUsername(int $employeeId, string $oldCpf, string $newCpf, ?int $by): ?string
+    {
+        $oldCpf = Sanitize::cpf($oldCpf);
+        $newCpf = Sanitize::cpf($newCpf);
+        if ($oldCpf === $newCpf || strlen($newCpf) !== 11) {
+            return null;
+        }
+        $linked = self::linkedUser($employeeId);
+        if (!$linked || (string)$linked['username'] !== $oldCpf) {
+            return null;
+        }
+        $dup = Core\DB::queryOne('SELECT id FROM users WHERE username = ? AND id <> ? LIMIT 1', [$newCpf, (int)$linked['id']]);
+        if ($dup) {
+            return 'O login do usuário vinculado NÃO foi alterado para o novo CPF: já existe outro usuário com o login ' . Sanitize::formatCpf($newCpf) . '.';
+        }
+        Core\DB::execute('UPDATE users SET username = ? WHERE id = ?', [$newCpf, (int)$linked['id']]);
+        Core\Audit::log('employee_access.rename', 'users', (string)$linked['id'], ['employee_id' => $employeeId, 'from' => $oldCpf, 'to' => $newCpf], $by, 'rh');
+        return 'Login do usuário vinculado atualizado para o novo CPF (' . Sanitize::formatCpf($newCpf) . ').';
     }
 
     /** ID do funcionário vinculado ao usuário logado (0 se não houver). */

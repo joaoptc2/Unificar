@@ -2,12 +2,12 @@
 /**
  * SurveyController — pesquisas.
  *
- *   page=surveys                       lista (surveys.view)
+ *   page=surveys                       lista (surveys.view; quem não gerencia e tem my.view vai ao portal)
  *   action=create|store                nova (surveys.create) — construtor de perguntas
  *   action=edit|update                 editar (surveys.edit)
  *   action=close                       encerrar (surveys.edit) — POST
  *   action=delete                      excluir (surveys.delete) — POST
- *   action=show&id=N                   resultados (surveys.view)
+ *   action=show&id=N                   resultados (surveys.create ou surveys.edit — nunca para o funcionário)
  *   action=respond                     POST de resposta (portal: page=my&action=survey)
  */
 class SurveyController
@@ -18,7 +18,23 @@ class SurveyController
     public function index(): void
     {
         core_require('surveys.view');
-        View::render('surveys/index', ['pageTitle' => 'Pesquisas', 'page' => 'surveys', 'surveys' => Survey::listAll()]);
+        $manage = self::manages();
+        // Funcionário (só surveys.view + my.view): as pesquisas dele ficam no portal.
+        if (!$manage && core_can('my.view')) {
+            header('Location: index.php?m=rh&page=my#pesquisas'); exit;
+        }
+        // Sem gestão e sem portal (ex.: gestor/visualizador): lista informativa
+        // apenas das pesquisas publicadas (sem rascunhos e sem resultados).
+        View::render('surveys/index', [
+            'pageTitle' => 'Pesquisas', 'page' => 'surveys',
+            'surveys' => Survey::listAll($manage), 'manage' => $manage,
+        ]);
+    }
+
+    /** true para quem gerencia pesquisas (vê rascunhos e resultados). */
+    public static function manages(): bool
+    {
+        return core_can_any(['surveys.create', 'surveys.edit', 'surveys.delete']);
     }
 
     public function create(): void
@@ -47,7 +63,7 @@ class SurveyController
     public function store(): void
     {
         core_require('surveys.create'); Csrf::check();
-        $data = $this->formData();
+        $data = $this->formData(null);
         $questions = $this->questionsFromPost();
         if ($data['title'] === '') { Session::flash('error', 'Título obrigatório.'); header('Location: index.php?m=rh&page=surveys&action=create'); exit; }
         if (!$questions) { Session::flash('error', 'Adicione ao menos uma pergunta.'); header('Location: index.php?m=rh&page=surveys&action=create'); exit; }
@@ -64,7 +80,7 @@ class SurveyController
         $id = Sanitize::int($_POST['id'] ?? 0);
         $old = Survey::find($id);
         if (!$old) { Session::flash('error', 'Pesquisa não encontrada.'); header('Location: index.php?m=rh&page=surveys'); exit; }
-        $data = $this->formData();
+        $data = $this->formData($old);
         $questions = $this->questionsFromPost();
         if ($data['title'] === '') { Session::flash('error', 'Título obrigatório.'); header('Location: index.php?m=rh&page=surveys&action=edit&id=' . $id); exit; }
         if (!$questions) { Session::flash('error', 'Adicione ao menos uma pergunta.'); header('Location: index.php?m=rh&page=surveys&action=edit&id=' . $id); exit; }
@@ -101,7 +117,8 @@ class SurveyController
         Session::flash('success', 'Pesquisa encerrada.'); header('Location: index.php?m=rh&page=surveys&action=show&id=' . $id); exit;
     }
 
-    private function formData(): array
+    /** Lê o formulário. $old = registro atual (edição) — preserva send_email após o envio. */
+    private function formData(?array $old): array
     {
         $type = Sanitize::post('type');
         if (!isset(Survey::TYPES[$type])) { $type = 'clima'; }
@@ -114,7 +131,8 @@ class SurveyController
             'anonymous' => !empty($_POST['anonymous']) ? 1 : 0,
             'department_id' => Sanitize::int($_POST['department_id'] ?? 0) ?: null,
             'show_in_portal' => !empty($_POST['show_in_portal']) ? 1 : 0,
-            'send_email' => !empty($_POST['send_email']) ? 1 : 0,
+            // Já enviado por e-mail: o campo fica travado no formulário — mantém o valor gravado.
+            'send_email' => !empty($old['emailed_at']) ? (int)$old['send_email'] : (!empty($_POST['send_email']) ? 1 : 0),
             'status' => $status,
             'starts_at' => Sanitize::date($_POST['starts_at'] ?? '') ?: null,
             'ends_at' => Sanitize::date($_POST['ends_at'] ?? '') ?: null,
@@ -157,7 +175,9 @@ class SurveyController
 
     public function show(): void
     {
-        core_require('surveys.view');
+        // Resultados (inclusive textos livres de pesquisas anônimas) são
+        // exclusivos de quem gerencia pesquisas — nunca do funcionário.
+        core_require_any(['surveys.create', 'surveys.edit']);
         $survey = Survey::withQuestions(Sanitize::int($_GET['id'] ?? 0));
         if (!$survey) { Session::flash('error', 'Pesquisa não encontrada.'); header('Location: index.php?m=rh&page=surveys'); exit; }
         $participants = Survey::participantCount((int)$survey['id']);
@@ -168,7 +188,7 @@ class SurveyController
             'stats' => Survey::stats((int)$survey['id']), 'participants' => $participants, 'audience' => $audience,
             'departmentName' => $dept ?: null,
             'answered' => Survey::hasParticipated((int)$survey['id'], (int)Session::userId()),
-            'employeeDept' => $this->userDepartment(),
+            'employeeDept' => EmployeeAccess::departmentOf((int)Session::userId()),
         ]);
     }
 
@@ -183,7 +203,7 @@ class SurveyController
         $done     = core_can('my.view') ? 'index.php?m=rh&page=my#pesquisas' : 'index.php?m=rh&page=surveys';
 
         if (!$survey || !Survey::isOpen($survey)) { Session::flash('error', 'Pesquisa indisponível.'); header("Location: $done"); exit; }
-        if (!Survey::targets($survey, $this->userDepartment()) && !core_can('surveys.create')) {
+        if (!Survey::targets($survey, EmployeeAccess::departmentOf($userId)) && !core_can('surveys.create')) {
             Session::flash('error', 'Esta pesquisa não é destinada ao seu departamento.'); header("Location: $done"); exit;
         }
         if (Survey::hasParticipated($surveyId, $userId)) { Session::flash('error', 'Você já respondeu esta pesquisa.'); header("Location: $done"); exit; }
@@ -265,13 +285,6 @@ class SurveyController
                 if ($t === '') return $blank();
                 return ['rating' => null, 'answer' => $t];
         }
-    }
-
-    private function userDepartment(): ?int
-    {
-        $row = Core\DB::queryOne('SELECT p.department_id, e.department_id AS emp_dept FROM rh_user_profile p LEFT JOIN rh_employees e ON e.id = p.employee_id WHERE p.user_id = ?', [Session::userId()]);
-        $d = (int)($row['emp_dept'] ?? $row['department_id'] ?? 0);
-        return $d ?: null;
     }
 
     public function delete(): void

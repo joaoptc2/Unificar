@@ -58,7 +58,11 @@ if ($page === 'users') {
 // (Core\AdminPanel). As telas (GET) redirecionam para o painel; os POSTs
 // continuam sendo processados pelos controllers do módulo.
 if (in_array($page, ['departments', 'positions'], true) && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
-    core_redirect(core_admin_url('rh', $page));
+    // Preserva action/id (links antigos de criar/editar caem na tela certa do painel).
+    $extra = [];
+    if (in_array($action, ['create', 'edit'], true)) { $extra['action'] = $action; }
+    if ($id > 0) { $extra['id'] = $id; }
+    core_redirect(core_admin_url('rh', $page, $extra));
 }
 
 // ---- MAPA CENTRAL rota → [controller, permissão mínima] ------------------

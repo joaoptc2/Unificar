@@ -43,7 +43,7 @@ class BirthdayPoster
     public static function save(array $s): void
     {
         Core\Settings::set('rh.birthdays.layout_id',  (string)(int)($s['layout_id'] ?? 0));
-        Core\Settings::set('rh.birthdays.title',      (string)($s['title'] ?? ''));
+        Core\Settings::set('rh.birthdays.title',      trim(strip_tags((string)($s['title'] ?? ''))));
         Core\Settings::set('rh.birthdays.intro_html', Core\DocLayout::sanitizeHtml((string)($s['intro_html'] ?? '')));
         Core\Settings::set('rh.birthdays.item_html',  Core\DocLayout::sanitizeHtml((string)($s['item_html'] ?? '')));
         Core\Settings::set('rh.birthdays.css',        self::sanitizeCss((string)($s['css'] ?? '')));
@@ -132,7 +132,8 @@ class BirthdayPoster
             '{{total}}' => (string)count($rows),
         ];
 
-        $title = strtr((string)$cfg['title'], $vars);
+        // Título é texto puro: escapa ANTES de substituir os placeholders (já escapados).
+        $title = strtr(Sanitize::e(strip_tags((string)$cfg['title'])), $vars);
         $intro = strtr((string)$cfg['intro_html'], $vars);
         $body  = self::expandItems((string)$cfg['item_html'], $rows, $month, $year, (bool)$cfg['show_photo']);
         $body  = strtr($body, $vars);
@@ -149,11 +150,11 @@ class BirthdayPoster
                  . '<a href="' . Sanitize::e(core_module_url('rh', ['page' => 'birthdays', 'month' => $month])) . '">Voltar</a>';
 
         return Core\DocLayout::renderHtml([
-            'title'        => strip_tags($title),
+            'title'        => html_entity_decode($title, ENT_QUOTES | ENT_HTML5, 'UTF-8'),
             'layout'       => $layout,
             'content_html' => $content,
             'meta'         => [
-                'title'    => strip_tags($title),
+                'title'    => html_entity_decode($title, ENT_QUOTES | ENT_HTML5, 'UTF-8'),
                 'author'   => core_user()['name'] ?? 'RH',
                 'date'     => date('d/m/Y'),
                 'version'  => '1',
@@ -162,7 +163,8 @@ class BirthdayPoster
             ],
             'toolbar'      => $toolbar,
             'autoprint'    => $autoprint,
-            'extra_css'    => (string)$cfg['css'],
+            // CSS sempre sanitizado aqui (vale também para a pré-visualização, que não passa por save()).
+            'extra_css'    => self::sanitizeCss((string)$cfg['css']),
         ]);
     }
 

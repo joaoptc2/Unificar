@@ -2,11 +2,12 @@
 /**
  * AnnouncementController — comunicados internos.
  *
- *   page=announcements                      lista (announcements.view)
+ *   page=announcements                      lista (announcements.view; funcionário com my.view vai ao portal;
+ *                                           quem não gerencia vê só o publicado para o seu departamento)
  *   action=create|store                     novo (announcements.create) — editor rico, imagem, anexo, portal, e-mail
  *   action=edit|update                      editar (announcements.edit)
  *   action=delete                           excluir (announcements.delete)
- *   action=read&id=N                        leitura formatada (marca como lido)
+ *   action=read&id=N                        leitura formatada (marca como lido) — respeita departamento/portal
  *   action=publish                          publicar rascunho (announcements.create)
  */
 class AnnouncementController
@@ -18,7 +19,16 @@ class AnnouncementController
     {
         core_require('announcements.view');
         $manage = core_can_any(['announcements.create', 'announcements.edit']);
-        $items = Announcement::published(null, (int)Session::userId(), $manage);
+        $userId = (int)Session::userId();
+        // Funcionário (só announcements.view + my.view): os comunicados dele ficam no portal.
+        if (!$manage && core_can('my.view')) {
+            header('Location: index.php?m=rh&page=my#comunicados'); exit;
+        }
+        // Quem gerencia vê tudo; os demais só o publicado/vigente, marcado
+        // para o portal e dirigido ao seu departamento (ou a todos).
+        $items = $manage
+            ? Announcement::published(null, $userId, true)
+            : Announcement::published(EmployeeAccess::departmentOf($userId), $userId, false, true);
         View::render('announcements/index', ['pageTitle' => 'Comunicados', 'page' => 'announcements', 'items' => $items, 'manage' => $manage]);
     }
 
@@ -126,13 +136,14 @@ class AnnouncementController
             'expires_at' => Sanitize::date($_POST['expires_at'] ?? '') ?: null,
             'pinned' => !empty($_POST['pinned']) ? 1 : 0,
             'show_in_portal' => !empty($_POST['show_in_portal']) ? 1 : 0,
-            'send_email' => !empty($_POST['send_email']) ? 1 : 0,
+            // Já enviado por e-mail: o campo fica travado no formulário — mantém o valor gravado.
+            'send_email' => !empty($old['emailed_at']) ? (int)$old['send_email'] : (!empty($_POST['send_email']) ? 1 : 0),
         ];
 
         // Imagem de capa (pública) e anexo (privado, servido pelo DownloadController).
         if (!empty($_FILES['image']['name'])) {
             $up = Upload::handle('image', 'announcements', ['jpg', 'jpeg', 'png']);
-            if (!$up['success']) { Session::flash('error', 'Imagem: ' . $up['error']); return null; }
+            if (!$up['success']) { Session::flash('error', 'Imagem: ' . Sanitize::e($up['error'])); return null; }
             if (!empty($old['image_path'])) { Upload::delete($old['image_path']); }
             $data['image_path'] = $up['path'];
         } elseif (!empty($_POST['remove_image']) && !empty($old['image_path'])) {
@@ -140,7 +151,7 @@ class AnnouncementController
         }
         if (!empty($_FILES['attachment']['name'])) {
             $up = Upload::handle('attachment', 'announcement_files');
-            if (!$up['success']) { Session::flash('error', 'Anexo: ' . $up['error']); return null; }
+            if (!$up['success']) { Session::flash('error', 'Anexo: ' . Sanitize::e($up['error'])); return null; }
             if (!empty($old['attachment_path'])) { Upload::delete($old['attachment_path']); }
             $data['attachment_path'] = $up['path'];
             $data['attachment_name'] = mb_substr($up['original_name'], 0, 255);
@@ -155,9 +166,9 @@ class AnnouncementController
         core_require('announcements.view');
         $id = Sanitize::int($_GET['id'] ?? 0);
         $item = Announcement::find($id);
-        if (!$item) { header('Location: index.php?m=rh&page=announcements'); exit; }
-        if (empty($item['published_at']) && !core_can_any(['announcements.create', 'announcements.edit'])) {
-            header('Location: index.php?m=rh&page=announcements'); exit;
+        if (!$item || !Announcement::readableBy($item, (int)Session::userId())) {
+            Session::flash('error', 'Comunicado indisponível.');
+            header('Location: ' . (core_can('my.view') && !core_can_any(['announcements.create', 'announcements.edit']) ? 'index.php?m=rh&page=my#comunicados' : 'index.php?m=rh&page=announcements')); exit;
         }
         Announcement::markRead($id, (int)Session::userId());
         View::render('announcements/show', ['pageTitle' => $item['title'], 'page' => 'announcements', 'item' => $item]);

@@ -21,6 +21,9 @@ ALTER TABLE rh_surveys ADD COLUMN department_id INT UNSIGNED NULL COMMENT 'NULL 
 ALTER TABLE rh_surveys ADD COLUMN show_in_portal TINYINT(1) NOT NULL DEFAULT 1 AFTER department_id;
 ALTER TABLE rh_surveys ADD COLUMN send_email TINYINT(1) NOT NULL DEFAULT 0 AFTER show_in_portal;
 ALTER TABLE rh_surveys ADD COLUMN emailed_at DATETIME NULL AFTER send_email;
+ALTER TABLE rh_surveys ADD COLUMN notified_at DATETIME NULL COMMENT 'Notificação in-app já enviada (evita reenvio ao editar)' AFTER emailed_at;
+-- Pesquisas já ativas antes desta versão não devem notificar de novo na primeira edição.
+UPDATE rh_surveys SET notified_at = COALESCE(updated_at, created_at) WHERE status = 'ativa' AND notified_at IS NULL;
 ALTER TABLE rh_surveys ADD COLUMN updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP AFTER created_at;
 ALTER TABLE rh_surveys ADD CONSTRAINT fk_rh_survey_dept
     FOREIGN KEY (department_id) REFERENCES rh_departments (id) ON DELETE SET NULL;
@@ -43,6 +46,9 @@ ALTER TABLE rh_announcements ADD COLUMN attachment_name VARCHAR(255) NULL AFTER 
 ALTER TABLE rh_announcements ADD COLUMN show_in_portal TINYINT(1) NOT NULL DEFAULT 1 AFTER attachment_name;
 ALTER TABLE rh_announcements ADD COLUMN send_email TINYINT(1) NOT NULL DEFAULT 0 AFTER show_in_portal;
 ALTER TABLE rh_announcements ADD COLUMN emailed_at DATETIME NULL AFTER send_email;
+ALTER TABLE rh_announcements ADD COLUMN notified_at DATETIME NULL COMMENT 'Notificação in-app já enviada (evita reenvio ao editar)' AFTER emailed_at;
+-- Comunicados já publicados antes desta versão não devem notificar de novo na primeira edição.
+UPDATE rh_announcements SET notified_at = published_at WHERE published_at IS NOT NULL AND notified_at IS NULL;
 
 -- ---- Solicitações (férias pelo portal) ------------------------------------
 ALTER TABLE rh_requests ADD COLUMN vacation_id INT UNSIGNED NULL COMMENT 'Solicitação de férias criada no portal' AFTER type;

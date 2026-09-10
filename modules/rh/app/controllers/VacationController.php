@@ -20,7 +20,7 @@ class VacationController
         $stmt->execute($params);
         $vacations = $stmt->fetchAll();
         View::render('vacations/index', [
-            'pageTitle' => 'Ferias', 'page' => 'vacations',
+            'pageTitle' => 'Férias', 'page' => 'vacations',
             'vacations' => $vacations, 'status' => $status, 'pagination' => $pagination,
         ]);
     }
@@ -30,7 +30,7 @@ class VacationController
         core_require('vacations.create');
         $employees = $this->db->query("SELECT id, full_name FROM rh_employees WHERE status = 'ativo' ORDER BY full_name")->fetchAll();
         View::render('vacations/form', [
-            'pageTitle' => 'Nova Ferias', 'page' => 'vacations',
+            'pageTitle' => 'Novas Férias', 'page' => 'vacations',
             'employees' => $employees, 'item' => null,
         ]);
     }
@@ -41,11 +41,11 @@ class VacationController
         Csrf::check();
         $data = $this->formData();
         if (!$data['employee_id'] || !$data['start_date'] || !$data['end_date']) {
-            Session::flash('error', 'Preencha funcionario, data inicio e fim.');
+            Session::flash('error', 'Preencha funcionário, data de início e fim.');
             header('Location: index.php?m=rh&page=vacations&action=create'); exit;
         }
         if (Vacation::overlapping((int)$data['employee_id'], $data['start_date'], $data['end_date'])) {
-            Session::flash('error', 'Ja existe ferias no periodo para este funcionario.');
+            Session::flash('error', 'Já existem férias no período para este funcionário.');
             header('Location: index.php?m=rh&page=vacations&action=create'); exit;
         }
         $data['created_by'] = Session::userId();
@@ -53,7 +53,7 @@ class VacationController
         // Cria bloqueio na agenda
         $this->syncSchedule($id, $data);
         AuditLog::log('create', 'vacations', $id, null, $data);
-        Session::flash('success', 'Ferias cadastradas.');
+        Session::flash('success', 'Férias cadastradas.');
         header('Location: index.php?m=rh&page=vacations'); exit;
     }
 
@@ -61,10 +61,10 @@ class VacationController
     {
         core_require('vacations.edit');
         $item = Vacation::find(Sanitize::int($_GET['id'] ?? 0));
-        if (!$item) { Session::flash('error', 'Nao encontrado.'); header('Location: index.php?m=rh&page=vacations'); exit; }
+        if (!$item) { Session::flash('error', 'Férias não encontradas.'); header('Location: index.php?m=rh&page=vacations'); exit; }
         $employees = $this->db->query("SELECT id, full_name FROM rh_employees WHERE status = 'ativo' ORDER BY full_name")->fetchAll();
         View::render('vacations/form', [
-            'pageTitle' => 'Editar Ferias', 'page' => 'vacations',
+            'pageTitle' => 'Editar Férias', 'page' => 'vacations',
             'employees' => $employees, 'item' => $item,
         ]);
     }
@@ -78,7 +78,7 @@ class VacationController
         Vacation::update($id, $data);
         $this->syncSchedule($id, $data);
         AuditLog::log('update', 'vacations', $id);
-        Session::flash('success', 'Ferias atualizadas.');
+        Session::flash('success', 'Férias atualizadas.');
         header('Location: index.php?m=rh&page=vacations'); exit;
     }
 
@@ -106,7 +106,7 @@ class VacationController
         $this->db->prepare("DELETE FROM rh_schedules WHERE title LIKE ? AND event_type = 'compromisso'")->execute(['Ferias:%' . $id . '%']);
         Vacation::delete($id);
         AuditLog::log('delete', 'vacations', $id);
-        Session::flash('success', 'Ferias excluidas.');
+        Session::flash('success', 'Férias excluídas.');
         header('Location: index.php?m=rh&page=vacations'); exit;
     }
 

@@ -411,10 +411,23 @@ class EmployeeController
             EmployeeAccess::syncDepartment($id, (int)$data['department_id'] ?: null);
         }
 
+        // Acesso ao sistema: desligamento desativa o usuário vinculado (e a
+        // volta do desligamento reativa); troca de CPF acompanha o login.
+        $accessNotes = [];
+        if ($old['status'] !== $data['status']) {
+            if ($data['status'] === 'desligado') {
+                $accessNotes[] = EmployeeAccess::setLinkedUserActive($id, false, Session::userId());
+            } elseif ($old['status'] === 'desligado') {
+                $accessNotes[] = EmployeeAccess::setLinkedUserActive($id, true, Session::userId());
+            }
+        }
+        $accessNotes[] = EmployeeAccess::syncUsername($id, (string)$old['cpf'], (string)$data['cpf'], Session::userId());
+        $accessNotes = array_filter($accessNotes);
+
         AuditLog::log('update', 'employees', $id, $old, $data);
         FileCache::forget('dashboard.global.' . date('Y-m-d'));
 
-        Session::flash('success', 'Funcionário atualizado com sucesso.');
+        Session::flash('success', 'Funcionário atualizado com sucesso.' . ($accessNotes ? ' ' . Sanitize::e(implode(' ', $accessNotes)) : ''));
         header('Location: index.php?m=rh&page=employees&action=show&id=' . $id);
         exit;
     }
@@ -539,7 +552,7 @@ class EmployeeController
 
         if (Lgpd::anonymizeEmployee($id)) {
             FileCache::forget('dashboard.global.' . date('Y-m-d'));
-            Session::flash('success', 'Funcionário anonimizado conforme LGPD. Registros estatísticos foram preservados.');
+            Session::flash('success', 'Funcionário anonimizado conforme LGPD. Registros estatísticos foram preservados; o usuário vinculado (se houver) foi desativado e anonimizado.');
         } else {
             Session::flash('error', 'Falha ao anonimizar funcionário.');
         }

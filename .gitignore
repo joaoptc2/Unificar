@@ -18,3 +18,7 @@ Thumbs.db
 # Cache de runtime dos módulos
 modules/*/storage/cache/*
 !modules/*/storage/cache/.gitkeep
+
+# Uploads privados (fora do webroot)
+/storage/uploads/*
+!/storage/uploads/.gitkeep
