@@ -22,9 +22,10 @@ ALTER TABLE rh_surveys ADD COLUMN show_in_portal TINYINT(1) NOT NULL DEFAULT 1 A
 ALTER TABLE rh_surveys ADD COLUMN send_email TINYINT(1) NOT NULL DEFAULT 0 AFTER show_in_portal;
 ALTER TABLE rh_surveys ADD COLUMN emailed_at DATETIME NULL AFTER send_email;
 ALTER TABLE rh_surveys ADD COLUMN notified_at DATETIME NULL COMMENT 'Notificação in-app já enviada (evita reenvio ao editar)' AFTER emailed_at;
--- Pesquisas já ativas antes desta versão não devem notificar de novo na primeira edição.
-UPDATE rh_surveys SET notified_at = COALESCE(updated_at, created_at) WHERE status = 'ativa' AND notified_at IS NULL;
 ALTER TABLE rh_surveys ADD COLUMN updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP AFTER created_at;
+-- Pesquisas já ativas antes desta versão não devem notificar de novo na primeira
+-- edição. (Vem depois dos ALTER acima: as colunas precisam existir.)
+UPDATE rh_surveys SET notified_at = created_at WHERE status = 'ativa' AND notified_at IS NULL;
 ALTER TABLE rh_surveys ADD CONSTRAINT fk_rh_survey_dept
     FOREIGN KEY (department_id) REFERENCES rh_departments (id) ON DELETE SET NULL;
 
