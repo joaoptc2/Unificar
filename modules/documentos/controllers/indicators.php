@@ -1,57 +1,115 @@
 <?php
 /**
- * Controller de Indicadores de Enfermagem (v2)
+ * Controller de Indicadores (painel unificado, templates, lançamentos,
+ * importação CSV e planos de ação PDCA)
  */
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Listagem
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Página ÚNICA de indicadores: filtros (setor global, periodicidade,
+ * categoria, acreditação, responsável, busca), cartões total / na meta /
+ * fora da meta / dentro da tolerância, gráficos do painel e a tabela com
+ * ações.
+ */
 function indicators_index($param = null) {
     core_require('indicators.view');
     $hospital_id = get_hospital_id();
+    $sector_id   = get_sector_id();
 
-    $type     = (string) query('type', '');
-    $search   = clean(query('search', ''));
-    $category = clean(query('category', ''));
+    $type          = (string) query('type', '');
+    $search        = clean(query('search', ''));
+    $category      = clean(query('category', ''));
+    $accreditation = clean(query('accreditation', ''));
+    $responsible   = sanitize_int(query('responsible_user_id'));
+    $goal_filter   = (string) query('goal', ''); // met | tolerance | missed | no_data
 
     $indicators = [];
-    $total = 0;
     $categories = [];
+    $accreditations = [];
+    $users = [];
 
     try {
-        $total      = indicator_count($hospital_id, $type, $search, $category);
-        $pagination = paginate($total);
-        $indicators = indicator_list($hospital_id, $type, $search, $category,
-                                     $pagination['per_page'], $pagination['offset']);
-        $categories = indicator_distinct_categories($hospital_id);
+        $indicators = indicator_list($hospital_id, $type, $search, $category, 500, 0, $sector_id,
+                                     ['accreditation' => $accreditation, 'responsible_user_id' => $responsible]);
+        $categories     = indicator_distinct_categories($hospital_id);
+        $accreditations = indicator_distinct_accreditations($hospital_id);
+        $users          = user_list_active();
 
-        // Anexa série de valores para mini-gráficos + último status vs meta
+        // Enriquece cada indicador com último valor, status, tendência, histórico curto
+        $all_series = indicator_data_series_many(array_column($indicators, 'id')); // 1 consulta (sem N+1)
         foreach ($indicators as &$ind) {
-            $series = indicator_data_series($ind['id']);
-            $vals = array_column($series, 'value');
-            $ind['spark_values'] = array_slice($vals, -12);
-            $ind['last_value']   = end($vals) !== false ? (float) end($vals) : null;
-            $ind['goal_status']  = ($ind['last_value'] !== null && $ind['goal_numeric'] !== null)
-                ? stats_goal_status($ind['last_value'], $ind['goal_numeric'],
-                                    $ind['goal_direction'], $ind['goal_tolerance'])
-                : null;
-            $ind['count_entries'] = count($vals);
+            $series = $all_series[(int) $ind['id']] ?? [];
+            $vals = array_map(fn($s) => (float) $s['value'], $series);
+            $ind['spark_values']  = array_slice($vals, -12);
+            $ind['last_value']    = end($vals) !== false ? (float) end($vals) : null;
+            $ind['last_date']     = !empty($series) ? end($series)['reference_date'] : null;
+            $ind['entries_count'] = count($vals);
+
+            $goal = $ind['goal_numeric'];
+            $tol  = (float) ($ind['goal_tolerance'] ?? 0);
+            $dir  = $ind['goal_direction'] ?? 'higher_better';
+            $ind['goal_status'] = ($ind['last_value'] !== null && $goal !== null)
+                ? stats_goal_status($ind['last_value'], $goal, $dir, $tol) : null;
+
+            if (count($vals) >= 2) {
+                $trend = stats_trend($vals);
+                $ind['trend_dir'] = $trend['direction'];
+                $ind['trend_pct'] = $trend['pct_change'];
+            } else {
+                $ind['trend_dir'] = null;
+                $ind['trend_pct'] = 0;
+            }
         }
         unset($ind);
     } catch (Exception $ex) {
         log_error('indicators_index', $ex);
-        $pagination = paginate(0);
     }
 
+    // KPIs globais (antes do filtro por situação da meta)
+    $kpi = [
+        'total'     => count($indicators),
+        'met'       => count(array_filter($indicators, fn($i) => $i['goal_status'] === 'met')),
+        'tolerance' => count(array_filter($indicators, fn($i) => $i['goal_status'] === 'tolerance')),
+        'missed'    => count(array_filter($indicators, fn($i) => $i['goal_status'] === 'missed')),
+        'no_data'   => count(array_filter($indicators, fn($i) => $i['goal_status'] === null)),
+    ];
+
+    if (in_array($goal_filter, ['met', 'tolerance', 'missed', 'no_data'], true)) {
+        $want = $goal_filter === 'no_data' ? null : $goal_filter;
+        $indicators = array_values(array_filter($indicators, fn($i) => $i['goal_status'] === $want));
+    }
+
+    // Agrupa por categoria (gráfico de situação por categoria + tabela)
+    $grouped = [];
+    $by_cat_chart = [];
+    foreach ($indicators as $ind) {
+        $cat = $ind['category'] ?: 'Sem categoria';
+        $grouped[$cat][] = $ind;
+        if (!isset($by_cat_chart[$cat])) $by_cat_chart[$cat] = ['met' => 0, 'tolerance' => 0, 'missed' => 0, 'no_data' => 0];
+        $by_cat_chart[$cat][$ind['goal_status'] ?? 'no_data']++;
+    }
+    ksort($grouped);
+    ksort($by_cat_chart);
+
     view('indicators/index', [
-        'page_title'  => 'Indicadores de Enfermagem',
-        'indicators'  => $indicators,
-        'type_filter' => $type,
-        'search'      => $search,
-        'category'    => $category,
-        'categories'  => $categories,
-        'pagination'  => $pagination,
+        'page_title'     => 'Indicadores',
+        'indicators'     => $indicators,
+        'grouped'        => $grouped,
+        'by_cat_chart'   => $by_cat_chart,
+        'kpi'            => $kpi,
+        'type_filter'    => $type,
+        'search'         => $search,
+        'category'       => $category,
+        'accreditation'  => $accreditation,
+        'responsible'    => $responsible,
+        'goal_filter'    => $goal_filter,
+        'categories'     => $categories,
+        'accreditations' => $accreditations,
+        'users'          => $users,
+        'menu_key'       => 'indicators',
     ]);
 }
 
@@ -96,6 +154,10 @@ function indicators_create($param = null) {
         'indicator'  => $indicator,
         'variables'  => $variables,
         'editing'    => false,
+        'sectors'    => sector_list(get_hospital_id()),
+        'users'      => user_list_active(),
+        'default_sector_id' => get_sector_id(),
+        'menu_key'   => 'indicators',
     ]);
 }
 
@@ -127,77 +189,20 @@ function indicators_templates($param = null) {
         'categories' => $categories,
         'category_filter' => $category_filter,
         'search'     => $search,
+        'menu_key'   => 'indicators',
     ]);
 }
 
 /**
- * Dashboard executivo consolidado — todos os indicadores com semáforos.
+ * Antigo "Painel de indicadores" — unificado na página `indicators`
+ * (redireciona preservando a query string).
  */
 function indicators_dashboard($param = null) {
     core_require('indicators.view');
-    $hospital_id = get_hospital_id();
-
-    $category = clean(query('category', ''));
-    $indicators = [];
-    $categories = [];
-
-    try {
-        $indicators = indicator_list($hospital_id, '', '', $category, 500, 0);
-        $categories = indicator_distinct_categories($hospital_id);
-
-        // Enriquece cada indicador com último valor, status, tendência, histórico curto
-        foreach ($indicators as &$ind) {
-            $series = indicator_data_series($ind['id']);
-            $vals = array_map(fn($s) => (float) $s['value'], $series);
-            $ind['spark_values'] = array_slice($vals, -12);
-            $ind['last_value']   = end($vals) !== false ? (float) end($vals) : null;
-            $ind['entries_count'] = count($vals);
-
-            $goal = $ind['goal_numeric'];
-            $tol  = (float) ($ind['goal_tolerance'] ?? 0);
-            $dir  = $ind['goal_direction'] ?? 'higher_better';
-            $ind['goal_status'] = ($ind['last_value'] !== null && $goal !== null)
-                ? stats_goal_status($ind['last_value'], $goal, $dir, $tol) : null;
-
-            if (count($vals) >= 2) {
-                $trend = stats_trend($vals);
-                $ind['trend_dir'] = $trend['direction'];
-                $ind['trend_pct'] = $trend['pct_change'];
-            } else {
-                $ind['trend_dir'] = null;
-                $ind['trend_pct'] = 0;
-            }
-        }
-        unset($ind);
-    } catch (Exception $ex) {
-        log_error('indicators_dashboard', $ex);
-    }
-
-    // Agrupa por categoria
-    $grouped = [];
-    foreach ($indicators as $ind) {
-        $cat = $ind['category'] ?: 'Sem categoria';
-        $grouped[$cat][] = $ind;
-    }
-    ksort($grouped);
-
-    // KPIs globais
-    $total = count($indicators);
-    $met = count(array_filter($indicators, fn($i) => $i['goal_status'] === 'met'));
-    $tolerance = count(array_filter($indicators, fn($i) => $i['goal_status'] === 'tolerance'));
-    $missed = count(array_filter($indicators, fn($i) => $i['goal_status'] === 'missed'));
-    $no_data = count(array_filter($indicators, fn($i) => $i['goal_status'] === null));
-
-    view('indicators/dashboard', [
-        'page_title' => 'Painel de Indicadores',
-        'grouped'    => $grouped,
-        'categories' => $categories,
-        'category'   => $category,
-        'kpi'        => [
-            'total' => $total, 'met' => $met, 'tolerance' => $tolerance,
-            'missed' => $missed, 'no_data' => $no_data,
-        ],
-    ]);
+    $qs = $_GET;
+    unset($qs['m'], $qs['url']);
+    $q = http_build_query($qs);
+    redirect('indicators' . ($q !== '' ? '?' . $q : ''));
 }
 
 function indicators_edit($param = null) {
@@ -223,6 +228,10 @@ function indicators_edit($param = null) {
         'indicator'  => $indicator,
         'variables'  => $variables,
         'editing'    => true,
+        'sectors'    => sector_list(get_hospital_id()),
+        'users'      => user_list_active(),
+        'default_sector_id' => $indicator['sector_id'],
+        'menu_key'   => 'indicators',
     ]);
 }
 
@@ -357,6 +366,7 @@ function indicators_view($param = null) {
         'data_entries' => $data_entries,
         'var_series'   => $var_series,
         'analysis'     => $analysis,
+        'menu_key'     => 'indicators',
     ]);
 }
 
@@ -399,6 +409,7 @@ function indicators_data($param = null) {
         'variables'   => $variables,
         'data'        => $data,
         'data_values' => $data_values,
+        'menu_key'    => 'indicators',
     ]);
 }
 
@@ -437,7 +448,7 @@ function indicators_store_data($param = null) {
         $raw = $var_values_in[$v['code']] ?? '';
         $raw = is_string($raw) ? str_replace(',', '.', trim($raw)) : $raw;
         if ($raw === '' || !is_numeric($raw)) {
-            $errors[] = "Valor numérico obrigatório para: {$v['label']}.";
+            $errors[] = 'Valor numérico obrigatório para: ' . e($v['label']) . '.';
         } else {
             $var_values[$v['code']] = (float) $raw;
         }
@@ -449,7 +460,7 @@ function indicators_store_data($param = null) {
         try {
             $calc_value = formula_evaluate($indicator['formula'], $var_values);
         } catch (Throwable $ex) {
-            $errors[] = 'Erro na fórmula: ' . $ex->getMessage();
+            $errors[] = 'Erro na fórmula: ' . e($ex->getMessage());
         }
     } elseif (empty($variables)) {
         // Modo legado: valor direto
@@ -591,7 +602,11 @@ function _indicators_collect_form() {
         'responsible_user_id' => sanitize_int(input('responsible_user_id')) ?: null,
         'accreditation'       => clean(input('accreditation')),
         'template_slug'       => clean(input('template_slug')) ?: null,
+        'sector_id'           => sanitize_int(input('sector_id')) ?: null,
     ];
+    if ($data['sector_id'] && !sector_find_active($data['sector_id'], get_hospital_id())) {
+        $data['sector_id'] = null;
+    }
 
     $bench_raw = str_replace(',', '.', (string) input('benchmark_value', ''));
     if ($bench_raw !== '' && is_numeric($bench_raw)) $data['benchmark_value'] = (float) $bench_raw;
@@ -641,10 +656,10 @@ function _indicators_validate(array $input) {
             continue;
         }
         if (!preg_match('/^[a-zA-Z][a-zA-Z0-9_]*$/', $v['code'])) {
-            $errors[] = "Código '{$v['code']}' inválido (use letras, começando com letra).";
+            $errors[] = "Código '" . e($v['code']) . "' inválido (use letras, começando com letra).";
         }
         if (isset($codes_seen[$v['code']])) {
-            $errors[] = "Código de variável duplicado: '{$v['code']}'.";
+            $errors[] = "Código de variável duplicado: '" . e($v['code']) . "'.";
         }
         $codes_seen[$v['code']] = true;
     }
@@ -655,7 +670,7 @@ function _indicators_validate(array $input) {
             $errors[] = 'Defina ao menos uma variável para usar a fórmula.';
         } else {
             $err = formula_validate($d['formula'], array_keys($codes_seen));
-            if ($err) $errors[] = 'Fórmula inválida: ' . $err;
+            if ($err) $errors[] = 'Fórmula inválida: ' . e($err);
         }
     }
 
@@ -699,13 +714,18 @@ function indicators_actions($param = null) {
         if ($indicator_id) {
             $indicator = indicator_find($indicator_id, $hospital_id);
         }
-        $actions = _action_list($indicator_id, $hospital_id);
+        $actions = _action_list($indicator_id, $hospital_id, get_sector_id());
+        if (!$indicator_id) {
+            $indicators_all = indicator_list($hospital_id, '', '', '', 500, 0, get_sector_id());
+        }
     } catch (Exception $ex) { log_error('indicators_actions', $ex); }
 
     view('indicators/actions', [
         'page_title' => 'Planos de Ação',
         'indicator'  => $indicator,
         'actions'    => $actions,
+        'indicators_all' => $indicators_all ?? [],
+        'menu_key'   => 'indicators-actions',
     ]);
 }
 
@@ -728,6 +748,10 @@ function indicators_action_store($param = null) {
         set_flash('error', 'Título da ação é obrigatório.');
         redirect('indicators/actions?indicator_id=' . $indicator_id);
     }
+    if (!$indicator_id || !indicator_find($indicator_id, get_hospital_id())) {
+        set_flash('error', 'Selecione um indicador válido para a ação.');
+        redirect('indicators/actions');
+    }
 
     try {
         _action_create($indicator_id, $data, get_user_id());
@@ -746,9 +770,22 @@ function indicators_action_update_status($param = null) {
     csrf_validate();
 
     $action_id    = sanitize_int(input('action_id'));
-    $indicator_id = sanitize_int(input('indicator_id'));
     $new_status   = (string) input('new_status');
     $verification = clean(input('verification'));
+
+    // A ação precisa pertencer a um indicador desta unidade (o indicator_id
+    // vem do registro, não do formulário)
+    $action_row = $action_id ? db_query_one(
+        "SELECT a.id, a.indicator_id FROM doc_indicator_actions a
+         JOIN doc_indicators i ON i.id = a.indicator_id
+         WHERE a.id = ? AND a.deleted_at IS NULL AND i.deleted_at IS NULL AND i.hospital_id = ?",
+        [$action_id, get_hospital_id()]
+    ) : null;
+    if (!$action_row) {
+        set_flash('error', 'Ação não encontrada.');
+        redirect('indicators/actions');
+    }
+    $indicator_id = (int) $action_row['indicator_id'];
 
     $valid = ['pending','in_progress','done','cancelled'];
     if (!in_array($new_status, $valid, true)) {
@@ -799,19 +836,20 @@ function indicators_import($param = null) {
         'indicator'  => $indicator,
         'variables'  => $variables,
         'result'     => $result,
+        'menu_key'   => 'indicators',
     ]);
 }
 
 // ─── Helpers PDCA ───────────────────────────────────────────────────────────
 
-function _action_list($indicator_id = null, $hospital_id = null) {
-    if (!db_has_table('doc_indicator_actions')) return [];
+function _action_list($indicator_id = null, $hospital_id = null, $sector_id = 0) {
     $sql = "SELECT a.*, i.name AS indicator_name FROM doc_indicator_actions a
             JOIN doc_indicators i ON i.id = a.indicator_id
-            WHERE a.deleted_at IS NULL";
+            WHERE a.deleted_at IS NULL AND i.deleted_at IS NULL";
     $params = [];
     if ($indicator_id) { $sql .= " AND a.indicator_id = ?"; $params[] = $indicator_id; }
     if ($hospital_id)  { $sql .= " AND i.hospital_id = ?";  $params[] = $hospital_id; }
+    if ((int) $sector_id > 0) { $sql .= " AND i.sector_id = ?"; $params[] = (int) $sector_id; }
     $sql .= " ORDER BY FIELD(a.status,'pending','in_progress','done','cancelled'), a.due_date ASC";
     return db_query($sql, $params);
 }
@@ -859,7 +897,7 @@ function _import_csv($indicator, $variables) {
     $handle = fopen($file, 'r');
     if (!$handle) return ['ok' => false, 'error' => 'Erro ao abrir arquivo.'];
 
-    $header = fgetcsv($handle, 0, ';');
+    $header = fgetcsv($handle, 0, ';', '"', '\\');
     if (!$header) { fclose($handle); return ['ok' => false, 'error' => 'Arquivo vazio ou formato inválido.']; }
 
     $header = array_map(function($h) { return trim(mb_strtolower($h)); }, $header);
@@ -883,7 +921,7 @@ function _import_csv($indicator, $variables) {
     if ($obs_col === false) $obs_col = array_search('observations', $header);
 
     $imported = 0; $errors = []; $line = 1;
-    while (($row = fgetcsv($handle, 0, ';')) !== false) {
+    while (($row = fgetcsv($handle, 0, ';', '"', '\\')) !== false) {
         $line++;
         $ref_date = trim($row[$date_col] ?? '');
 

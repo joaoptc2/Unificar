@@ -1,7 +1,7 @@
 <?php $isEdit = !empty($channel['id']); ?>
 <div class="page-header">
-    <h1><i class="bi bi-hash me-2"></i><?= $isEdit ? 'Editar Canal' : 'Novo Canal' ?></h1>
-    <a href="index.php?m=chat&page=chat" class="btn btn-outline-secondary btn-sm">
+    <h1 class="h4"><i class="bi bi-hash me-2"></i><?= $isEdit ? 'Editar canal' : 'Novo canal' ?></h1>
+    <a href="index.php?m=chat&page=chat<?= $isEdit ? '&channel_id=' . (int) $channel['id'] : '' ?>" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>
@@ -25,7 +25,7 @@
                                        placeholder="ex: projetos-marketing"
                                        value="<?= Sanitize::e($channel['name'] ?? '') ?>">
                             </div>
-                            <div class="form-text">Use letras minúsculas, números e hífens.</div>
+                            <div class="form-text">Nome curto e descritivo (ex.: projetos-marketing).</div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Tipo</label>
@@ -39,6 +39,17 @@
                             <textarea name="description" class="form-control" rows="2"
                                       placeholder="Sobre o que é este canal?"><?= Sanitize::e($channel['description'] ?? '') ?></textarea>
                         </div>
+                        <?php if (!empty($categories)): ?>
+                        <div class="col-md-6">
+                            <label class="form-label">Categoria</label>
+                            <select name="category_id" class="form-select">
+                                <option value="">Sem categoria</option>
+                                <?php foreach ($categories as $cat): ?>
+                                <option value="<?= (int) $cat['id'] ?>" <?= (int) ($channel['category_id'] ?? 0) === (int) $cat['id'] ? 'selected' : '' ?>><?= Sanitize::e($cat['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <?php endif; ?>
                         <?php if ($isEdit): ?>
                         <div class="col-12">
                             <label class="form-label">Tópico</label>
@@ -53,7 +64,7 @@
                             <label class="form-label">Adicionar membros</label>
                             <select name="members[]" class="form-select" multiple size="5">
                                 <?php foreach ($users ?? [] as $u): ?>
-                                    <?php if ($u['id'] != Session::userId()): ?>
+                                    <?php if ((int) $u['id'] !== (int) Session::userId()): ?>
                                     <option value="<?= $u['id'] ?>"><?= Sanitize::e($u['name']) ?> (<?= Sanitize::e($u['email']) ?>)</option>
                                     <?php endif; ?>
                                 <?php endforeach; ?>
@@ -63,9 +74,9 @@
                         <?php endif; ?>
 
                         <div class="col-12 text-end">
-                            <a href="index.php?m=chat&page=chat" class="btn btn-outline-secondary me-2">Cancelar</a>
+                            <a href="index.php?m=chat&page=chat<?= $isEdit ? '&channel_id=' . (int) $channel['id'] : '' ?>" class="btn btn-outline-secondary me-2">Cancelar</a>
                             <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-lg me-1"></i> <?= $isEdit ? 'Atualizar' : 'Criar Canal' ?>
+                                <i class="bi bi-check-lg me-1"></i> <?= $isEdit ? 'Salvar' : 'Criar canal' ?>
                             </button>
                         </div>
                     </div>

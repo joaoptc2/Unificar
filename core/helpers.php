@@ -26,9 +26,25 @@ function core_module_url(string $module, array $params = []): string
     return BASE_URL . '/index.php?' . $query;
 }
 
+/**
+ * URL de um arquivo de assets/ com marca de versão (data da última
+ * modificação): o .htaccess pede cache longo para CSS/JS, e a marca
+ * garante que uma atualização do sistema chegue ao navegador.
+ */
 function core_asset(string $path): string
 {
-    return BASE_URL . '/assets/' . ltrim($path, '/');
+    $path = ltrim($path, '/');
+    $url  = BASE_URL . '/assets/' . $path;
+
+    static $stamps = [];
+    if (!array_key_exists($path, $stamps)) {
+        $file = BASE_PATH . '/assets/' . $path;
+        $stamps[$path] = is_file($file) ? (string) filemtime($file) : '';
+    }
+    if ($stamps[$path] === '') {
+        return $url;
+    }
+    return $url . (str_contains($url, '?') ? '&' : '?') . 'v=' . $stamps[$path];
 }
 
 function core_redirect(string $url): never
@@ -85,4 +101,38 @@ function core_require(string $permKey, ?string $module = null): void
 {
     $module ??= defined('MODULE_SLUG') ? MODULE_SLUG : '';
     Core\Perms::require($module, $permKey);
+}
+
+/** true se o usuário logado tem QUALQUER uma das micropermissões. */
+function core_can_any(array $permKeys, ?string $module = null): bool
+{
+    foreach ($permKeys as $key) {
+        if (core_can((string) $key, $module)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/** Interrompe com 403 se o usuário não tem NENHUMA das micropermissões. */
+function core_require_any(array $permKeys, ?string $module = null): void
+{
+    if (!core_can_any($permKeys, $module)) {
+        core_require((string) ($permKeys[0] ?? ''), $module);
+    }
+}
+
+/**
+ * URL do painel de configuração de um módulo na administração central:
+ * core_admin_url('documentos', 'sectors') → index.php?m=admin&a=module&slug=documentos&tab=sectors
+ */
+function core_admin_url(string $module, string $tab = '', array $extra = []): string
+{
+    return Core\AdminPanel::url($module, $tab, $extra);
+}
+
+/** Aba ativa do painel de módulo na administração central (ou null fora dele). */
+function core_admin_tab(): ?string
+{
+    return defined('CORE_ADMIN_TAB') ? CORE_ADMIN_TAB : null;
 }

@@ -17,7 +17,7 @@
 <!-- Filtros -->
 <div class="filter-panel">
     <form method="GET" class="row g-2 align-items-end">
-        <input type="hidden" name="page" value="expirations">
+        <input type="hidden" name="m" value="rh"><input type="hidden" name="page" value="expirations">
         <div class="col-md-3">
             <label class="form-label">Buscar</label>
             <input type="text" name="search" class="form-control form-control-sm"

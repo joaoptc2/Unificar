@@ -11,7 +11,7 @@ $status_labels = [
 ];
 ?>
 <div class="page-header">
-    <h1><i class="bi bi-folder2-open me-2"></i>Documentos</h1>
+    <h1><i class="bi bi-folder2-open me-2"></i>Documentos controlados</h1>
     <div class="d-flex gap-2">
         <?php if (core_can('documents.export')): ?>
         <a href="<?php echo url('documents/export' . ($export_qs ? '?' . $export_qs : '')); ?>"
@@ -19,11 +19,16 @@ $status_labels = [
         <?php endif; ?>
         <?php if (core_can('documents.create')): ?>
         <a href="<?php echo url('documents/create'); ?>" class="btn btn-primary btn-sm">
-            <i class="bi bi-plus-lg me-1"></i>Novo Documento
+            <i class="bi bi-plus-lg me-1"></i>Novo documento
         </a>
         <?php endif; ?>
     </div>
 </div>
+
+<p class="text-muted small mb-3">
+    <i class="bi bi-shield-check me-1"></i>Documentos com controle de validade, revisão periódica, aprovação e ciência.
+    Os documentos apenas armazenados ficam em <a href="<?php echo url('documents/uncontrolled'); ?>">Documentos não controlados</a>.
+</p>
 
 <div class="filter-panel">
     <form method="GET" action="<?php echo core_url('index.php'); ?>" class="row g-2 align-items-end">
@@ -64,7 +69,7 @@ $status_labels = [
         <div class="col-md-4">
             <label class="form-label">Buscar</label>
             <input type="text" name="search" class="form-control form-control-sm"
-                   placeholder="Título, responsável..." value="<?php echo e($search); ?>">
+                   placeholder="Título, código, responsável..." value="<?php echo e($search); ?>">
         </div>
         <div class="col-md-2">
             <button type="submit" class="btn btn-outline-primary btn-sm w-100">
@@ -79,7 +84,7 @@ $status_labels = [
         <?php if (empty($documents)): ?>
             <div class="text-center py-5">
                 <i class="bi bi-folder2-open display-1 text-muted"></i>
-                <p class="text-muted mt-2">Nenhum documento encontrado.</p>
+                <p class="text-muted mt-2">Nenhum documento controlado encontrado<?php echo get_sector_id() ? ' no setor em foco' : ''; ?>.</p>
                 <?php if (core_can('documents.create')): ?>
                 <a href="<?php echo url('documents/create'); ?>" class="btn btn-sm btn-primary">
                     <i class="bi bi-plus-lg me-1"></i>Cadastrar
@@ -93,6 +98,7 @@ $status_labels = [
                         <tr>
                             <th>Documento</th>
                             <th>Categoria</th>
+                            <th>Setor</th>
                             <th>Validade</th>
                             <th>Status</th>
                             <th>Situação</th>
@@ -101,13 +107,16 @@ $status_labels = [
                     </thead>
                     <tbody>
                     <?php foreach ($documents as $doc):
-                        $d_days = days_until($doc['expiration_date']);
-                        $d_badge = $d_days < 0 ? 'badge-vencido' : ($d_days <= 30 ? 'badge-proximo' : 'badge-valido');
+                        $d_days = $doc['expiration_date'] ? days_until($doc['expiration_date']) : null;
+                        $d_badge = $d_days === null ? 'bg-light text-dark' : ($d_days < 0 ? 'badge-vencido' : ($d_days <= 30 ? 'badge-proximo' : 'badge-valido'));
                         $d_st = $status_labels[$doc['status'] ?? 'approved'] ?? ['bg-secondary','?'];
+                        $is_editor = document_is_editor($doc);
                     ?>
                         <tr>
                             <td>
-                                <?php if (!empty($doc['file_type'])): ?>
+                                <?php if ($is_editor): ?>
+                                    <i class="bi bi-file-earmark-richtext text-primary me-1" title="Escrito no sistema"></i>
+                                <?php elseif (!empty($doc['file_type'])): ?>
                                     <i class="bi <?php echo file_icon($doc['file_type']); ?> me-1"></i>
                                 <?php endif; ?>
                                 <a href="<?php echo url('documents/view?id=' . $doc['id']); ?>"
@@ -117,21 +126,26 @@ $status_labels = [
                                 <?php if (!empty($doc['document_code'])): ?>
                                     <small class="text-muted ms-1"><?php echo e($doc['document_code']); ?></small>
                                 <?php endif; ?>
+                                <small class="text-muted ms-1">v<?php echo (int) $doc['current_version']; ?></small>
                             </td>
                             <td><span class="badge bg-secondary"><?php echo e($doc['category']); ?></span></td>
+                            <td class="small text-muted"><?php echo e($doc['sector_name'] ?: '—'); ?></td>
                             <td class="small"><?php echo format_date($doc['expiration_date']); ?></td>
                             <td><span class="badge <?php echo $d_st[0]; ?>" style="font-size:.65rem"><?php echo $d_st[1]; ?></span></td>
-                            <td><span class="badge <?php echo $d_badge; ?>"><?php echo expiry_label($d_days); ?></span></td>
-                            <td class="text-end">
+                            <td><span class="badge <?php echo $d_badge; ?>"><?php echo $d_days === null ? 'Sem validade' : expiry_label($d_days); ?></span></td>
+                            <td class="text-end text-nowrap">
                                 <a href="<?php echo url('documents/view?id=' . $doc['id']); ?>"
-                                   class="btn btn-outline-primary btn-action"><i class="bi bi-eye"></i></a>
+                                   class="btn btn-outline-primary btn-action" title="Ver"><i class="bi bi-eye"></i></a>
                                 <?php if (core_can('documents.edit')): ?>
                                 <a href="<?php echo url('documents/edit?id=' . $doc['id']); ?>"
-                                   class="btn btn-outline-warning btn-action"><i class="bi bi-pencil"></i></a>
+                                   class="btn btn-outline-warning btn-action" title="Editar"><i class="bi bi-pencil"></i></a>
                                 <?php endif; ?>
-                                <?php if (!empty($doc['file_path'])): ?>
+                                <?php if ($is_editor): ?>
+                                <a href="<?php echo url('documents/print/' . $doc['id']); ?>" target="_blank"
+                                   class="btn btn-outline-success btn-action" title="Imprimir / PDF"><i class="bi bi-printer"></i></a>
+                                <?php elseif (!empty($doc['file_path'])): ?>
                                 <a href="<?php echo url('documents/download?id=' . $doc['id']); ?>"
-                                   class="btn btn-outline-success btn-action"><i class="bi bi-download"></i></a>
+                                   class="btn btn-outline-success btn-action" title="Baixar"><i class="bi bi-download"></i></a>
                                 <?php endif; ?>
                             </td>
                         </tr>

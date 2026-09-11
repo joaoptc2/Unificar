@@ -13,8 +13,11 @@ if (strlen($q) >= 2) {
     $like = "%{$q}%";
 
     try {
-        $st = db()->prepare("SELECT id, name, code, status, criticality FROM man_equipment WHERE hospital_id = ? AND (name LIKE ? OR code LIKE ? OR serial_number LIKE ?) LIMIT 10");
-        $st->execute([$hid, $like, $like, $like]);
+        // Também localiza pelo código de identificação de 12 dígitos (com ou sem espaços)
+        $digits   = man_asset_code_normalize($q);
+        $likeCode = '%' . ($digits !== '' ? $digits : $q) . '%';
+        $st = db()->prepare("SELECT id, name, code, asset_code, status, criticality FROM man_equipment WHERE hospital_id = ? AND (name LIKE ? OR code LIKE ? OR serial_number LIKE ? OR asset_code LIKE ?) LIMIT 10");
+        $st->execute([$hid, $like, $like, $like, $likeCode]);
         $results['equipment'] = $st->fetchAll();
     } catch (Throwable $ex) {}
 
@@ -40,6 +43,7 @@ if (strlen($q) >= 2) {
 $totalResults = array_sum(array_map('count', $results));
 $statusLabels = ['open'=>'Aberta','in_progress'=>'Em Andamento','waiting_part'=>'Ag. Peça','completed'=>'Concluída','cancelled'=>'Cancelada'];
 $critLabels   = ['low'=>'Baixa','medium'=>'Média','high'=>'Alta','critical'=>'Crítica'];
+$eqStatusLabels = ['active'=>'Ativo','maintenance'=>'Em Manutenção','inactive'=>'Inativo','broken'=>'Quebrado'];
 
 $pageTitle = 'Busca';
 ob_start();
@@ -53,7 +57,7 @@ ob_start();
     <form method="GET" class="row g-2 align-items-end">
         <input type="hidden" name="m" value="manutencao"><input type="hidden" name="page" value="search">
         <div class="col">
-            <input type="text" class="form-control" name="q" value="<?php echo e($q); ?>" placeholder="Buscar equipamentos, OS, peças, técnicos..." autofocus>
+            <input type="text" class="form-control" name="q" value="<?php echo e($q); ?>" placeholder="Buscar equipamentos (nome, código de identificação, série), OS, peças, técnicos..." autofocus>
         </div>
         <div class="col-auto">
             <button class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i> Buscar</button>
@@ -77,15 +81,19 @@ ob_start();
         <div class="card-header bg-white fw-semibold"><i class="bi bi-hdd-rack me-1"></i> Equipamentos (<?php echo count($results['equipment']); ?>)</div>
         <div class="card-body p-0">
             <div class="table-responsive"><table class="table table-sm table-hover mb-0">
-                <thead><tr><th>Nome</th><th>Código</th><th>Criticidade</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Identificação</th><th>Nome</th><th>Cód. patrimonial</th><th>Criticidade</th><th>Status</th><th></th></tr></thead>
                 <tbody>
                 <?php foreach ($results['equipment'] as $r): ?>
                 <tr>
+                    <td><a href="<?php echo url('equipment', ['action'=>'history','id'=>$r['id']]); ?>" class="font-monospace fw-semibold text-decoration-none text-nowrap"><?php echo e(man_asset_code_format((string)($r['asset_code'] ?? '')) ?: '—'); ?></a></td>
                     <td><strong><?php echo e($r['name']); ?></strong></td>
                     <td class="text-muted"><?php echo e($r['code'] ?? '—'); ?></td>
                     <td><span class="badge badge-<?php echo e($r['criticality']); ?>"><?php echo e($critLabels[$r['criticality']] ?? $r['criticality']); ?></span></td>
-                    <td><span class="badge badge-<?php echo e($r['status']); ?>"><?php echo e($r['status']); ?></span></td>
-                    <td class="text-end"><a href="<?php echo url('equipment', ['action'=>'detail','id'=>$r['id']]); ?>" class="btn btn-outline-primary btn-action"><i class="bi bi-eye"></i></a></td>
+                    <td><span class="badge badge-<?php echo e($r['status']); ?>"><?php echo e($eqStatusLabels[$r['status']] ?? $r['status']); ?></span></td>
+                    <td class="text-end">
+                        <a href="<?php echo url('equipment', ['action'=>'history','id'=>$r['id']]); ?>" class="btn btn-outline-primary btn-action" title="Histórico"><i class="bi bi-clock-history"></i></a>
+                        <a href="<?php echo url('equipment', ['action'=>'label','id'=>$r['id']]); ?>" class="btn btn-outline-secondary btn-action" title="Etiqueta" target="_blank"><i class="bi bi-upc"></i></a>
+                    </td>
                 </tr>
                 <?php endforeach; ?>
                 </tbody>

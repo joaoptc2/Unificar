@@ -1,7 +1,7 @@
 <div class="page-header">
-    <h1><i class="bi bi-gear me-2"></i>Configurações — #<?= Sanitize::e($channel['name']) ?></h1>
+    <h1 class="h4"><i class="bi bi-gear me-2"></i>Configurações — #<?= Sanitize::e($channel['name']) ?></h1>
     <a href="index.php?m=chat&page=chat&channel_id=<?= $channel['id'] ?>" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left me-1"></i> Voltar ao Canal
+        <i class="bi bi-arrow-left me-1"></i> Voltar ao canal
     </a>
 </div>
 
@@ -18,9 +18,9 @@
                             <label class="form-label">Modo somente leitura</label>
                             <select name="is_readonly" class="form-select">
                                 <option value="0" <?= !(int)($channel['is_readonly'] ?? 0) ? 'selected' : '' ?>>Desativado — todos podem enviar</option>
-                                <option value="1" <?= (int)($channel['is_readonly'] ?? 0) ? 'selected' : '' ?>>Ativado — somente admins enviam</option>
+                                <option value="1" <?= (int)($channel['is_readonly'] ?? 0) ? 'selected' : '' ?>>Ativado — somente moderadores enviam</option>
                             </select>
-                            <div class="form-text">Quando ativado, apenas administradores podem enviar mensagens.</div>
+                            <div class="form-text">Quando ativado, apenas quem tem a permissão "Moderar" do chat envia mensagens.</div>
                         </div>
 
                         <div class="col-md-6">
@@ -61,12 +61,27 @@
                         <div class="col-12 text-end mt-3">
                             <a href="index.php?m=chat&page=chat&channel_id=<?= $channel['id'] ?>" class="btn btn-outline-secondary me-2">Cancelar</a>
                             <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-lg me-1"></i> Salvar Configurações
+                                <i class="bi bi-check-lg me-1"></i> Salvar configurações
                             </button>
                         </div>
                     </div>
                 </form>
             </div>
         </div>
+        <?php if (!empty($canArchive)): ?>
+        <div class="card border-0 shadow-sm mt-3 border-danger-subtle">
+            <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <strong class="text-danger"><i class="bi bi-archive me-1"></i>Arquivar canal</strong>
+                    <div class="small text-muted">O canal deixa de aparecer para todos; as mensagens são preservadas.</div>
+                </div>
+                <form method="POST" action="index.php?m=chat&page=channels&action=archive">
+                    <?= Csrf::field() ?>
+                    <input type="hidden" name="id" value="<?= (int) $channel['id'] ?>">
+                    <button type="submit" class="btn btn-outline-danger btn-sm" data-confirm="Arquivar o canal #<?= Sanitize::e($channel['name']) ?>?"><i class="bi bi-archive me-1"></i> Arquivar</button>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 </div>

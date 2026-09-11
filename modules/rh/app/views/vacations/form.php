@@ -1,6 +1,6 @@
 <?php $isEdit = !empty($item['id']); ?>
 <div class="page-header">
-    <h1><i class="bi bi-sun me-2"></i><?= $isEdit ? 'Editar' : 'Nova' ?> Ferias</h1>
+    <h1><i class="bi bi-sun me-2"></i><?= $isEdit ? 'Editar' : 'Novas' ?> Férias</h1>
     <a href="index.php?m=rh&page=vacations" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
 </div>
 <div class="row justify-content-center"><div class="col-md-8">

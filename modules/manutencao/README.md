@@ -16,8 +16,10 @@ Contrato do porte: `docs/PORTING.md` (raiz da plataforma).
   `permissions`) e o conjunto efetivo do usuário chega por request em
   `$GLOBALS['MODULE_PERMS']`. As pages checam com
   `core_can('recurso.ação')` / `core_require('recurso.ação')`;
-  `canAccessModule()`/`requireModule()` do `config.php` apenas traduzem
-  o nome da página para a chave `.view` correspondente. Os níveis
+  `requireModule()` do `config.php` apenas traduz o nome da página para a
+  chave `.view` correspondente. Todo POST passa por `manPostIsValid()`,
+  que **rejeita** (mensagem + auditoria + redirecionamento) o envio sem
+  token CSRF válido em vez de descartá-lo em silêncio. Os níveis
   legados (`admin`, `manager`, `maintenance`, `cleaning`, `viewer`)
   viraram `presets` no manifesto, usados pela UI de permissões e pelo
   conversor de grants.
@@ -28,8 +30,23 @@ Contrato do porte: `docs/PORTING.md` (raiz da plataforma).
   `stock.edit`).
 - **Login/registro/logout locais removidos** → telas do núcleo
   (`?m=auth&a=login|logout`). O CRUD de usuários saiu de `pages/admin.php`
-  → administração central (`?m=admin&a=users`); o módulo mantém apenas
-  Hospital e Setores.
+  → administração central (`?m=admin&a=users`).
+- **Configuração do módulo na Administração central**: setores e
+  categorias de equipamentos ficam em `admin_panel.php` (abas `sectors` e
+  `categories` de `?m=admin&a=module&slug=manutencao`; ações em
+  `lib/admin_actions.php`). `?page=admin` e `?page=equipment&action=categories`
+  só redirecionam (GET) ou processam POST legado. A aba "Hospital / Dados
+  da unidade" foi descontinuada — o nome da unidade vem de
+  `Core\Settings::get('org_name')` (`manOrgName()`).
+- **Código de identificação único (12 dígitos, DV Luhn)** em
+  `man_equipment.asset_code` (`lib/asset_code.php`), com código de barras
+  Code 128 (`lib/barcode.php`) e QR Code (`lib/qrcode.php`) em PHP puro.
+  Rotas: `equipment&action=lookup[&code=]` (busca/leitor → histórico),
+  `action=history&id=` (linha do tempo consolidada + totais),
+  `action=label&id=|ids=` (etiquetas 50×30, 70×40 ou A4). Equipamentos
+  antigos recebem código **em lotes** (`man_asset_code_ensure_all($limite)`):
+  `MAN_ASSET_CODE_BATCH` (200) por abertura da listagem e 5.000 por
+  execução do cron, para que uma base grande não trave o request.
 - **Banco único**: todas as tabelas do módulo têm prefixo `man_`
   (`sql/modules/manutencao.sql`). `users`, `notifications` e `audit_log`
   são as tabelas GLOBAIS do núcleo (`notifications.module='manutencao'`,

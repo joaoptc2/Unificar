@@ -117,9 +117,11 @@ ob_start();
 <div class="page-header">
     <h1><i class="bi bi-speedometer2 me-2"></i>Dashboard</h1>
     <div class="d-flex gap-2">
+        <?php if (core_can('indicators.view')): ?>
         <a class="btn btn-outline-primary btn-sm" href="<?php echo url('indicators'); ?>">
             <i class="bi bi-graph-up me-1"></i> Indicadores
         </a>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -234,9 +236,11 @@ ob_start();
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
                 <span class="fw-semibold"><i class="bi bi-clipboard2-pulse me-1"></i> Últimas Ordens de Serviço</span>
+                <?php if (core_can('service_orders.view')): ?>
                 <a class="btn btn-outline-secondary btn-sm" href="<?php echo url('service-orders'); ?>">
                     <i class="bi bi-arrow-right me-1"></i> Ver todas
                 </a>
+                <?php endif; ?>
             </div>
             <div class="card-body p-0">
                 <?php if (empty($recentOrders)): ?>

@@ -28,6 +28,12 @@ final class Perms
     /** @var array<int, array<string, array<string, bool>>> userId => module => set efetivo */
     private static array $effective = [];
 
+    /** @var array<int, bool> userId => todas as concessões já carregadas (1 consulta por tipo) */
+    private static array $loadedAll = [];
+
+    /** @var array<int, bool> userId => é administrador global (cache por request) */
+    private static array $isAdmin = [];
+
     /** @var array<int, int[]>|null userId => groupIds (cache por request) */
     private static array $groupsOf = [];
 
@@ -92,45 +98,66 @@ final class Perms
             return self::$effective[$userId][$module];
         }
 
-        $set = [];
-
         if (self::isGlobalAdmin($userId)) {
+            $set = [];
             foreach (self::allKeys($module) as $key) {
                 $set[$key] = true;
             }
             return self::$effective[$userId][$module] = $set;
         }
 
+        // As concessões de TODOS os módulos são lidas de uma vez (duas
+        // consultas por request): o menu superior, a administração e os
+        // gates do módulo ativo consultam vários módulos em sequência.
+        self::loadAllFor($userId);
+
+        return self::$effective[$userId][$module] ??= [];
+    }
+
+    /**
+     * Carrega, em duas consultas, todas as concessões do usuário (grupos +
+     * individuais) e monta o conjunto efetivo de cada módulo.
+     */
+    private static function loadAllFor(int $userId): void
+    {
+        if (!empty(self::$loadedAll[$userId])) {
+            return;
+        }
+        self::$loadedAll[$userId] = true;
+
+        $sets = [];
+
         // 1) grupos
         $groupIds = self::groupIdsOf($userId);
         if ($groupIds) {
             $in   = implode(',', array_fill(0, count($groupIds), '?'));
             $rows = DB::query(
-                "SELECT perm_key FROM permission_grants
-                 WHERE subject_type = 'group' AND subject_id IN ({$in})
-                   AND module_slug = ? AND allowed = 1",
-                [...$groupIds, $module]
+                "SELECT module_slug, perm_key FROM permission_grants
+                 WHERE subject_type = 'group' AND subject_id IN ({$in}) AND allowed = 1",
+                $groupIds
             );
             foreach ($rows as $r) {
-                $set[$r['perm_key']] = true;
+                $sets[$r['module_slug']][$r['perm_key']] = true;
             }
         }
 
-        // 2) registros individuais (sobrepõem)
+        // 2) registros individuais (sobrepõem: allowed=0 nega)
         $rows = DB::query(
-            "SELECT perm_key, allowed FROM permission_grants
-             WHERE subject_type = 'user' AND subject_id = ? AND module_slug = ?",
-            [$userId, $module]
+            "SELECT module_slug, perm_key, allowed FROM permission_grants
+             WHERE subject_type = 'user' AND subject_id = ?",
+            [$userId]
         );
         foreach ($rows as $r) {
             if ((int) $r['allowed'] === 1) {
-                $set[$r['perm_key']] = true;
+                $sets[$r['module_slug']][$r['perm_key']] = true;
             } else {
-                unset($set[$r['perm_key']]);
+                unset($sets[$r['module_slug']][$r['perm_key']]);
             }
         }
 
-        return self::$effective[$userId][$module] = $set;
+        foreach ($sets as $slug => $set) {
+            self::$effective[$userId][(string) $slug] = $set;
+        }
     }
 
     public static function can(int $userId, string $module, string $permKey): bool
@@ -318,14 +345,19 @@ final class Perms
     {
         self::$effective = [];
         self::$groupsOf  = [];
+        self::$loadedAll = [];
+        self::$isAdmin   = [];
     }
 
-    private static function isGlobalAdmin(int $userId): bool
+    public static function isGlobalAdmin(int $userId): bool
     {
         if (Auth::id() === $userId) {
             return Auth::isGlobalAdmin();
         }
-        $row = DB::queryOne('SELECT is_admin FROM users WHERE id = ?', [$userId]);
-        return (bool) ($row['is_admin'] ?? false);
+        if (!isset(self::$isAdmin[$userId])) {
+            $row = DB::queryOne('SELECT is_admin FROM users WHERE id = ?', [$userId]);
+            self::$isAdmin[$userId] = (bool) ($row['is_admin'] ?? false);
+        }
+        return self::$isAdmin[$userId];
     }
 }

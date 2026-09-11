@@ -4,8 +4,8 @@ $formAction = $isEdit ? 'index.php?m=rh&page=positions&action=update' : 'index.p
 ?>
 
 <div class="page-header">
-    <h1><i class="bi bi-person-workspace me-2"></i><?= $isEdit ? 'Editar Cargo' : 'Novo Cargo' ?></h1>
-    <a href="index.php?m=rh&page=positions" class="btn btn-outline-secondary btn-sm">
+    <h1 class="h5"><i class="bi bi-person-workspace me-2"></i><?= $isEdit ? 'Editar Cargo' : 'Novo Cargo' ?></h1>
+    <a href="<?= core_admin_url('rh', 'positions') ?>" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
     </a>
 </div>

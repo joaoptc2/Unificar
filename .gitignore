@@ -9,6 +9,9 @@
 /uploads/*
 !/uploads/.htaccess
 !/uploads/*/.gitkeep
+# As proteções de diretório de upload são versionadas (o servidor precisa delas)
+!/uploads/*/.htaccess
+!/uploads/*/*/.htaccess
 
 # SO / editores
 .DS_Store
@@ -18,3 +21,9 @@ Thumbs.db
 # Cache de runtime dos módulos
 modules/*/storage/cache/*
 !modules/*/storage/cache/.gitkeep
+
+# Uploads privados (fora do webroot)
+/storage/uploads/*
+!/storage/uploads/.gitkeep
+modules/*/logs/*
+!modules/*/logs/.gitkeep

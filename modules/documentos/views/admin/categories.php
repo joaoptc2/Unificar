@@ -1,15 +1,20 @@
-<div class="page-header">
-    <h1><i class="bi bi-tags me-2"></i>Categorias de Documentos</h1>
-    <div class="d-flex gap-2">
-        <?php if (core_can('categories.create')): ?>
-        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCategory" onclick="clearCategoryForm()">
-            <i class="bi bi-plus-lg me-1"></i>Nova Categoria
-        </button>
-        <?php endif; ?>
-        <a href="<?php echo url('admin'); ?>" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-arrow-left me-1"></i>Voltar
-        </a>
+<?php
+/**
+ * Aba "Categorias" do painel de configuração (Administração central).
+ * Os POSTs vão para as rotas do módulo (admin/category-store|update|delete)
+ * e voltam para core_admin_url('documentos', 'categories').
+ */
+?>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h2 class="h5 mb-1"><i class="bi bi-tags me-2"></i>Categorias de documentos</h2>
+        <p class="text-muted small mb-0">Categorias oferecidas no cadastro de documentos controlados e não controlados.</p>
     </div>
+    <?php if (core_can('categories.create')): ?>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCategory" onclick="clearCategoryForm()">
+        <i class="bi bi-plus-lg me-1"></i>Nova categoria
+    </button>
+    <?php endif; ?>
 </div>
 
 <div class="card border-0 shadow-sm">
@@ -53,7 +58,7 @@
                                 </button>
                                 <?php endif; ?>
                                 <?php if (core_can('categories.delete')): ?>
-                                <form method="POST" action="<?php echo url('admin/category_delete'); ?>" class="d-inline"
+                                <form method="POST" action="<?php echo url('admin/category-delete'); ?>" class="d-inline"
                                       data-confirm="Remover esta categoria? Documentos existentes mantêm o nome da categoria.">
                                     <?php echo csrf_field(); ?>
                                     <input type="hidden" name="id" value="<?php echo (int) $c['id']; ?>">
@@ -74,7 +79,7 @@
 <div class="modal fade" id="modalCategory" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form id="categoryForm" method="POST" action="<?php echo url('admin/category_store'); ?>">
+            <form id="categoryForm" method="POST" action="<?php echo url('admin/category-store'); ?>">
                 <?php echo csrf_field(); ?>
                 <input type="hidden" name="id" id="cat_id">
                 <div class="modal-header py-2">
@@ -121,14 +126,14 @@
 
 <script>
 function clearCategoryForm() {
-    document.getElementById('categoryForm').action = '<?php echo url('admin/category_store'); ?>';
+    document.getElementById('categoryForm').action = '<?php echo url('admin/category-store'); ?>';
     document.getElementById('catModalTitle').textContent = 'Nova Categoria';
     ['cat_id','cat_name','cat_desc','cat_icon'].forEach(function(id){ document.getElementById(id).value=''; });
     document.getElementById('cat_order').value = '0';
     document.getElementById('catStatusField').style.display = 'none';
 }
 function editCategory(c) {
-    document.getElementById('categoryForm').action = '<?php echo url('admin/category_update'); ?>';
+    document.getElementById('categoryForm').action = '<?php echo url('admin/category-update'); ?>';
     document.getElementById('catModalTitle').textContent = 'Editar Categoria';
     document.getElementById('cat_id').value = c.id;
     document.getElementById('cat_name').value = c.name || '';

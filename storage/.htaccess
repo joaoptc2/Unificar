@@ -1,0 +1,10 @@
+# Nada em storage/ é servido pelo servidor web (logs, cache e uploads
+# privados). O .htaccess da raiz já bloqueia /storage, esta é a segunda
+# barreira para quando o mod_rewrite não estiver disponível.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

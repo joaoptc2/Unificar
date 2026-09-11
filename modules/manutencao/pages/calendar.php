@@ -29,8 +29,7 @@ if ($month < 1 || $month > 12 || $year < 2000 || $year > 2100) {
 $firstDay   = mktime(0, 0, 0, $month, 1, $year);
 $daysInMonth = (int)date('t', $firstDay);
 $startWeekday = (int)date('N', $firstDay); // 1=Mon, 7=Sun
-$monthLabel  = strftime('%B %Y', $firstDay);
-// fallback for systems where strftime is deprecated
+// Nomes dos meses em PT-BR (strftime() está obsoleto no PHP 8.1+)
 $monthNames = [
     1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril',
     5 => 'Maio', 6 => 'Junho', 7 => 'Julho', 8 => 'Agosto',

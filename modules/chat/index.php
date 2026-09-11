@@ -7,6 +7,12 @@
  * acesso ao módulo e definiu:
  *   MODULE_SLUG, MODULE_PATH, MODULE_URL e as micropermissões do usuário
  *   (consultadas via core_can()/core_require()).
+ *
+ * O módulo é SOMENTE chat: canais, mensagens diretas, threads, reações,
+ * anexos, menções, fixados, favoritos e busca. As antigas funções
+ * (tarefas, reuniões, calendário, equipes, processos, enquetes, painel,
+ * exportações e configurações visuais) foram descontinuadas — as rotas
+ * correspondentes redirecionam para o chat com um aviso.
  */
 
 // Caminho raiz do módulo para o código legado (views, config, autoloader).
@@ -21,11 +27,12 @@ date_default_timezone_set($config['timezone'] ?? 'America/Sao_Paulo');
 // Autoloader das classes globais do módulo (helpers, models, controllers)
 require CHAT_PATH . '/app/helpers/Autoloader.php';
 
-$page   = trim($_GET['page'] ?? 'chat');
-$action = trim($_GET['action'] ?? 'index');
+// is_string(): `?page[]=x` chegaria como array e derrubaria trim() (TypeError)
+$page   = is_string($_GET['page']   ?? null) ? trim($_GET['page'])   : 'chat';
+$action = is_string($_GET['action'] ?? null) ? trim($_GET['action']) : 'index';
 
-$page   = preg_replace('/[^a-zA-Z0-9_-]/', '', $page);
-$action = preg_replace('/[^a-zA-Z0-9_-]/', '', $action);
+$page   = preg_replace('/[^a-zA-Z0-9_-]/', '', $page) ?: 'chat';
+$action = preg_replace('/[^a-zA-Z0-9_-]/', '', $action) ?: 'index';
 
 // Login/registro/logout saem do módulo — núcleo cuida (?m=auth).
 // Perfil do usuário também é do núcleo.
@@ -36,43 +43,50 @@ if ($page === 'login' || $page === 'auth') {
     core_redirect('index.php?m=chat&page=chat');
 }
 
+// Funções descontinuadas → volta ao chat com aviso.
+$discontinued = ['tasks', 'teams', 'meetings', 'calendar', 'processes', 'polls', 'export'];
+if (in_array($page, $discontinued, true)) {
+    \Core\Flash::set('warning', 'Função descontinuada: o módulo Comunicação agora é somente chat.');
+    core_redirect('index.php?m=chat&page=chat');
+}
+
 $routes = [
     'chat'      => 'ChatController',
     'channels'  => 'ChannelController',
-    'tasks'     => 'TaskController',
-    'teams'     => 'TeamController',
-    'meetings'  => 'MeetingController',
-    'processes' => 'ProcessController',
     'search'    => 'SearchController',
     'admin'     => 'AdminController',
-    'polls'     => 'PollController',
     'api'       => 'ApiController',
 ];
 
 if (!isset($routes[$page])) {
-    http_response_code(404);
-    echo '<h1>Página não encontrada</h1>';
-    echo '<p><a href="index.php?m=chat&page=chat">Voltar ao chat</a></p>';
+    \Core\Layout::renderError(404, 'Página não encontrada no módulo Comunicação.');
     exit;
+}
+
+// Configuração (categorias/emojis) fica na Administração central: qualquer
+// GET em page=admin abre o painel central. Pelo módulo só passam os POSTs
+// que alteram dados (as telas são renderizadas por admin_panel.php).
+if ($page === 'admin') {
+    $adminPosts = ['saveCategory', 'deleteCategory', 'addEmoji', 'storeEmoji', 'deleteEmoji'];
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !in_array($action, $adminPosts, true)) {
+        $tab = in_array($action, ['categories', 'emojis'], true) ? $action : '';
+        if (in_array($action, ['index', 'settings', 'audit', 'export', 'updateSettings', 'doExport', 'generateExport'], true)) {
+            \Core\Flash::set('warning', 'Função descontinuada: o módulo Comunicação agora é somente chat.');
+        }
+        core_redirect(core_admin_url('chat', $tab));
+    }
 }
 
 $controllerName = $routes[$page];
+$controller     = new $controllerName();
 
-if (!class_exists($controllerName)) {
-    http_response_code(500);
-    echo '<h1>Erro interno</h1>';
-    exit;
-}
-
-$controller = new $controllerName();
-
-if (!method_exists($controller, $action)) {
+if (!method_exists($controller, $action) || !is_callable([$controller, $action])
+    || str_starts_with($action, '__')) {
     $action = 'index';
 }
 
 if (!method_exists($controller, $action)) {
-    http_response_code(404);
-    echo '<h1>Ação não encontrada</h1>';
+    \Core\Layout::renderError(404, 'Ação não encontrada no módulo Comunicação.');
     exit;
 }
 

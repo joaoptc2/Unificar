@@ -11,6 +11,20 @@ use Core\Flash;
 
 core_require('layouts.view');
 
+// Os layouts de documentos são do NÚCLEO desde a atualização de setembro/2026
+// (compartilhados com o módulo Documentos): Administração > Padronização.
+$_legacyAction = (string) ($_GET['action'] ?? 'list');
+$_target = ['a' => 'layouts'];
+if ($_legacyAction === 'form') {
+    $_target = ['a' => 'layout_form'];
+    if (!empty($_GET['id'])) {
+        $_target['id'] = (int) $_GET['id'];
+    }
+} elseif ($_legacyAction === 'preview' && !empty($_GET['id'])) {
+    $_target = ['a' => 'layout_preview', 'id' => (int) $_GET['id']];
+}
+core_redirect(core_module_url('admin', $_target));
+
 $action = (string) ($_GET['action'] ?? 'list');
 
 // ---- Salvar -----------------------------------------------------------------

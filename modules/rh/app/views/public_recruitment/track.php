@@ -26,7 +26,7 @@
                     </div>
                     <div class="card-body">
                         <form method="GET">
-                            <input type="hidden" name="page" value="public_recruitment">
+                            <input type="hidden" name="m" value="rh"><input type="hidden" name="page" value="public_recruitment">
                             <input type="hidden" name="action" value="track">
                             <div class="input-group">
                                 <input type="text" name="token" class="form-control"

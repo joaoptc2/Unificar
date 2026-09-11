@@ -6,11 +6,17 @@
  * - Limita tamanho
  * - Bloqueia execução
  *
- * Todos os arquivos vivem em /uploads/rh/<subdir>/ (RH_UPLOADS_PATH).
+ * Arquivos PÚBLICOS (fotos, capas — exibidos em <img>) vivem em
+ * /uploads/rh/<subdir>/ (RH_UPLOADS_PATH). Arquivos PRIVADOS (documentos,
+ * atestados, currículos, anexos de comunicados…) vivem em
+ * /storage/uploads/rh/<subdir>/ (STORAGE_PATH) — diretório bloqueado pelo
+ * .htaccess raiz da plataforma e nunca exposto por URL: só o
+ * DownloadController os entrega, após autenticação e permissão.
  * O caminho ARMAZENADO no banco mantém o formato legado:
- *   - `uploads/<sub>/<arquivo>`          → público (fotos exibidas em <img>)
+ *   - `uploads/<sub>/<arquivo>`          → público
  *   - `storage/uploads/<sub>/<arquivo>`  → privado (servido pelo DownloadController)
- * Isso preserva os dados migrados do sistema antigo sem reescrita.
+ * Arquivos privados gravados por versões anteriores em /uploads/rh/<sub>/
+ * continuam sendo localizados (resolvePath tenta os dois locais).
  */
 class Upload
 {
@@ -32,13 +38,13 @@ class Upload
 
     /**
      * Subdiretórios considerados "públicos" (acessíveis diretamente por URL —
-     * ex.: fotos de perfil exibidas em <img src>). Os demais são bloqueados
-     * pelo .htaccess de /uploads/rh/ e só acessíveis via DownloadController
-     * com autenticação/permissão.
+     * ex.: fotos de perfil exibidas em <img src>). Os demais são gravados em
+     * storage/uploads/rh/ (fora da área pública) e só acessíveis via
+     * DownloadController com autenticação/permissão.
      */
-    private static array $publicSubdirs = ['employees', 'photos'];
+    private static array $publicSubdirs = ['employees', 'photos', 'announcements', 'rewards'];
 
-    /** Diretório físico base dos uploads do módulo. */
+    /** Diretório físico base dos uploads PÚBLICOS do módulo (/uploads/rh). */
     public static function baseDir(): string
     {
         if (defined('RH_UPLOADS_PATH')) {
@@ -50,16 +56,32 @@ class Upload
         return dirname(__DIR__, 4) . '/uploads/rh';
     }
 
+    /** Diretório físico dos uploads PRIVADOS do módulo (/storage/uploads/rh — fora da área pública). */
+    public static function privateDir(): string
+    {
+        if (defined('STORAGE_PATH')) {
+            return rtrim(STORAGE_PATH, '/') . '/uploads/rh';
+        }
+        return dirname(__DIR__, 4) . '/storage/uploads/rh';
+    }
+
+    /** Subdiretório público (servido por URL) ou privado (DownloadController)? */
+    public static function isPublicSubdir(string $subDir): bool
+    {
+        return in_array($subDir, self::$publicSubdirs, true);
+    }
+
     /**
      * Processa upload de arquivo
      *
      * @param string $fieldName Nome do campo do formulário
-     * @param string $subDir Subdiretório (employees, photos, documents, resumes, certificates)
+     * @param string $subDir Subdiretório (employees, photos, documents, resumes, certificates, announcements, rewards)
+     * @param string[]|null $onlyExtensions Restringe ainda mais as extensões (ex.: ['jpg','jpeg','png'] para imagens)
      * @return array ['success' => bool, 'path' => string, 'original_name' => string, 'size' => int, 'error' => string]
      *               `path` é armazenado no banco. Se começar com `uploads/` é público;
      *               se começar com `storage/` é privado (servir via DownloadController).
      */
-    public static function handle(string $fieldName, string $subDir = 'documents'): array
+    public static function handle(string $fieldName, string $subDir = 'documents', ?array $onlyExtensions = null): array
     {
         $result = ['success' => false, 'path' => '', 'original_name' => '', 'size' => 0, 'error' => ''];
 
@@ -84,7 +106,7 @@ class Upload
 
         // Verificar extensão
         $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        if (!in_array($ext, self::$allowedExtensions)) {
+        if (!in_array($ext, self::$allowedExtensions) || ($onlyExtensions !== null && !in_array($ext, $onlyExtensions, true))) {
             $result['error'] = 'Extensão de arquivo não permitida: .' . $ext;
             return $result;
         }
@@ -103,32 +125,59 @@ class Upload
         // Sanitiza o subdiretório (sem path traversal).
         $subDir = preg_replace('/[^a-z0-9_-]/i', '', $subDir) ?: 'documents';
 
-        $isPublic   = in_array($subDir, self::$publicSubdirs, true);
-        $destDir    = self::baseDir() . '/' . $subDir . '/';
+        $isPublic   = self::isPublicSubdir($subDir);
+        $destDir    = ($isPublic ? self::baseDir() : self::privateDir()) . '/' . $subDir . '/';
         $pathPrefix = $isPublic ? 'uploads/' : 'storage/uploads/';
 
         if (!is_dir($destDir)) {
             @mkdir($destDir, 0755, true);
         }
+        if (!$isPublic) {
+            // Raiz privada: nega tudo (defesa em profundidade — o .htaccess da
+            // plataforma já bloqueia /storage/ e o diretório nunca é linkado).
+            $rootHt = self::privateDir() . '/.htaccess';
+            if (!file_exists($rootHt)) {
+                @file_put_contents($rootHt, "<IfModule mod_authz_core.c>\n"
+                    . "    Require all denied\n"
+                    . "</IfModule>\n"
+                    . "<IfModule !mod_authz_core.c>\n"
+                    . "    Order allow,deny\n"
+                    . "    Deny from all\n"
+                    . "</IfModule>\n");
+            }
+        }
 
         // .htaccess por subdiretório: públicos permitem leitura mas nunca
-        // execução; privados são negados (defesa em profundidade — o
-        // .htaccess raiz de /uploads/rh/ já nega tudo).
+        // execução; privados são negados.
         $htaccess = $destDir . '.htaccess';
         if (!file_exists($htaccess)) {
             if ($isPublic) {
                 @file_put_contents(
                     $htaccess,
-                    "Require all granted\n" .
+                    "<IfModule mod_authz_core.c>\n" .
+                    "    Require all granted\n" .
+                    "</IfModule>\n" .
                     "Options -ExecCGI\n" .
                     "RemoveHandler .php .phtml .php3 .php4 .php5 .phps\n" .
                     "AddType text/plain .php .phtml .php3 .php4 .php5 .phps\n" .
                     "<FilesMatch \"\\.(php|phtml|php3|php4|php5|phps)$\">\n" .
-                    "    Require all denied\n" .
+                    "    <IfModule mod_authz_core.c>\n" .
+                    "        Require all denied\n" .
+                    "    </IfModule>\n" .
+                    "    <IfModule !mod_authz_core.c>\n" .
+                    "        Order allow,deny\n" .
+                    "        Deny from all\n" .
+                    "    </IfModule>\n" .
                     "</FilesMatch>\n"
                 );
             } else {
-                @file_put_contents($htaccess, "Require all denied\n");
+                @file_put_contents($htaccess, "<IfModule mod_authz_core.c>\n"
+                    . "    Require all denied\n"
+                    . "</IfModule>\n"
+                    . "<IfModule !mod_authz_core.c>\n"
+                    . "    Order allow,deny\n"
+                    . "    Deny from all\n"
+                    . "</IfModule>\n");
             }
         }
 
@@ -163,31 +212,37 @@ class Upload
 
     /**
      * Resolve o caminho absoluto a partir do path armazenado no banco.
-     * Retorna null se o arquivo estiver fora do diretório de uploads do
-     * módulo (proteção contra path traversal).
+     * Privados (`storage/uploads/...`): procura em /storage/uploads/rh/ e, para
+     * arquivos gravados por versões anteriores, em /uploads/rh/. Públicos:
+     * /uploads/rh/. Retorna null se o arquivo não existir ou estiver fora
+     * desses diretórios (proteção contra path traversal).
      */
     public static function resolvePath(string $relativePath): ?string
     {
         // Rejeita qualquer tentativa de path traversal.
         if (strpos($relativePath, '..') !== false) return null;
 
-        $base = realpath(self::baseDir());
-        if (!$base) return null;
-
-        // Remove os prefixos legados — fisicamente tudo vive em /uploads/rh/.
         $inner = $relativePath;
+        $roots = [self::baseDir()];
         if (str_starts_with($inner, 'storage/uploads/')) {
             $inner = substr($inner, strlen('storage/uploads/'));
+            $roots = [self::privateDir(), self::baseDir()];
         } elseif (str_starts_with($inner, 'uploads/')) {
             $inner = substr($inner, strlen('uploads/'));
         }
+        $inner = ltrim($inner, '/');
+        if ($inner === '') return null;
 
-        $full = realpath($base . '/' . ltrim($inner, '/'));
-        if (!$full) return null;
-
-        // Garante que o resultado está dentro de /uploads/rh/.
-        if (!str_starts_with($full, $base)) return null;
-        return $full;
+        foreach ($roots as $root) {
+            $base = realpath($root);
+            if (!$base) continue;
+            $full = realpath($base . '/' . $inner);
+            // Garante que o resultado está dentro do diretório raiz.
+            if ($full && is_file($full) && str_starts_with($full, $base . DIRECTORY_SEPARATOR)) {
+                return $full;
+            }
+        }
+        return null;
     }
 
     /**

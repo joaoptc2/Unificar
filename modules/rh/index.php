@@ -47,6 +47,24 @@ if (!isset($_GET['page']) && !core_can('dashboard.view') && core_can('my.view'))
     exit;
 }
 
+// A aba "Vínculos de usuários" foi descontinuada: o vínculo é feito no
+// cadastro do funcionário (seção "Acesso ao sistema").
+if ($page === 'users') {
+    header('Location: index.php?m=rh&page=employees');
+    exit;
+}
+
+// Departamentos e cargos são configurados na Administração central
+// (Core\AdminPanel). As telas (GET) redirecionam para o painel; os POSTs
+// continuam sendo processados pelos controllers do módulo.
+if (in_array($page, ['departments', 'positions'], true) && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+    // Preserva action/id (links antigos de criar/editar caem na tela certa do painel).
+    $extra = [];
+    if (in_array($action, ['create', 'edit'], true)) { $extra['action'] = $action; }
+    if ($id > 0) { $extra['id'] = $id; }
+    core_redirect(core_admin_url('rh', $page, $extra));
+}
+
 // ---- MAPA CENTRAL rota → [controller, permissão mínima] ------------------
 // A permissão mínima é exigida ANTES do despacho (403 via core_require).
 // null = sem gate de rota: rota pública (is_public no manifesto) ou rota em
@@ -64,7 +82,6 @@ $routes = [
     'recruitment'        => ['RecruitmentController',       'recruitment.view'],
     'talent_pool'        => ['TalentPoolController',        'talent_pool.view'],
     'notifications'      => ['NotificationController',      null], // notificações do próprio usuário (núcleo)
-    'users'              => ['UserController',              'user_links.view'],
     'departments'        => ['DepartmentController',        'departments.view'],
     'positions'          => ['PositionController',          'positions.view'],
     'public_recruitment' => ['PublicRecruitmentController', null], // pública (is_public)
@@ -73,7 +90,7 @@ $routes = [
     'scores'             => ['ScoreController',             null], // gates por ação (scores.create/.delete)
     'compliments'        => ['ComplimentController',        null], // gates por ação (compliments.create/.delete)
     'my'                 => ['MyController',                'my.view'],
-    'vacations'          => ['VacationController',          'vacations.view'],
+    'vacations'          => ['VacationController',          null], // gates por ação (vacations.view/.create/.edit/.delete; request = my.view — portal)
     'shifts'             => ['ShiftController',             'shifts.view'],
     'onboarding'         => ['OnboardingController',        'onboarding.view'],
     'announcements'      => ['AnnouncementController',      'announcements.view'],
@@ -82,6 +99,7 @@ $routes = [
     'salary_history'     => ['SalaryHistoryController',     null], // gates por ação (salary_history.create/.delete)
     'dependents'         => ['DependentController',         null], // gates por ação (dependents.create/.delete)
     'requests'           => ['RequestController',           null], // gates por ação (requests.view/.create/.respond)
+    'rewards'            => ['RewardController',            'rewards.view'], // gates por ação (rewards.create/.edit/.delete/.respond)
     'warnings'           => ['WarningController',           null], // gates por ação (warnings.create/.delete)
     'signatures'         => ['SignatureController',         null], // gates por ação (signatures.create/.view)
     'files'              => ['DownloadController',          null], // valida a .view do recurso dono do arquivo

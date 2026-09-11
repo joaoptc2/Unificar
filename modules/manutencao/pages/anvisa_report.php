@@ -19,7 +19,7 @@ $hid = hospitalId();
 try {
     // 1. Calibrações vencidas — equipamentos cuja última calibração tem next_date < hoje
     $stCalib = db()->prepare("
-        SELECT e.id AS equip_id, e.code, e.name AS equip_name, e.serial_number,
+        SELECT e.id AS equip_id, e.code, e.asset_code, e.name AS equip_name, e.serial_number,
                s.name AS sector_name,
                ec.calibration_date, ec.next_date, ec.responsible_body, ec.result
         FROM man_equipment e
@@ -58,7 +58,7 @@ try {
 try {
     // 3. Equipamentos sem plano preventivo ativo
     $stNoPlan = db()->prepare("
-        SELECT e.id, e.code, e.name, e.serial_number, e.criticality,
+        SELECT e.id, e.code, e.asset_code, e.name, e.serial_number, e.criticality,
                s.name AS sector_name
         FROM man_equipment e
         LEFT JOIN man_sectors s ON s.id = e.sector_id
@@ -134,7 +134,7 @@ ob_start();
             <table class="table table-sm table-hover mb-0">
                 <thead>
                     <tr>
-                        <th>Código</th>
+                        <th>Identificação</th>
                         <th>Equipamento</th>
                         <th>N/S</th>
                         <th>Setor</th>
@@ -154,8 +154,8 @@ ob_start();
                         $resultLabels = ['conforme'=>'Conforme','nao_conforme'=>'Não conforme','conforme_com_ressalvas'=>'Com ressalvas'];
                     ?>
                     <tr>
-                        <td><code><?php echo e($c['code'] ?? '—'); ?></code></td>
-                        <td><a href="<?php echo url('equipment', ['action'=>'view','id'=>$c['equip_id']]); ?>"><?php echo e($c['equip_name']); ?></a></td>
+                        <td><span class="font-monospace text-nowrap"><?php echo e(man_asset_code_format((string)($c['asset_code'] ?? '')) ?: '—'); ?></span><?php if (!empty($c['code'])): ?><br><small class="text-muted"><?php echo e($c['code']); ?></small><?php endif; ?></td>
+                        <td><a href="<?php echo url('equipment', ['action'=>'history','id'=>$c['equip_id']]); ?>"><?php echo e($c['equip_name']); ?></a></td>
                         <td class="text-muted"><?php echo e($c['serial_number'] ?? '—'); ?></td>
                         <td><?php echo e($c['sector_name'] ?? '—'); ?></td>
                         <td><?php echo formatDate($c['calibration_date']); ?></td>
@@ -225,7 +225,7 @@ ob_start();
             <table class="table table-sm table-hover mb-0">
                 <thead>
                     <tr>
-                        <th>Código</th>
+                        <th>Identificação</th>
                         <th>Equipamento</th>
                         <th>N/S</th>
                         <th>Setor</th>
@@ -239,8 +239,8 @@ ob_start();
                 <?php else: ?>
                     <?php foreach ($semPlano as $eq): ?>
                     <tr>
-                        <td><code><?php echo e($eq['code'] ?? '—'); ?></code></td>
-                        <td><a href="<?php echo url('equipment', ['action'=>'view','id'=>$eq['id']]); ?>"><?php echo e($eq['name']); ?></a></td>
+                        <td><span class="font-monospace text-nowrap"><?php echo e(man_asset_code_format((string)($eq['asset_code'] ?? '')) ?: '—'); ?></span><?php if (!empty($eq['code'])): ?><br><small class="text-muted"><?php echo e($eq['code']); ?></small><?php endif; ?></td>
+                        <td><a href="<?php echo url('equipment', ['action'=>'history','id'=>$eq['id']]); ?>"><?php echo e($eq['name']); ?></a></td>
                         <td class="text-muted"><?php echo e($eq['serial_number'] ?? '—'); ?></td>
                         <td><?php echo e($eq['sector_name'] ?? '—'); ?></td>
                         <td><span class="badge badge-<?php echo e($eq['criticality']); ?>"><?php echo e($critLabels[$eq['criticality']] ?? $eq['criticality']); ?></span></td>

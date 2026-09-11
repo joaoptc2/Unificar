@@ -1,62 +1,121 @@
 <?php
 /**
- * Uploads do módulo — gravados em /uploads/chat/{avatars,attachments}
+ * Uploads do módulo — gravados em /uploads/chat/{attachments,emojis,avatars}
  * na raiz da plataforma (UPLOADS_PATH definido pelo bootstrap do núcleo).
  * O caminho relativo armazenado no banco começa com "uploads/chat/".
+ *
+ * Validação: tamanho máximo, MIME real (finfo) E extensão coerente com o
+ * MIME (lista em config/app.php), nome de arquivo aleatório.
  */
 class Upload
 {
-    public static function handle(string $fieldName, string $subDir = 'attachments'): array
+    /**
+     * @param string $fieldName  campo de $_FILES
+     * @param string $subDir     subpasta em uploads/chat/
+     * @param bool   $imagesOnly aceita apenas imagens (emojis)
+     */
+    public static function handle(string $fieldName, string $subDir = 'attachments', bool $imagesOnly = false): array
     {
-        if (empty($_FILES[$fieldName]) || $_FILES[$fieldName]['error'] !== UPLOAD_ERR_OK) {
+        if (empty($_FILES[$fieldName]) || !is_array($_FILES[$fieldName])) {
             return ['success' => false, 'error' => 'Nenhum arquivo enviado.'];
         }
 
         $file = $_FILES[$fieldName];
-        $cfg  = (require CHAT_PATH . '/config/app.php')['upload'];
-
-        if ($file['size'] > $cfg['max_size']) {
-            return ['success' => false, 'error' => 'Arquivo muito grande.'];
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return ['success' => false, 'error' => self::errorMessage((int) $file['error'])];
+        }
+        if (!is_uploaded_file($file['tmp_name'])) {
+            return ['success' => false, 'error' => 'Envio inválido.'];
         }
 
-        $mime = mime_content_type($file['tmp_name']);
-        if (!in_array($mime, $cfg['allowed_files'], true)) {
+        $cfg  = (require CHAT_PATH . '/config/app.php')['upload'];
+
+        if ($file['size'] <= 0) {
+            return ['success' => false, 'error' => 'Arquivo vazio.'];
+        }
+        if ($file['size'] > $cfg['max_size']) {
+            return ['success' => false, 'error' => 'Arquivo muito grande (máximo ' . self::formatSize((int) $cfg['max_size']) . ').'];
+        }
+
+        $allowed = $imagesOnly ? $cfg['allowed_images'] : $cfg['allowed_files'];
+
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mime  = (string) $finfo->file($file['tmp_name']);
+        if (!isset($allowed[$mime])) {
             return ['success' => false, 'error' => 'Tipo de arquivo não permitido.'];
         }
 
-        $ext  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        $name = bin2hex(random_bytes(16)) . '.' . $ext;
+        $ext = strtolower(pathinfo((string) $file['name'], PATHINFO_EXTENSION));
+        if ($ext === '' || !in_array($ext, $allowed[$mime], true)) {
+            return ['success' => false, 'error' => 'A extensão do arquivo não corresponde ao seu conteúdo.'];
+        }
 
+        // Imagens: garante que é decodificável (evita arquivos disfarçados)
+        if (str_starts_with($mime, 'image/') && @getimagesize($file['tmp_name']) === false) {
+            return ['success' => false, 'error' => 'Imagem inválida.'];
+        }
+
+        $name    = bin2hex(random_bytes(16)) . '.' . $ext;
         $subDir  = preg_replace('/[^a-z0-9_-]/', '', $subDir) ?: 'attachments';
         $destDir = UPLOADS_PATH . '/chat/' . $subDir;
 
-        if (!is_dir($destDir)) {
-            mkdir($destDir, 0755, true);
+        if (!is_dir($destDir) && !mkdir($destDir, 0755, true) && !is_dir($destDir)) {
+            return ['success' => false, 'error' => 'Falha ao preparar a pasta de uploads.'];
         }
+        self::protectPrivateDir($subDir, $destDir);
 
         $destPath = $destDir . '/' . $name;
         if (!move_uploaded_file($file['tmp_name'], $destPath)) {
             return ['success' => false, 'error' => 'Falha ao salvar arquivo.'];
         }
+        @chmod($destPath, 0644);
 
         return [
             'success'       => true,
             'path'          => 'uploads/chat/' . $subDir . '/' . $name,
-            'original_name' => $file['name'],
+            'original_name' => mb_substr(basename((string) $file['name']), 0, 250),
             'file_type'     => $mime,
-            'file_size'     => $file['size'],
+            'file_size'     => (int) $file['size'],
         ];
+    }
+
+    /**
+     * Pastas privadas (anexos de mensagens) nunca podem ser servidas
+     * direto pelo servidor web — a entrega é pelo endpoint autenticado
+     * downloadAttachment. O .htaccess é recriado aqui porque /uploads
+     * fica fora do versionamento (.gitignore) e some em cada implantação.
+     */
+    private static function protectPrivateDir(string $subDir, string $destDir): void
+    {
+        if ($subDir !== 'attachments') {
+            return; // emojis/avatares são públicos
+        }
+        $file = $destDir . '/.htaccess';
+        if (is_file($file)) {
+            return;
+        }
+        @file_put_contents($file, "# Anexos do chat: nunca servidos diretamente pelo servidor web.\n"
+            . "# A entrega passa pelo endpoint autenticado do módulo\n"
+            . "# (index.php?m=chat&page=api&action=downloadAttachment&id=N), que checa\n"
+            . "# se o usuário participa do canal da mensagem.\n"
+            . "<IfModule mod_authz_core.c>\n"
+            . "    Require all denied\n"
+            . "</IfModule>\n"
+            . "<IfModule !mod_authz_core.c>\n"
+            . "    Order allow,deny\n"
+            . "    Deny from all\n"
+            . "</IfModule>\n");
     }
 
     public static function delete(string $path): bool
     {
         $path = ltrim($path, '/');
-        // Apenas arquivos do próprio módulo
-        if (!str_starts_with($path, 'uploads/chat/')) {
+        // Apenas arquivos do próprio módulo, sem travessia de diretório
+        if (!str_starts_with($path, 'uploads/chat/') || str_contains($path, '..')) {
             return false;
         }
         $full = BASE_PATH . '/' . $path;
-        if (file_exists($full)) {
+        if (is_file($full)) {
             return unlink($full);
         }
         return false;
@@ -76,10 +135,21 @@ class Upload
     {
         $units = ['B', 'KB', 'MB', 'GB'];
         $i = 0;
-        while ($bytes >= 1024 && $i < 3) {
-            $bytes /= 1024;
+        $val = (float) $bytes;
+        while ($val >= 1024 && $i < 3) {
+            $val /= 1024;
             $i++;
         }
-        return round($bytes, 1) . ' ' . $units[$i];
+        return round($val, 1) . ' ' . $units[$i];
+    }
+
+    private static function errorMessage(int $code): string
+    {
+        return match ($code) {
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'Arquivo muito grande.',
+            UPLOAD_ERR_PARTIAL => 'Envio incompleto. Tente novamente.',
+            UPLOAD_ERR_NO_FILE => 'Nenhum arquivo enviado.',
+            default => 'Falha no envio do arquivo.',
+        };
     }
 }

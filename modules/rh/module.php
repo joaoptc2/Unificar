@@ -10,18 +10,23 @@
  * O menu recebe um verificador `callable $can` e filtra os itens pela
  * permissão `.view` de cada recurso. Como o manifesto também é carregado
  * fora do módulo (topbar, admin central), o closure usa core_module_url().
+ *
+ * Configuração do módulo (departamentos, cargos, acessos dos funcionários e
+ * layout A4 dos aniversariantes) fica na ADMINISTRAÇÃO CENTRAL (chave
+ * 'admin' → Core\AdminPanel). A antiga aba "Vínculos de usuários" foi
+ * descontinuada: o vínculo usuário ↔ funcionário é feito no cadastro do
+ * funcionário (login padrão: CPF / senha inicial: data de nascimento).
  */
 
 return [
     'slug'        => 'rh',
     'name'        => 'RH',
     'icon'        => 'bi-people',
-    'description' => 'Funcionários, vencimentos, férias, escalas, recrutamento e comunicados.',
+    'description' => 'Funcionários, portal do funcionário, férias, escalas, recrutamento, comunicados, pesquisas e brindes.',
     'entry'       => 'index.php',
 
     // ------------------------------------------------------------------
     // CATÁLOGO DE MICROPERMISSÕES — todas as funções do módulo.
-    // Chave efetiva: "<recurso>.<ação>" (ex.: employees.edit).
     // ------------------------------------------------------------------
     'permissions' => [
         'dashboard' => [
@@ -30,16 +35,23 @@ return [
         ],
         'my' => [
             'label'   => 'Minha Área (portal do funcionário)',
-            'actions' => ['view' => 'Acessar'],
+            'actions' => ['view' => 'Acessar (férias, comunicados, pesquisas, brindes, solicitações)'],
         ],
         'employees' => [
             'label'   => 'Funcionários',
             'actions' => [
                 'view'   => 'Visualizar (inclui ficha e impressão)',
-                'create' => 'Criar',
+                'create' => 'Criar (gera o acesso padrão ao portal)',
                 'edit'   => 'Editar',
                 'delete' => 'Excluir / anonimizar (LGPD)',
                 'export' => 'Exportar CSV',
+            ],
+        ],
+        'employee_access' => [
+            'label'   => 'Acessos dos funcionários (configuração)',
+            'actions' => [
+                'view'   => 'Visualizar',
+                'manage' => 'Criar / redefinir acessos padrão (CPF + nascimento)',
             ],
         ],
         'employee_documents' => [
@@ -104,7 +116,11 @@ return [
         ],
         'birthdays' => [
             'label'   => 'Aniversariantes',
-            'actions' => ['view' => 'Visualizar'],
+            'actions' => [
+                'view'      => 'Visualizar',
+                'export'    => 'Exportar A4 (impressão / PDF)',
+                'configure' => 'Personalizar layout do A4',
+            ],
         ],
         'recruitment' => [
             'label'   => 'Processos seletivos',
@@ -127,7 +143,8 @@ return [
             'label'   => 'Comunicados',
             'actions' => [
                 'view'   => 'Visualizar',
-                'create' => 'Criar / publicar',
+                'create' => 'Criar / publicar (portal e e-mail)',
+                'edit'   => 'Editar',
                 'delete' => 'Excluir',
             ],
         ],
@@ -135,7 +152,8 @@ return [
             'label'   => 'Pesquisas',
             'actions' => [
                 'view'   => 'Visualizar / responder',
-                'create' => 'Criar',
+                'create' => 'Criar / publicar (portal e e-mail)',
+                'edit'   => 'Editar / encerrar',
                 'delete' => 'Excluir',
             ],
         ],
@@ -145,6 +163,16 @@ return [
                 'view'    => 'Visualizar',
                 'create'  => 'Criar (portal)',
                 'respond' => 'Responder',
+            ],
+        ],
+        'rewards' => [
+            'label'   => 'Brindes (troca de pontos)',
+            'actions' => [
+                'view'    => 'Visualizar catálogo e resgates',
+                'create'  => 'Cadastrar brindes',
+                'edit'    => 'Editar brindes',
+                'delete'  => 'Excluir brindes',
+                'respond' => 'Aprovar / entregar / recusar resgates',
             ],
         ],
         'warnings' => [
@@ -163,7 +191,7 @@ return [
             ],
         ],
         'departments' => [
-            'label'   => 'Departamentos',
+            'label'   => 'Departamentos (configuração)',
             'actions' => [
                 'view'   => 'Visualizar',
                 'create' => 'Criar',
@@ -172,19 +200,12 @@ return [
             ],
         ],
         'positions' => [
-            'label'   => 'Cargos',
+            'label'   => 'Cargos (configuração)',
             'actions' => [
                 'view'   => 'Visualizar',
                 'create' => 'Criar',
                 'edit'   => 'Editar',
                 'delete' => 'Excluir',
-            ],
-        ],
-        'user_links' => [
-            'label'   => 'Vínculos usuário ↔ funcionário',
-            'actions' => [
-                'view' => 'Visualizar',
-                'edit' => 'Editar',
             ],
         ],
         'salary_history' => [
@@ -225,8 +246,7 @@ return [
     ],
 
     // ------------------------------------------------------------------
-    // PRESETS — chave = nível legado, fiéis à matriz Auth::$permissions
-    // antiga (usados na UI de permissões e pelo conversor de níveis).
+    // PRESETS — chave = nível legado.
     // ------------------------------------------------------------------
     'presets' => [
         'admin' => [
@@ -238,6 +258,7 @@ return [
             'keys'  => [
                 'dashboard.view',
                 'employees.*',
+                'employee_access.*',
                 'employee_documents.*',
                 'certificates.*',
                 'expirations.*',
@@ -245,12 +266,13 @@ return [
                 'vacations.*',
                 'shifts.*',
                 'trainings.*',
-                'birthdays.view',
+                'birthdays.*',
                 'recruitment.*',
                 'talent_pool.*',
                 'announcements.*',
                 'surveys.*',
                 'requests.*',
+                'rewards.*',
                 'warnings.*',
                 'salary_history.*',
                 'dependents.*',
@@ -258,8 +280,8 @@ return [
                 'compliments.*',
                 'signatures.*',
                 'onboarding.*',
-                'departments.view',
-                'positions.view',
+                'departments.*',
+                'positions.*',
             ],
         ],
         'gestor' => [
@@ -274,13 +296,14 @@ return [
                 'vacations.view', 'vacations.edit',
                 'shifts.view', 'shifts.create', 'shifts.edit',
                 'trainings.view',
-                'birthdays.view',
+                'birthdays.view', 'birthdays.export',
                 'recruitment.view',
                 'talent_pool.view',
                 'onboarding.view', 'onboarding.edit',
                 'announcements.view',
                 'surveys.view',
                 'requests.view',
+                'rewards.view',
             ],
         ],
         'visualizador' => [
@@ -292,14 +315,17 @@ return [
                 'announcements.view',
             ],
         ],
+        // Preset aplicado automaticamente ao login padrão criado no cadastro
+        // do funcionário (EmployeeController) e em "Acessos dos funcionários".
         'funcionario' => [
             'label' => 'Funcionário',
-            'keys'  => ['my.view', 'requests.view', 'requests.create', 'announcements.view'],
+            'keys'  => ['my.view', 'requests.view', 'requests.create', 'announcements.view', 'surveys.view', 'rewards.view'],
         ],
     ],
 
     // ------------------------------------------------------------------
     // Menu lateral — itens filtrados pela micropermissão .view.
+    // (o link "Configurações do módulo" é acrescentado pelo núcleo)
     // ------------------------------------------------------------------
     'menu' => function (callable $can): array {
         $url = fn (string $page, array $extra = []): string =>
@@ -331,25 +357,29 @@ return [
         if ($can('announcements.view')) { $main[] = ['label' => 'Comunicados',         'url' => $url('announcements'), 'icon' => 'bi-megaphone',      'key' => 'announcements']; }
         if ($can('surveys.view'))       { $main[] = ['label' => 'Pesquisas',           'url' => $url('surveys'),       'icon' => 'bi-clipboard-data', 'key' => 'surveys']; }
         if ($can('requests.view'))      { $main[] = ['label' => 'Solicitações',        'url' => $url('requests'),      'icon' => 'bi-envelope-paper', 'key' => 'requests']; }
+        if ($can('rewards.view'))       { $main[] = ['label' => 'Brindes',             'url' => $url('rewards'),       'icon' => 'bi-bag-heart',      'key' => 'rewards']; }
+        if ($can('onboarding.view'))    { $main[] = ['label' => 'Onboarding',          'url' => $url('onboarding'),    'icon' => 'bi-list-check',     'key' => 'onboarding']; }
         if ($main) {
             $sections[] = ['heading' => 'RH', 'items' => $main];
         }
 
-        $admin = [];
-        if ($can('departments.view')) { $admin[] = ['label' => 'Departamentos', 'url' => $url('departments'), 'icon' => 'bi-building',   'key' => 'departments']; }
-        if ($can('positions.view'))   { $admin[] = ['label' => 'Cargos',        'url' => $url('positions'),   'icon' => 'bi-diagram-3',  'key' => 'positions']; }
-        if ($can('onboarding.view'))  { $admin[] = ['label' => 'Onboarding',    'url' => $url('onboarding'),  'icon' => 'bi-list-check', 'key' => 'onboarding']; }
-        if ($can('user_links.view')) {
-            $admin[] = ['label' => 'Vínculos de usuários', 'url' => $url('users'),                                   'icon' => 'bi-person-badge', 'key' => 'users'];
-            $admin[] = ['label' => 'Usuários (central)',   'url' => core_url('index.php?m=admin&a=users'),           'icon' => 'bi-shield-lock',  'key' => 'users_central'];
-            $admin[] = ['label' => 'Auditoria',            'url' => core_url('index.php?m=admin&a=audit&module=rh'), 'icon' => 'bi-journal-text', 'key' => 'audit'];
-        }
-        if ($admin) {
-            $sections[] = ['heading' => 'Administração', 'items' => $admin];
-        }
-
         return $sections;
     },
+
+    // ------------------------------------------------------------------
+    // Painel de configuração na Administração central.
+    // ------------------------------------------------------------------
+    'admin' => [
+        'label' => 'RH',
+        'icon'  => 'bi-people',
+        'entry' => 'admin_panel.php',
+        'tabs'  => [
+            'departments' => ['label' => 'Departamentos',           'icon' => 'bi-building',     'perm' => 'departments.view'],
+            'positions'   => ['label' => 'Cargos',                  'icon' => 'bi-diagram-3',    'perm' => 'positions.view'],
+            'access'      => ['label' => 'Acessos dos funcionários','icon' => 'bi-person-lock',  'perm' => 'employee_access.view'],
+            'birthdays'   => ['label' => 'Aniversariantes (A4)',    'icon' => 'bi-gift',         'perm' => 'birthdays.configure'],
+        ],
+    ],
 
     // Rotas públicas (sem login): vagas públicas e política de privacidade.
     'is_public' => fn (array $get): bool =>

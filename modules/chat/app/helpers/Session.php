@@ -34,19 +34,15 @@ class Session
     }
 
     /**
-     * Flash messages do módulo. Grava também no flash do núcleo
-     * (Core\Flash) para que o layout unificado exiba as mensagens.
+     * Flash messages: gravadas no flash do núcleo (Core\Flash), exibidas
+     * pelo layout unificado. A leitura devolve null (o layout já consome).
      */
     public static function flash(string $key, ?string $value = null): mixed
     {
         if ($value !== null) {
-            $_SESSION['_flash'][$key] = $value;
             \Core\Flash::set($key, $value);
-            return null;
         }
-        $msg = $_SESSION['_flash'][$key] ?? null;
-        unset($_SESSION['_flash'][$key]);
-        return $msg;
+        return null;
     }
 
     public static function isLoggedIn(): bool

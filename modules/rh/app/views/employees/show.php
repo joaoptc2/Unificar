@@ -90,6 +90,11 @@
                 <?php endif; ?>
             </div>
         </div>
+
+        <!-- Acesso ao sistema -->
+        <div class="mt-3">
+            <?php require __DIR__ . '/_access.php'; ?>
+        </div>
     </div>
 
     <!-- Dados -->
@@ -173,19 +178,6 @@
                             <div class="col-md-6"><small class="text-muted">Último exame</small><div><?= Sanitize::formatDate($employee['aso_admissional_date'] ?? null) ?></div></div>
                             <div class="col-md-6"><small class="text-muted">Próximo exame</small><div><?= Sanitize::formatDate($employee['aso_next_date'] ?? null) ?></div></div>
                         </div>
-
-                        <?php if ($portalUser): ?>
-                            <h6 class="fw-semibold text-primary mb-3">Acesso ao Portal</h6>
-                            <div class="row g-2 mb-4">
-                                <div class="col-md-6"><small class="text-muted">Login (e-mail)</small><div><?= Sanitize::e($portalUser['email']) ?></div></div>
-                                <div class="col-md-3"><small class="text-muted">Status</small><div>
-                                    <span class="badge <?= $portalUser['active'] ? 'bg-success' : 'bg-secondary' ?>">
-                                        <?= $portalUser['active'] ? 'Ativo' : 'Inativo' ?>
-                                    </span>
-                                </div></div>
-                                <div class="col-md-3"><small class="text-muted">Último acesso</small><div><?= $portalUser['last_login'] ? Sanitize::formatDateTime($portalUser['last_login']) : '-' ?></div></div>
-                            </div>
-                        <?php endif; ?>
 
                         <?php if ($employee['notes']): ?>
                             <h6 class="fw-semibold text-primary mb-3">Observações</h6>

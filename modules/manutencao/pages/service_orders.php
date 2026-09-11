@@ -11,7 +11,7 @@ $action = $_GET['action'] ?? 'list';
 // ============================================================
 // PROCESSAR POST
 // ============================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
+if (manPostIsValid()) {
     $act = $_POST['action'] ?? '';
 
     if ($act === 'add') {
@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
                 addOsHistory($newId, 'OS criada', "Tipo: {$type}, Prioridade: {$priority}");
                 flash('success', "OS {$osNumber} criada com sucesso!");
             } catch (Exception $ex) {
-                flash('error', 'Erro ao criar OS: ' . $ex->getMessage());
+                error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Erro ao criar OS. Verifique os dados e tente novamente.');
             }
         }
         redirect(url('service-orders'));
@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
                 addOsHistory($id, 'OS editada', "Título: {$title}");
                 flash('success', 'OS atualizada!');
             } catch (Exception $ex) {
-                flash('error', 'Erro: ' . $ex->getMessage());
+                error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Não foi possível concluir a operação. Tente novamente.');
             }
         }
         redirect(url('service-orders'));
@@ -147,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
                 addOsHistory($id, 'Status alterado', 'Novo status: ' . ($statusLabelsHist[$status] ?? $status));
                 flash('success', 'Status atualizado!');
             } catch (Exception $ex) {
-                flash('error', 'Erro: ' . $ex->getMessage());
+                error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Não foi possível concluir a operação. Tente novamente.');
             }
         }
         redirect(url('service-orders'));
@@ -162,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             auditLog('delete', 'service_orders', $id);
             flash('success', 'OS excluída.');
         } catch (Exception $ex) {
-            flash('error', 'Erro ao excluir: ' . $ex->getMessage());
+            error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Erro ao excluir. Verifique os dados e tente novamente.');
         }
         redirect(url('service-orders'));
     }
@@ -212,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             } catch (\Throwable $ignored) {}
 
             flash('success', 'Peça adicionada.');
-        } catch (\Throwable $ex) { flash('error', 'Erro ao adicionar peça: ' . $ex->getMessage()); }
+        } catch (\Throwable $ex) { error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Erro ao adicionar peça. Verifique os dados e tente novamente.'); }
         redirect(url('service-orders', ['action'=>'edit','id'=>$osId]));
     }
 
@@ -238,7 +238,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
 
                 flash('success', 'Peça removida.');
             }
-        } catch (\Throwable $ex) { flash('error', 'Erro ao remover peça: ' . $ex->getMessage()); }
+        } catch (\Throwable $ex) { error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Erro ao remover peça. Verifique os dados e tente novamente.'); }
         redirect(url('service-orders', ['action'=>'edit','id'=>$osId]));
     }
 
@@ -253,7 +253,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
             } else {
                 flash('error', 'Assinatura inválida.');
             }
-        } catch (\Throwable $ex) { flash('error', 'Erro ao salvar assinatura: ' . $ex->getMessage()); }
+        } catch (\Throwable $ex) { error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Erro ao salvar assinatura. Verifique os dados e tente novamente.'); }
         redirect(url('service-orders', ['action'=>'edit','id'=>$osId]));
     }
 }
@@ -671,6 +671,9 @@ else:
         <a class="btn btn-outline-primary btn-sm" href="index.php?m=manutencao&page=export&type=service_orders&format=print" target="_blank" rel="noopener"><i class="bi bi-printer me-1"></i> Imprimir</a>
         <?php if (core_can('service_orders.create')): ?>
             <button onclick="openModal('modalAdd')" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> Nova OS</button>
+            <?php if ((int)($_GET['equipment_id'] ?? 0) > 0): ?>
+            <script>document.addEventListener('DOMContentLoaded', function () { if (typeof openModal === 'function') openModal('modalAdd'); });</script>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 </div>
@@ -805,7 +808,7 @@ else:
                             <label class="form-label">Equipamento (opcional)</label>
                             <select class="form-select" name="equipment_id">
                                 <option value="">Nenhum</option>
-                                <?php foreach ($equipments as $eq): ?><option value="<?php echo $eq['id']; ?>"><?php echo e($eq['code'] ? $eq['code'].' - ' : ''); echo e($eq['name']); ?></option><?php endforeach; ?>
+                                <?php $preEq = (int)($_GET['equipment_id'] ?? 0); foreach ($equipments as $eq): ?><option value="<?php echo $eq['id']; ?>" <?php echo $preEq === (int)$eq['id'] ? 'selected' : ''; ?>><?php echo e($eq['code'] ? $eq['code'].' - ' : ''); echo e($eq['name']); ?></option><?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-md-4">

@@ -5,6 +5,11 @@
 --   • FKs de usuário apontando para a tabela GLOBAL users(id);
 --   • rh_user_profile: vínculo usuário ↔ funcionário/departamento
 --     (substitui users.employee_id / users.department_id / users.role);
+--     o vínculo é criado no cadastro do funcionário — login padrão =
+--     CPF (só dígitos), senha inicial = data de nascimento (ddmmaaaa);
+--   • pesquisas com vários tipos de pergunta, comunicados formatados
+--     (portal + e-mail), férias solicitadas pelo portal e brindes
+--     (migração 006 da plataforma);
 --   • SEM tabelas que agora são do núcleo: users, notifications,
 --     audit_log, login_attempts, password_resets, user_2fa, settings.
 -- Idempotente (CREATE TABLE IF NOT EXISTS; seeds com NOT EXISTS).
@@ -510,12 +515,21 @@ CREATE TABLE IF NOT EXISTS `rh_training_records` (
 CREATE TABLE IF NOT EXISTS `rh_announcements` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `title` VARCHAR(200) NOT NULL,
-    `body` TEXT NOT NULL,
+    `summary` VARCHAR(300) NULL COMMENT 'Resumo (lista, e-mail)',
+    `body` TEXT NOT NULL COMMENT 'Texto simples (fallback / busca)',
+    `body_html` MEDIUMTEXT NULL COMMENT 'Corpo formatado (editor)',
     `type` ENUM('informativo','urgente','celebracao') NOT NULL DEFAULT 'informativo',
     `department_id` INT UNSIGNED NULL,
     `published_at` DATETIME NULL,
     `expires_at` DATE NULL,
     `pinned` TINYINT(1) NOT NULL DEFAULT 0,
+    `image_path` VARCHAR(500) NULL,
+    `attachment_path` VARCHAR(500) NULL,
+    `attachment_name` VARCHAR(255) NULL,
+    `show_in_portal` TINYINT(1) NOT NULL DEFAULT 1,
+    `send_email` TINYINT(1) NOT NULL DEFAULT 0,
+    `emailed_at` DATETIME NULL,
+    `notified_at` DATETIME NULL COMMENT 'Notificação in-app já enviada (evita reenvio ao editar)',
     `created_by` INT UNSIGNED NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -542,11 +556,18 @@ CREATE TABLE IF NOT EXISTS `rh_surveys` (
     `description` TEXT NULL,
     `type` ENUM('clima','enps','pulse','custom') NOT NULL DEFAULT 'clima',
     `anonymous` TINYINT(1) NOT NULL DEFAULT 1,
+    `department_id` INT UNSIGNED NULL COMMENT 'NULL = todos os departamentos',
+    `show_in_portal` TINYINT(1) NOT NULL DEFAULT 1,
+    `send_email` TINYINT(1) NOT NULL DEFAULT 0,
+    `emailed_at` DATETIME NULL,
+    `notified_at` DATETIME NULL COMMENT 'Notificação in-app já enviada (evita reenvio ao editar)',
     `status` ENUM('rascunho','ativa','encerrada') NOT NULL DEFAULT 'rascunho',
     `starts_at` DATE NULL,
     `ends_at` DATE NULL,
     `created_by` INT UNSIGNED NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT `fk_rh_survey_dept` FOREIGN KEY (`department_id`) REFERENCES `rh_departments`(`id`) ON DELETE SET NULL,
     CONSTRAINT `fk_rh_survey_creator` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -554,8 +575,10 @@ CREATE TABLE IF NOT EXISTS `rh_survey_questions` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `survey_id` INT UNSIGNED NOT NULL,
     `question` TEXT NOT NULL,
-    `type` ENUM('rating','text','choice') NOT NULL DEFAULT 'rating',
-    `options` JSON NULL,
+    `type` ENUM('rating','text','choice','multiple','yes_no','scale','number','date') NOT NULL DEFAULT 'rating',
+    `options` JSON NULL COMMENT 'Lista de opções (choice/multiple) ou {"min","max","labels"} (scale)',
+    `required` TINYINT(1) NOT NULL DEFAULT 0,
+    `help_text` VARCHAR(255) NULL,
     `sort_order` INT UNSIGNED NOT NULL DEFAULT 0,
     CONSTRAINT `fk_rh_sq_survey` FOREIGN KEY (`survey_id`) REFERENCES `rh_surveys`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -571,6 +594,17 @@ CREATE TABLE IF NOT EXISTS `rh_survey_responses` (
     KEY `idx_rh_sr_survey` (`survey_id`),
     CONSTRAINT `fk_rh_sr_survey` FOREIGN KEY (`survey_id`) REFERENCES `rh_surveys`(`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_rh_sr_question` FOREIGN KEY (`question_id`) REFERENCES `rh_survey_questions`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Quem já respondeu (controle de participação — mesmo em pesquisas anônimas
+-- as respostas não são vinculadas ao usuário, apenas a participação).
+CREATE TABLE IF NOT EXISTS `rh_survey_participations` (
+    `survey_id` INT UNSIGNED NOT NULL,
+    `user_id` INT UNSIGNED NOT NULL,
+    `completed_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`survey_id`, `user_id`),
+    CONSTRAINT `fk_rh_sp_survey` FOREIGN KEY (`survey_id`) REFERENCES `rh_surveys`(`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_rh_sp_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
@@ -596,8 +630,10 @@ CREATE TABLE IF NOT EXISTS `rh_requests` (
     `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `employee_id` INT UNSIGNED NOT NULL,
     `type` ENUM('declaracao','alteracao_cadastral','treinamento','ferias','outro') NOT NULL,
+    `vacation_id` INT UNSIGNED NULL COMMENT 'Solicitação de férias criada no portal',
     `subject` VARCHAR(200) NOT NULL,
     `body` TEXT NULL,
+    `requested_by` INT UNSIGNED NULL COMMENT 'Usuário que abriu a solicitação',
     `status` ENUM('pendente','em_analise','aprovada','rejeitada') NOT NULL DEFAULT 'pendente',
     `response` TEXT NULL,
     `responded_by` INT UNSIGNED NULL,
@@ -606,7 +642,9 @@ CREATE TABLE IF NOT EXISTS `rh_requests` (
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY `idx_rh_req_employee` (`employee_id`),
     KEY `idx_rh_req_status` (`status`),
+    KEY `idx_rh_req_vacation` (`vacation_id`),
     CONSTRAINT `fk_rh_req_employee` FOREIGN KEY (`employee_id`) REFERENCES `rh_employees`(`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_rh_req_vacation` FOREIGN KEY (`vacation_id`) REFERENCES `rh_vacations`(`id`) ON DELETE SET NULL,
     CONSTRAINT `fk_rh_req_responder` FOREIGN KEY (`responded_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -664,6 +702,47 @@ CREATE TABLE IF NOT EXISTS `rh_warnings` (
     CONSTRAINT `fk_rh_warn_employee` FOREIGN KEY (`employee_id`) REFERENCES `rh_employees`(`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_rh_warn_creator` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL,
     CONSTRAINT `fk_rh_warn_sig` FOREIGN KEY (`signature_id`) REFERENCES `rh_digital_signatures`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- rh_rewards / rh_reward_redemptions (Brindes — troca de pontos)
+-- Saldo do funcionário = SUM(rh_employee_scores.points); cada resgate
+-- aprovado lança pontos negativos (score_id) na pontuação.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `rh_rewards` (
+    `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `name` VARCHAR(150) NOT NULL,
+    `description` TEXT NULL,
+    `points_cost` INT UNSIGNED NOT NULL DEFAULT 0,
+    `stock` INT NULL COMMENT 'NULL = ilimitado',
+    `image_path` VARCHAR(500) NULL,
+    `active` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_by` INT UNSIGNED NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY `idx_rh_rewards_active` (`active`, `points_cost`),
+    CONSTRAINT `fk_rh_rewards_creator` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `rh_reward_redemptions` (
+    `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `reward_id` INT UNSIGNED NOT NULL,
+    `employee_id` INT UNSIGNED NOT NULL,
+    `points_spent` INT UNSIGNED NOT NULL,
+    `status` ENUM('pendente','aprovada','entregue','rejeitada','cancelada') NOT NULL DEFAULT 'pendente',
+    `notes` TEXT NULL COMMENT 'Observação do funcionário',
+    `response` TEXT NULL COMMENT 'Resposta do RH',
+    `score_id` BIGINT UNSIGNED NULL COMMENT 'Lançamento (negativo) em rh_employee_scores',
+    `responded_by` INT UNSIGNED NULL,
+    `responded_at` DATETIME NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY `idx_rh_redeem_employee` (`employee_id`, `created_at`),
+    KEY `idx_rh_redeem_status` (`status`),
+    CONSTRAINT `fk_rh_redeem_reward` FOREIGN KEY (`reward_id`) REFERENCES `rh_rewards`(`id`) ON DELETE RESTRICT,
+    CONSTRAINT `fk_rh_redeem_employee` FOREIGN KEY (`employee_id`) REFERENCES `rh_employees`(`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_rh_redeem_score` FOREIGN KEY (`score_id`) REFERENCES `rh_employee_scores`(`id`) ON DELETE SET NULL,
+    CONSTRAINT `fk_rh_redeem_responder` FOREIGN KEY (`responded_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------

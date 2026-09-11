@@ -2,7 +2,9 @@
 -- MÓDULO DOCUMENTOS (gestão documental / qualidade) — schema consolidado
 -- Plataforma Unificada · prefixo doc_ · MySQL 5.7+/MariaDB 10.3+ · utf8mb4
 --
--- Consolida o schema legado + migrations 001–007:
+-- Requer sql/schema.sql (núcleo) ANTES: users e intra_layouts (layouts).
+-- Consolida o schema legado + migrations 001–007 + migração 004 da plataforma
+-- (controlados/não controlados e editor com layouts):
 --   001 inicial · 002 segurança/índices · 003 indicadores v2 (variáveis,
 --   fórmula, metas) · 004 system_settings · 005 indicadores v3 + histórico
 --   de documentos · 006 setores · 007 workflow/revisão/PDCA/ciência digital
@@ -21,7 +23,8 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ════════════════════════════════════════════════════════════════════════════
---  1. HOSPITAIS / UNIDADES
+--  1. HOSPITAIS / UNIDADES (aba "Unidades" descontinuada — unidade única
+--     id=1; tabela mantida pela compatibilidade das FKs)
 -- ════════════════════════════════════════════════════════════════════════════
 CREATE TABLE IF NOT EXISTS `doc_hospitals` (
     `id`         INT UNSIGNED    NOT NULL AUTO_INCREMENT,
@@ -40,6 +43,9 @@ CREATE TABLE IF NOT EXISTS `doc_hospitals` (
 
 -- ════════════════════════════════════════════════════════════════════════════
 --  2. SETORES (departamentos/unidades) + vínculo usuário↔setor
+--     (doc_user_sectors: a aba "Usuários & Setores" foi descontinuada — o
+--      seletor de setor mostra todos os setores ativos; a tabela é mantida
+--      apenas para importação de dados legados)
 -- ════════════════════════════════════════════════════════════════════════════
 CREATE TABLE IF NOT EXISTS `doc_sectors` (
     `id`          INT UNSIGNED    NOT NULL AUTO_INCREMENT,
@@ -97,6 +103,8 @@ CREATE TABLE IF NOT EXISTS `doc_documents` (
     `status`              ENUM('draft','pending_review','approved','expired','archived')
                           NOT NULL DEFAULT 'approved'
                           COMMENT 'Workflow: rascunho > em revisão > aprovado > vencido > arquivado',
+    `is_controlled`       TINYINT(1)      NOT NULL DEFAULT 1
+                          COMMENT '1 = controlado (status, validade, revisão); 0 = não controlado (apenas armazenado)',
     `title`               VARCHAR(250)    NOT NULL,
     `document_code`       VARCHAR(50)     DEFAULT NULL COMMENT 'Código interno: POP-UTI-001',
     `category`            VARCHAR(100)    NOT NULL,
@@ -105,7 +113,7 @@ CREATE TABLE IF NOT EXISTS `doc_documents` (
     `legal_basis`         VARCHAR(255)    DEFAULT NULL COMMENT 'Base legal / normativa',
     `confidentiality`     ENUM('public','internal','restricted','confidential')
                           NOT NULL DEFAULT 'internal',
-    `expiration_date`     DATE            NOT NULL,
+    `expiration_date`     DATE            DEFAULT NULL COMMENT 'Obrigatória apenas em documentos controlados',
     `notify_days_before`  INT UNSIGNED    NOT NULL DEFAULT 30,
     `review_interval_months` INT UNSIGNED NOT NULL DEFAULT 12
                           COMMENT 'Intervalo de revisão obrigatória em meses',
@@ -117,6 +125,14 @@ CREATE TABLE IF NOT EXISTS `doc_documents` (
     `file_size`           BIGINT UNSIGNED DEFAULT NULL,
     `file_type`           VARCHAR(10)     DEFAULT NULL,
     `mime_type`           VARCHAR(100)    DEFAULT NULL,
+    `source`              ENUM('upload','editor') NOT NULL DEFAULT 'upload'
+                          COMMENT 'upload = arquivo enviado; editor = escrito no sistema',
+    `content_html`        MEDIUMTEXT      DEFAULT NULL COMMENT 'Conteúdo do editor (source=editor)',
+    `cover_html`          MEDIUMTEXT      DEFAULT NULL COMMENT 'Conteúdo da capa (opcional)',
+    `layout_id`           INT UNSIGNED    DEFAULT NULL COMMENT 'Layout de página (intra_layouts)',
+    `cover_layout_id`     INT UNSIGNED    DEFAULT NULL COMMENT 'Layout de capa (intra_layouts)',
+    `font_family`         VARCHAR(80)     DEFAULT NULL,
+    `font_size`           VARCHAR(10)     DEFAULT NULL,
     `current_version`     INT UNSIGNED    NOT NULL DEFAULT 1,
     `created_by`          INT UNSIGNED    DEFAULT NULL,
     `approved_by`         INT UNSIGNED    DEFAULT NULL,
@@ -132,6 +148,13 @@ CREATE TABLE IF NOT EXISTS `doc_documents` (
     INDEX `idx_doc_docs_category` (`category`),
     INDEX `idx_doc_docs_deleted` (`deleted_at`),
     INDEX `idx_doc_docs_hosp_del_exp` (`hospital_id`, `deleted_at`, `expiration_date`),
+    INDEX `idx_doc_docs_controlled` (`is_controlled`, `deleted_at`),
+    CONSTRAINT `fk_doc_docs_layout`
+        FOREIGN KEY (`layout_id`) REFERENCES `intra_layouts` (`id`)
+        ON DELETE SET NULL,
+    CONSTRAINT `fk_doc_docs_cover_layout`
+        FOREIGN KEY (`cover_layout_id`) REFERENCES `intra_layouts` (`id`)
+        ON DELETE SET NULL,
     CONSTRAINT `fk_doc_docs_hospital`
         FOREIGN KEY (`hospital_id`) REFERENCES `doc_hospitals` (`id`)
         ON DELETE RESTRICT ON UPDATE CASCADE,
@@ -156,6 +179,12 @@ CREATE TABLE IF NOT EXISTS `doc_document_versions` (
     `file_size`    BIGINT UNSIGNED DEFAULT NULL,
     `file_type`    VARCHAR(10)  DEFAULT NULL,
     `mime_type`    VARCHAR(100) DEFAULT NULL,
+    `content_html` MEDIUMTEXT   DEFAULT NULL COMMENT 'Conteúdo do editor nesta versão',
+    `cover_html`   MEDIUMTEXT   DEFAULT NULL,
+    `layout_id`    INT UNSIGNED DEFAULT NULL,
+    `cover_layout_id` INT UNSIGNED DEFAULT NULL,
+    `font_family`  VARCHAR(80)  DEFAULT NULL,
+    `font_size`    VARCHAR(10)  DEFAULT NULL,
     `expiration_date` DATE      DEFAULT NULL COMMENT 'Validade no momento desta versão',
     `notes`        TEXT         DEFAULT NULL COMMENT 'Anotações da mudança',
     `created_by`   INT UNSIGNED DEFAULT NULL,

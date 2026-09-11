@@ -4,6 +4,10 @@
  * Editor de texto com layouts predefinidos (papel timbrado), múltiplos
  * tamanhos de página, versionamento das edições, cópia pública opcional
  * e exportação em PDF (impressão do navegador com CSS @page).
+ *
+ * Os layouts (papel timbrado, capa, fundo, fontes) são do NÚCLEO
+ * (Core\DocLayout) e são gerenciados em Administração > Padronização >
+ * Layouts de documentos — compartilhados com o módulo Documentos.
  */
 
 return [
@@ -33,7 +37,7 @@ return [
             ],
         ],
         'layouts' => [
-            'label'   => 'Layouts (papel timbrado)',
+            'label'   => 'Layouts de documentos (padronização)',
             'actions' => [
                 'view'   => 'Visualizar',
                 'create' => 'Criar',
@@ -64,7 +68,7 @@ return [
 
         if ($can('layouts.view')) {
             $sections[] = ['heading' => 'Padronização', 'items' => [
-                ['label' => 'Layouts', 'url' => core_module_url('intranet', ['page' => 'layouts']), 'icon' => 'bi-layout-text-window-reverse', 'key' => 'layouts'],
+                ['label' => 'Layouts de documentos', 'url' => core_module_url('admin', ['a' => 'layouts']), 'icon' => 'bi-layout-text-window-reverse', 'key' => 'layouts'],
             ]];
         }
         return $sections;

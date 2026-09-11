@@ -155,13 +155,14 @@ class EmployeeController
             // Gera vencimentos automáticos (ASO e Conselho Regional, se houver).
             $this->autoCreateExpirations($employeeId, $data);
 
-            // Cria acesso do funcionário ao sistema (login = e-mail, senha = CPF).
-            $portalInfo = $this->createEmployeeUser($employeeId, $data);
+            // Login padrão do funcionário (usuário global: CPF / data de nascimento).
+            $access = EmployeeAccess::ensure(array_merge($data, ['id' => $employeeId]), Session::userId());
 
             $this->db->commit();
         } catch (\Throwable $e) {
             $this->db->rollBack();
-            Session::flash('error', 'Falha ao cadastrar funcionário: ' . Sanitize::e($e->getMessage()));
+            error_log('RH employees.store: ' . $e->getMessage());
+            Session::flash('error', 'Falha ao cadastrar funcionário. Verifique os dados e tente novamente.');
             header('Location: index.php?m=rh&page=employees&action=create');
             exit;
         }
@@ -170,11 +171,12 @@ class EmployeeController
         FileCache::forget('dashboard.global.' . date('Y-m-d'));
 
         $msg = 'Funcionário cadastrado com sucesso.';
-        if ($portalInfo['created']) {
-            $msg .= ' Acesso ao portal criado: login <code>' . Sanitize::e($portalInfo['email'])
-                  . '</code> / senha inicial: CPF sem formatação.';
-        } elseif ($portalInfo['reason']) {
-            $msg .= ' ' . $portalInfo['reason'];
+        if ($access['status'] === 'created') {
+            $msg .= ' Acesso ao portal criado — login: <code>' . Sanitize::e(Sanitize::formatCpf($access['username']))
+                  . '</code> / senha inicial: <code>' . Sanitize::e((string)$access['password'])
+                  . '</code> (data de nascimento, troca obrigatória no primeiro acesso).';
+        } else {
+            $msg .= ' ' . Sanitize::e($access['message']);
         }
         Session::flash('success', $msg);
         header('Location: index.php?m=rh&page=employees&action=show&id=' . $employeeId);
@@ -234,59 +236,6 @@ class EmployeeController
     }
 
     /**
-     * Cria o usuário do portal do funcionário (preset de micropermissões
-     * "funcionario": my.view, requests.view, requests.create,
-     * announcements.view).
-     * Pré-condições: e-mail preenchido, CPF válido, e-mail ainda não cadastrado.
-     * Retorna ['created'=>bool, 'reason'=>string, 'email'=>string].
-     */
-    private function createEmployeeUser(int $employeeId, array $data): array
-    {
-        $email = $data['email'] ?? '';
-        $cpf   = $data['cpf']   ?? '';
-        if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return ['created' => false, 'reason' => 'Acesso ao portal não criado: e-mail inválido/ausente.', 'email' => ''];
-        }
-        if (!$cpf || strlen($cpf) !== 11) {
-            return ['created' => false, 'reason' => 'Acesso ao portal não criado: CPF inválido.', 'email' => ''];
-        }
-
-        $stmt = $this->db->prepare('SELECT id FROM users WHERE email = ? OR username = ? LIMIT 1');
-        $stmt->execute([$email, $email]);
-        if ($stmt->fetch()) {
-            return ['created' => false, 'reason' => 'Acesso ao portal não criado: o e-mail já está em uso por outro usuário.', 'email' => $email];
-        }
-
-        // Usuário GLOBAL da plataforma (senha inicial = CPF, troca obrigatória).
-        $hash = password_hash($cpf, PASSWORD_BCRYPT, ['cost' => 12]);
-        $stmt = $this->db->prepare(
-            'INSERT INTO users (name, username, email, password_hash, is_admin, active, force_password_change)
-             VALUES (?,?,?,?,0,1,1)'
-        );
-        $stmt->execute([$data['full_name'], $email, $email, $hash]);
-        $userId = (int)$this->db->lastInsertId();
-
-        // Perfil do módulo: vínculo usuário ↔ funcionário/departamento.
-        $stmt = $this->db->prepare(
-            'INSERT INTO rh_user_profile (user_id, employee_id, department_id)
-             VALUES (?,?,?)
-             ON DUPLICATE KEY UPDATE employee_id = VALUES(employee_id),
-                                     department_id = VALUES(department_id)'
-        );
-        $stmt->execute([$userId, $employeeId, $data['department_id'] ?: null]);
-
-        // Acesso ao módulo RH com o preset "Funcionário" (micropermissões).
-        Core\Perms::setUserGrants(
-            $userId,
-            'rh',
-            Core\Perms::expand('rh', ['my.view', 'requests.view', 'requests.create', 'announcements.view']),
-            Core\Auth::id()
-        );
-
-        return ['created' => true, 'reason' => '', 'email' => $email];
-    }
-
-    /**
      * Visualizar funcionário (Ficha Funcional)
      */
     public function show(): void
@@ -337,15 +286,9 @@ class EmployeeController
         $scoresTotal     = EmployeeScore::totalFor($id);
         $compliments     = EmployeeCompliment::listFor($id);
 
-        // Usuário vinculado (portal do funcionário) — via rh_user_profile.
-        $stmt = $this->db->prepare(
-            'SELECT u.id, u.email, u.active, u.last_login_at AS last_login
-             FROM rh_user_profile p
-             JOIN users u ON u.id = p.user_id
-             WHERE p.employee_id = ?'
-        );
-        $stmt->execute([$id]);
-        $portalUser = $stmt->fetch() ?: null;
+        // Acesso ao sistema (usuário global vinculado via rh_user_profile).
+        $portalUser    = EmployeeAccess::linkedUser($id);
+        $unlinkedUsers = (!$portalUser && core_can('employees.edit')) ? EmployeeAccess::unlinkedUsers() : [];
 
         $pageTitle = $employee['full_name'];
         $page = 'employees';
@@ -372,6 +315,10 @@ class EmployeeController
 
         $departments = $this->db->query('SELECT id, name FROM rh_departments WHERE active = 1 ORDER BY name')->fetchAll();
         $positions = $this->db->query('SELECT id, title FROM rh_job_positions WHERE active = 1 ORDER BY title')->fetchAll();
+
+        // Seção "Acesso ao sistema" do formulário.
+        $portalUser    = EmployeeAccess::linkedUser($id);
+        $unlinkedUsers = $portalUser ? [] : EmployeeAccess::unlinkedUsers();
 
         $pageTitle = 'Editar Funcionário';
         $page = 'employees';
@@ -460,10 +407,118 @@ class EmployeeController
             );
         }
 
+        // Mantém o departamento do vínculo (rh_user_profile) sincronizado.
+        if ((int)$old['department_id'] !== (int)$data['department_id']) {
+            EmployeeAccess::syncDepartment($id, (int)$data['department_id'] ?: null);
+        }
+
+        // Acesso ao sistema: desligamento desativa o usuário vinculado (e a
+        // volta do desligamento reativa); troca de CPF acompanha o login.
+        $accessNotes = [];
+        if ($old['status'] !== $data['status']) {
+            if ($data['status'] === 'desligado') {
+                $accessNotes[] = EmployeeAccess::setLinkedUserActive($id, false, Session::userId());
+            } elseif ($old['status'] === 'desligado') {
+                $accessNotes[] = EmployeeAccess::setLinkedUserActive($id, true, Session::userId());
+            }
+        }
+        $accessNotes[] = EmployeeAccess::syncUsername($id, (string)$old['cpf'], (string)$data['cpf'], Session::userId());
+        $accessNotes = array_filter($accessNotes);
+
         AuditLog::log('update', 'employees', $id, $old, $data);
         FileCache::forget('dashboard.global.' . date('Y-m-d'));
 
-        Session::flash('success', 'Funcionário atualizado com sucesso.');
+        Session::flash('success', 'Funcionário atualizado com sucesso.' . ($accessNotes ? ' ' . Sanitize::e(implode(' ', $accessNotes)) : ''));
+        header('Location: index.php?m=rh&page=employees&action=show&id=' . $id);
+        exit;
+    }
+
+    // ---- Acesso ao sistema (login padrão CPF / nascimento) ----
+
+    /**
+     * Cria o acesso padrão do funcionário (ou vincula o usuário já existente
+     * com username = CPF). POST — employees.edit.
+     */
+    public function create_access(): void
+    {
+        core_require('employees.edit');
+        Csrf::check();
+
+        $id = Sanitize::int($_POST['id'] ?? 0);
+        $employee = $this->getEmployee($id);
+        if (!$employee) {
+            Session::flash('error', 'Funcionário não encontrado.');
+            header('Location: index.php?m=rh&page=employees');
+            exit;
+        }
+        if (!empty($employee['anonymized_at'])) {
+            Session::flash('error', 'Funcionário anonimizado não pode receber acesso.');
+            header('Location: index.php?m=rh&page=employees&action=show&id=' . $id);
+            exit;
+        }
+
+        $access = EmployeeAccess::ensure($employee, Session::userId());
+        if ($access['status'] === 'created') {
+            Session::flash('success', 'Acesso criado — login: <code>' . Sanitize::e(Sanitize::formatCpf($access['username']))
+                . '</code> / senha inicial: <code>' . Sanitize::e((string)$access['password'])
+                . '</code> (data de nascimento, troca obrigatória no primeiro acesso).');
+        } elseif ($access['status'] === 'error') {
+            Session::flash('error', Sanitize::e($access['message']));
+        } else {
+            Session::flash('success', Sanitize::e($access['message']));
+        }
+        header('Location: index.php?m=rh&page=employees&action=show&id=' . $id);
+        exit;
+    }
+
+    /**
+     * Redefine a senha do usuário vinculado para a padrão (nascimento
+     * ddmmaaaa, troca obrigatória). POST — employees.edit.
+     */
+    public function reset_password(): void
+    {
+        core_require('employees.edit');
+        Csrf::check();
+
+        $id = Sanitize::int($_POST['id'] ?? 0);
+        $employee = $this->getEmployee($id);
+        if (!$employee) {
+            Session::flash('error', 'Funcionário não encontrado.');
+            header('Location: index.php?m=rh&page=employees');
+            exit;
+        }
+
+        $password = EmployeeAccess::resetPassword($employee, Session::userId());
+        if ($password === null) {
+            Session::flash('error', 'O funcionário ainda não possui acesso ao sistema.');
+        } else {
+            Session::flash('success', 'Senha redefinida para o padrão: <code>' . Sanitize::e($password)
+                . '</code> (data de nascimento). O funcionário deverá trocá-la no próximo acesso.');
+        }
+        header('Location: index.php?m=rh&page=employees&action=show&id=' . $id);
+        exit;
+    }
+
+    /**
+     * Vincula o funcionário a um usuário global já existente (sem vínculo).
+     * POST — employees.edit.
+     */
+    public function link_user(): void
+    {
+        core_require('employees.edit');
+        Csrf::check();
+
+        $id     = Sanitize::int($_POST['id'] ?? 0);
+        $userId = Sanitize::int($_POST['user_id'] ?? 0);
+        $employee = $this->getEmployee($id);
+        if (!$employee) {
+            Session::flash('error', 'Funcionário não encontrado.');
+            header('Location: index.php?m=rh&page=employees');
+            exit;
+        }
+
+        $result = EmployeeAccess::linkExisting($employee, $userId, Session::userId());
+        Session::flash($result['ok'] ? 'success' : 'error', Sanitize::e($result['message']));
         header('Location: index.php?m=rh&page=employees&action=show&id=' . $id);
         exit;
     }
@@ -498,7 +553,7 @@ class EmployeeController
 
         if (Lgpd::anonymizeEmployee($id)) {
             FileCache::forget('dashboard.global.' . date('Y-m-d'));
-            Session::flash('success', 'Funcionário anonimizado conforme LGPD. Registros estatísticos foram preservados.');
+            Session::flash('success', 'Funcionário anonimizado conforme LGPD. Registros estatísticos foram preservados; o usuário vinculado (se houver) foi desativado e anonimizado.');
         } else {
             Session::flash('error', 'Falha ao anonimizar funcionário.');
         }

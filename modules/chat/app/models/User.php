@@ -82,8 +82,21 @@ class User extends Model
         )->execute([$id, $status]);
     }
 
+    /**
+     * "Visto por último". O polling chama isto a cada 2s por usuário —
+     * grava no máximo uma vez por minuto para não transformar o chat em
+     * uma torrente de UPDATEs.
+     */
     public static function updateLastSeen(int $id): void
     {
+        if (Session::userId() === $id) {
+            $last = (int) (Session::get('chat_last_seen_ping') ?? 0);
+            if ($last > time() - 60) {
+                return;
+            }
+            Session::set('chat_last_seen_ping', time());
+        }
+
         $db = Database::getInstance();
         $db->prepare(
             'INSERT INTO chat_presence (user_id, last_seen_at)
@@ -116,7 +129,8 @@ class User extends Model
              WHERE u.active = 1 AND (u.name LIKE ? OR u.email LIKE ?)
              ORDER BY u.name ASC LIMIT 20'
         );
-        $like = "%{$query}%";
+        // Escapa os curingas do LIKE (% e _) — senão "%" lista todo mundo
+        $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $query) . '%';
         $stmt->execute([$like, $like]);
         return $stmt->fetchAll();
     }

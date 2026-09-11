@@ -1,7 +1,9 @@
 <?php
 /**
- * CRON do módulo DOCUMENTOS: documentos vencendo/vencidos →
+ * CRON do módulo DOCUMENTOS: documentos CONTROLADOS vencendo/vencidos →
  * notificações (tabela global, module='documentos') + e-mails.
+ * Documentos não controlados (is_controlled = 0) não têm validade e são
+ * ignorados.
  *
  * Executado pelo cron unificado da plataforma via manifesto:
  *   php cron.php --module=documentos
@@ -43,7 +45,7 @@ try {
     $documents = db_query(
         "SELECT d.id, d.title, d.category, d.expiration_date, d.notify_days_before, d.hospital_id
          FROM doc_documents d
-         WHERE d.deleted_at IS NULL
+         WHERE d.deleted_at IS NULL AND d.is_controlled = 1
            AND d.expiration_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL d.notify_days_before DAY)"
     );
 
@@ -106,7 +108,8 @@ try {
         $expired = db_query(
             "SELECT id, title, category, expiration_date, hospital_id
              FROM doc_documents
-             WHERE deleted_at IS NULL AND expiration_date < CURDATE()"
+             WHERE deleted_at IS NULL AND is_controlled = 1
+               AND expiration_date IS NOT NULL AND expiration_date < CURDATE()"
         );
         echo "Documentos vencidos: " . count($expired) . "\n";
 

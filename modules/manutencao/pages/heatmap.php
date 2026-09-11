@@ -176,6 +176,13 @@ ob_start();
 (function(){
     var ctx = document.getElementById('heatmapChart');
     if (!ctx) return;
+    if (typeof Chart === 'undefined') {  // biblioteca de CDN indisponível
+        ctx.replaceWith(Object.assign(document.createElement('p'), {
+            className: 'text-muted small text-center my-3',
+            textContent: 'Gráfico indisponível (biblioteca não carregada).'
+        }));
+        return;
+    }
     new Chart(ctx, {
         type: 'bar',
         data: {

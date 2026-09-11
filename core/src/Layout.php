@@ -16,6 +16,26 @@ namespace Core;
 final class Layout
 {
     /**
+     * Modo "embutido": as próximas renderizações usam o chrome da
+     * administração central (sidebar/aba ativa/cabeçalho de abas) em vez do
+     * menu do módulo. Usado pelos painéis de configuração dos módulos
+     * (index.php?m=admin&a=module&slug=...), sem alterar as views do módulo.
+     *
+     * @var array{sidebar?: array, active?: string, prepend?: string, title?: string}|null
+     */
+    private static ?array $embed = null;
+
+    public static function embed(?array $opts): void
+    {
+        self::$embed = $opts;
+    }
+
+    public static function embedded(): bool
+    {
+        return self::$embed !== null;
+    }
+
+    /**
      * @param array{
      *   title?: string, content: string, module?: ?string, active?: string,
      *   head?: string, scripts?: string, fluid?: bool, sidebar?: ?array,
@@ -35,23 +55,56 @@ final class Layout
             $userId  = (int) $user['id'];
             $can     = fn (string $permKey): bool => Perms::can($userId, $moduleSlug, $permKey);
             $sidebar = ($manifest['menu'])($can);
+
+            // Painel de configuração do módulo na administração central:
+            // link padronizado no fim do menu lateral de todos os módulos.
+            if (self::$embed === null && !empty($manifest['admin']) && AdminPanel::tabsFor($userId, $moduleSlug) !== []) {
+                $sidebar   = is_array($sidebar) ? $sidebar : [];
+                $sidebar[] = [
+                    'heading' => 'Configuração',
+                    'items'   => [[
+                        'label' => 'Configurações do módulo',
+                        'url'   => AdminPanel::url($moduleSlug),
+                        'icon'  => 'bi-gear',
+                        'key'   => 'module-settings',
+                    ]],
+                ];
+            }
         }
 
+        $title        = $opts['title'] ?? ($manifest['name'] ?? core_config('app.name', 'Portal'));
+        $content      = $opts['content'] ?? '';
+        $active       = $opts['active'] ?? '';
+        $topbarActive = $moduleSlug;
+
+        // Painel de módulo dentro da administração central
+        if (self::$embed !== null) {
+            $sidebar      = self::$embed['sidebar'] ?? $sidebar;
+            $active       = self::$embed['active'] ?? $active;
+            $content      = (self::$embed['prepend'] ?? '') . $content;
+            $title        = (self::$embed['title'] ?? 'Administração') . ' — ' . $title;
+            $topbarActive = null;
+        }
+
+        $isGlobalAdmin = $user && Auth::isGlobalAdmin();
         $ctx = [
-            'title'       => $opts['title'] ?? ($manifest['name'] ?? core_config('app.name', 'Portal')),
-            'content'     => $opts['content'] ?? '',
+            'title'       => $title,
+            'content'     => $content,
             'head'        => $opts['head'] ?? '',
             'scripts'     => $opts['scripts'] ?? '',
             'fluid'       => (bool) ($opts['fluid'] ?? false),
             'body_class'  => $opts['body_class'] ?? '',
-            'active'      => $opts['active'] ?? '',
+            'active'      => $active,
             'user'        => $user,
             'module_slug' => $moduleSlug,
+            'topbar_active' => $topbarActive,
             'manifest'    => $manifest,
             'sidebar'     => $sidebar,
             'modules_nav' => $user ? Modules::forUser((int) $user['id']) : [],
             'unread'      => $user ? Notifications::unreadCount((int) $user['id']) : 0,
             'flash'       => Flash::pull(),
+            'admin_link'  => $user && ($isGlobalAdmin || AdminPanel::canAccess((int) $user['id'])),
+            'migrations_pending' => $isGlobalAdmin && Migrations::hasPending(),
         ];
 
         extract($ctx, EXTR_SKIP);

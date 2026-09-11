@@ -11,7 +11,7 @@ $action = $_GET['action'] ?? 'list';
 // ============================================================
 // PROCESSAR POST
 // ============================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
+if (manPostIsValid()) {
     $act = $_POST['action'] ?? '';
 
     if ($act === 'add') {
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
                 auditLog('create', 'maintenance_plans', (int)db()->lastInsertId());
                 flash('success', 'Plano de manutenção criado!');
             } catch (Exception $ex) {
-                flash('error', 'Erro: ' . $ex->getMessage());
+                error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Não foi possível concluir a operação. Tente novamente.');
             }
         }
         redirect(url('maintenance'));
@@ -87,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf()) {
                 flash('success', "OS {$osNumber} criada! Próxima manutenção: {$nextDate}");
             }
         } catch (Exception $ex) {
-            flash('error', 'Erro: ' . $ex->getMessage());
+            error_log('manutencao: ' . $ex->getMessage()); flash('error', 'Não foi possível concluir a operação. Tente novamente.');
         }
         redirect(url('maintenance'));
     }

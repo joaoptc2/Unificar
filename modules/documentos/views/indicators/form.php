@@ -72,6 +72,31 @@ $f = function($key, $default = '') use ($ind) {
                             <input type="number" name="decimal_places" class="form-control" min="0" max="6"
                                    value="<?php echo (int) $f('decimal_places', 2); ?>">
                         </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Setor</label>
+                            <select name="sector_id" class="form-select">
+                                <option value="">— Sem setor —</option>
+                                <?php foreach (($sectors ?? []) as $s): ?>
+                                    <option value="<?php echo (int) $s['id']; ?>"
+                                            <?php echo (int) ($default_sector_id ?? 0) === (int) $s['id'] ? 'selected' : ''; ?>>
+                                        <?php echo e($s['name']); ?><?php echo !empty($s['code']) ? ' (' . e($s['code']) . ')' : ''; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small class="text-muted">Usado pelo seletor "Setor em foco" e pelos planos de ação.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Responsável</label>
+                            <select name="responsible_user_id" class="form-select">
+                                <option value="">— Não definido —</option>
+                                <?php foreach (($users ?? []) as $u): ?>
+                                    <option value="<?php echo (int) $u['id']; ?>"
+                                            <?php echo (int) $f('responsible_user_id', 0) === (int) $u['id'] ? 'selected' : ''; ?>>
+                                        <?php echo e($u['name']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
                         <div class="col-12">
                             <label class="form-label">Descrição</label>
                             <textarea name="description" class="form-control" rows="2"

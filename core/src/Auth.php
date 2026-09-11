@@ -28,6 +28,12 @@ final class Auth
             return ['ok' => false, 'error' => 'Informe usuário e senha.'];
         }
 
+        // CPF digitado com pontuação → usuário é o CPF só com dígitos
+        // (login padrão dos funcionários criados pelo módulo RH).
+        if (preg_match('/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/', $login)) {
+            $login = preg_replace('/\D/', '', $login);
+        }
+
         if (RateLimit::isBlocked($login)) {
             return ['ok' => false, 'error' => 'Muitas tentativas. Aguarde alguns minutos e tente novamente.'];
         }

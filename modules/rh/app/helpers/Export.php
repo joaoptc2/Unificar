@@ -24,11 +24,11 @@ class Export
         fwrite($output, "\xEF\xBB\xBF");
 
         // Cabeçalhos
-        fputcsv($output, $headers, ';');
+        fputcsv($output, $headers, ';', '"', '');
 
         // Dados
         foreach ($rows as $row) {
-            fputcsv($output, $row, ';');
+            fputcsv($output, $row, ';', '"', '');
         }
 
         fclose($output);

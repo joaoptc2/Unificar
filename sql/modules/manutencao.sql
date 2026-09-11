@@ -16,7 +16,8 @@
 
 SET NAMES utf8mb4;
 
--- 1. HOSPITAIS (unidades do módulo — hospital_id das demais tabelas)
+-- 1. HOSPITAIS (unidades do módulo — hospital_id das demais tabelas;
+--    a aba "Dados da unidade" foi descontinuada: unidade única id=1)
 CREATE TABLE IF NOT EXISTS `man_hospitals` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `name` VARCHAR(200) NOT NULL,
@@ -65,6 +66,7 @@ CREATE TABLE IF NOT EXISTS `man_equipment` (
     `sector_id` INT UNSIGNED DEFAULT NULL,
     `category_id` INT UNSIGNED DEFAULT NULL,
     `code` VARCHAR(50) DEFAULT NULL,
+    `asset_code` CHAR(12) DEFAULT NULL COMMENT 'Código único de 12 dígitos (11 + dígito verificador Luhn) — código de barras/QR',
     `name` VARCHAR(200) NOT NULL,
     `manufacturer` VARCHAR(150) DEFAULT NULL,
     `model` VARCHAR(150) DEFAULT NULL,
@@ -81,6 +83,7 @@ CREATE TABLE IF NOT EXISTS `man_equipment` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_man_equipment_asset_code` (`asset_code`),
     KEY `idx_man_equip_hospital` (`hospital_id`),
     KEY `idx_man_equip_sector` (`sector_id`),
     KEY `idx_man_equip_category` (`category_id`),

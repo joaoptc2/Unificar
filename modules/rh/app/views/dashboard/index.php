@@ -227,6 +227,17 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 (function () {
+    // A biblioteca de gráficos vem de CDN: sem ela (rede bloqueada), a
+    // página continua funcionando — só os gráficos não são desenhados.
+    if (typeof Chart === 'undefined') {
+        document.querySelectorAll('canvas[id^="chart"]').forEach(function (el) {
+            const aviso = document.createElement('p');
+            aviso.className = 'text-muted small text-center my-3';
+            aviso.textContent = 'Gráficos indisponíveis (biblioteca não carregada).';
+            el.replaceWith(aviso);
+        });
+        return;
+    }
     const data = <?= json_encode($chartsData, JSON_UNESCAPED_UNICODE) ?>;
     const palette = ['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1','#20c997','#fd7e14','#0dcaf0','#6c757d','#d63384'];
     const textColor = '#495057';

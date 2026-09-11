@@ -1,0 +1,11 @@
+# Anexos do chat: nunca servidos diretamente pelo servidor web.
+# A entrega passa pelo endpoint autenticado do módulo
+# (index.php?m=chat&page=api&action=downloadAttachment&id=N), que checa
+# se o usuário participa do canal da mensagem.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

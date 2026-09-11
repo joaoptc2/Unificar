@@ -25,6 +25,15 @@ return [
         'user'    => 'root',
         'pass'    => '',
         'charset' => 'utf8mb4',
+
+        /**
+         * Fuso da sessão do banco. 'app' (padrão) alinha o banco ao fuso do
+         * PHP (app.timezone), para que NOW() e date() marquem a mesma hora.
+         * Use 'server' para manter o fuso do servidor de banco — indicado
+         * quando a base já tem histórico gravado em outro fuso e você prefere
+         * não misturar. Também aceita um deslocamento fixo, ex.: '-03:00'.
+         */
+        'timezone' => 'app',
     ],
 
     /**
