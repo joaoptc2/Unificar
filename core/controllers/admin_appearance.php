@@ -380,7 +380,15 @@ function core_admin_appearance(): string
                 v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
             }).reduce(function (acc, v, i) { return acc + v * [0.2126, 0.7152, 0.0722][i]; }, 0);
         }
-        function on(hex) { return lum(hex) > 0.5 ? '#1f2937' : '#ffffff'; }
+        // Mesma régua do servidor (Core\Branding::contrastColor): compara a
+        // razão de contraste com o claro e com o escuro em vez do brilho médio.
+        function on(hex) {
+            var bg = lum(hex), dl = lum('#1f2937');
+            var light = 1.05 / (bg + 0.05);
+            var dark = (Math.max(bg, dl) + 0.05) / (Math.min(bg, dl) + 0.05);
+            return dark > light ? '#1f2937' : '#ffffff';
+        }
+        function isDark(hex) { return on(hex) === '#ffffff'; }
         function val(id, fallback) { var el = document.getElementById(id); return el && el.value ? el.value : fallback; }
 
         function paint() {
@@ -393,7 +401,7 @@ function core_admin_appearance(): string
                       : style === 'light' ? '#ffffff'
                       : 'linear-gradient(90deg,' + shade(topBase, -0.22) + ',' + topBase + ')';
             var topText = style === 'light' ? '#1f2937' : style === 'dark' ? '#f8fafc' : on(topBase);
-            var sideDark = lum(side) < 0.5, bodyDark = lum(body) < 0.5;
+            var sideDark = isDark(side), bodyDark = isDark(body);
             var el = document.getElementById('brandPreview');
             var font = document.getElementById('f_font');
             var set = function (k, v) { el.style.setProperty(k, v); };

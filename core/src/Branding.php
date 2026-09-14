@@ -123,7 +123,12 @@ final class Branding
         if ($name !== '') {
             return $name;
         }
-        return (string) Settings::get('org_name', core_config('app.name', 'Portal Corporativo'));
+        $org = trim((string) Settings::get('org_name', ''));
+        if ($org !== '') {
+            return $org;
+        }
+        $app = trim((string) core_config('app.name', ''));
+        return $app !== '' ? $app : 'Portal Corporativo';
     }
 
     /** Nome curto (topbar). */
@@ -232,7 +237,7 @@ final class Branding
             return true;
         }
         $bg = self::get('topbar_bg') ?: self::get('primary');
-        return self::luminance($bg) < 0.55;
+        return self::isDark($bg);
     }
 
     /** Cor de fundo da topbar (CSS pronto: cor ou degradê). */
@@ -269,7 +274,7 @@ final class Branding
         $sideBg   = self::color($b['sidebar_bg'], self::DEFAULTS['sidebar_bg']);
         $sideText = self::color($b['sidebar_text'], self::DEFAULTS['sidebar_text']);
         $bodyBg   = self::color($b['body_bg'], self::DEFAULTS['body_bg']);
-        $sideDark = self::luminance($sideBg) < 0.5;
+        $sideDark = self::isDark($sideBg);
 
         $font    = self::FONTS[$b['font']]['stack'] ?? self::FONTS['system']['stack'];
         $scale   = self::DENSITIES[$b['density']]['scale'] ?? '1';
@@ -299,10 +304,10 @@ final class Branding
             '--portal-sidebar-border'     => $sideDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)',
             '--portal-sidebar-w'          => $sideW . 'px',
             '--portal-body-bg'            => $bodyBg,
-            '--portal-surface'            => self::luminance($bodyBg) < 0.5 ? '#1f2937' : '#ffffff',
-            '--portal-text'               => self::luminance($bodyBg) < 0.5 ? '#e5e7eb' : '#212529',
-            '--portal-muted'              => self::luminance($bodyBg) < 0.5 ? '#9ca3af' : '#6c757d',
-            '--portal-border'             => self::luminance($bodyBg) < 0.5 ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.09)',
+            '--portal-surface'            => self::isDark($bodyBg) ? '#1f2937' : '#ffffff',
+            '--portal-text'               => self::isDark($bodyBg) ? '#e5e7eb' : '#212529',
+            '--portal-muted'              => self::isDark($bodyBg) ? '#9ca3af' : '#6c757d',
+            '--portal-border'             => self::isDark($bodyBg) ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.09)',
             '--portal-radius'             => $radius . 'px',
             '--portal-radius-sm'          => max(0, (int) round($radius * 0.6)) . 'px',
             '--portal-font'               => $font,
@@ -318,7 +323,7 @@ final class Branding
             '--bs-border-radius-lg'       => ($radius + 4) . 'px',
             '--bs-body-font-family'       => $font,
             '--bs-body-bg'                => $bodyBg,
-            '--bs-body-color'             => self::luminance($bodyBg) < 0.5 ? '#e5e7eb' : '#212529',
+            '--bs-body-color'             => self::isDark($bodyBg) ? '#e5e7eb' : '#212529',
         ];
 
         $css = ":root{\n";
@@ -368,7 +373,10 @@ final class Branding
         }
         // Compatibilidade: o nome da organização continua em org_name
         if (array_key_exists('name', $values)) {
-            Settings::set('org_name', self::get('name') ?: (string) Settings::get('org_name', ''));
+            $brandName = self::get('name');
+            if ($brandName !== '') {
+                Settings::set('org_name', $brandName);
+            }
         }
         self::forget();
     }
@@ -549,8 +557,27 @@ final class Branding
     }
 
     /** Texto legível sobre a cor informada (branco ou quase preto). */
+    /**
+     * O fundo é escuro? (ou seja: sobre ele o texto legível é claro)
+     * Mesma régua de contraste usada em contrastColor(), para a superfície,
+     * o texto e as bordas acompanharem a cor escolhida sem surpresas.
+     */
+    public static function isDark(string $hex): bool
+    {
+        return self::contrastColor($hex) === '#ffffff';
+    }
+
+    /**
+     * Cor de texto legível sobre $hex: escolhe entre claro e escuro pela
+     * razão de contraste da WCAG (e não pelo brilho médio, que erra em
+     * tons como o âmbar, onde o branco fica ilegível).
+     */
     public static function contrastColor(string $hex): string
     {
-        return self::luminance($hex) > 0.5 ? '#1f2937' : '#ffffff';
+        $bg    = self::luminance($hex);
+        $light = (max($bg, 1.0) + 0.05) / (min($bg, 1.0) + 0.05);
+        $darkL = self::luminance('#1f2937');
+        $dark  = (max($bg, $darkL) + 0.05) / (min($bg, $darkL) + 0.05);
+        return $dark > $light ? '#1f2937' : '#ffffff';
     }
 }

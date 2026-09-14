@@ -338,3 +338,30 @@ a:hover { color: var(--bs-link-hover-color, var(--portal-primary-dark)); }
 .portal-body .card-header.bg-white,
 .portal-body .bg-white { background-color: var(--portal-surface) !important; }
 .portal-body .text-muted { color: var(--portal-muted) !important; }
+
+/* ============================================================
+   IMPRESSÃO — o papel é sempre branco.
+   Um tema escuro vale só na tela: etiquetas, cartazes A4, relatórios
+   e documentos voltam ao fundo branco com texto preto ao imprimir.
+   ============================================================ */
+@media print {
+    :root {
+        --portal-body-bg: #ffffff;
+        --portal-surface: #ffffff;
+        --portal-text: #000000;
+        --portal-muted: #444444;
+        --portal-border: #cccccc;
+        --portal-sidebar-bg: #ffffff;
+        --portal-sidebar-text: #000000;
+        --bs-body-bg: #ffffff;
+        --bs-body-color: #000000;
+    }
+
+    body.portal-body,
+    body.portal-bare {
+        background: #fff !important;
+        background-image: none !important;
+        color: #000;
+        padding-top: 0;
+    }
+}
