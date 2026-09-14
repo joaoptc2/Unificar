@@ -36,7 +36,7 @@ $isGlobal = Auth::isGlobalAdmin();
 $coreActions = [
     'users', 'user_form', 'user_save', 'user_delete', 'user_perms', 'user_perms_save',
     'groups', 'group_form', 'group_save', 'group_delete',
-    'modules', 'settings', 'audit',
+    'modules', 'settings', 'appearance', 'appearance_save', 'audit',
     'migrations', 'migrations_apply',
     'mailqueue', 'mailqueue_process', 'mailqueue_retry',
 ];
@@ -59,6 +59,7 @@ function admin_sidebar(): array
         $core[] = ['label' => 'Grupos de permissões','url' => core_module_url('admin', ['a' => 'groups']),     'icon' => 'bi-diagram-3',    'key' => 'groups'];
         $core[] = ['label' => 'Módulos',             'url' => core_module_url('admin', ['a' => 'modules']),    'icon' => 'bi-grid',         'key' => 'modules'];
         $core[] = ['label' => 'Configurações',       'url' => core_module_url('admin', ['a' => 'settings']),   'icon' => 'bi-sliders',      'key' => 'settings'];
+        $core[] = ['label' => 'Aparência',           'url' => core_module_url('admin', ['a' => 'appearance']), 'icon' => 'bi-palette',      'key' => 'appearance'];
         $core[] = ['label' => 'Atualizações de banco','url' => core_module_url('admin', ['a' => 'migrations']),'icon' => 'bi-database-up',  'key' => 'migrations'];
         $core[] = ['label' => 'Fila de e-mails',     'url' => core_module_url('admin', ['a' => 'mailqueue']),  'icon' => 'bi-envelope-paper','key' => 'mailqueue'];
         $core[] = ['label' => 'Auditoria',           'url' => core_module_url('admin', ['a' => 'audit']),      'icon' => 'bi-journal-text', 'key' => 'audit'];
@@ -385,6 +386,17 @@ switch ($action) {
             'layout_save'    => core_admin_layouts_save(),
             'layout_delete'  => core_admin_layouts_delete(),
             'layout_preview' => core_admin_layout_preview(),
+        };
+        break;
+
+    // ================= APARÊNCIA (identidade visual) =================
+
+    case 'appearance':
+    case 'appearance_save':
+        require CORE_PATH . '/controllers/admin_appearance.php';
+        match ($action) {
+            'appearance'      => admin_render('Aparência', core_admin_appearance(), 'appearance'),
+            'appearance_save' => core_admin_appearance_save(),
         };
         break;
 
