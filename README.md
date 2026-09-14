@@ -364,4 +364,8 @@ equipamentos, aniversários/vencimentos do RH etc.). Use
 
   Arquivos privados (anexos de comunicados, por exemplo) ficam em
   `storage/uploads/` e só são entregues pelo download autenticado do módulo;
+- Imagens da identidade visual (`uploads/branding/`) são públicas por
+  natureza — o navegador precisa buscá-las —, mas nunca executáveis: SVG
+  enviado é sanitizado antes de gravar e a extensão real é decidida pelo
+  tipo do conteúdo, não pelo nome do arquivo;
 - Auditoria unificada (Administração → Auditoria).

@@ -422,8 +422,18 @@ final class Branding
         if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
             return ['ok' => true];
         }
-        if (($file['error'] ?? 0) !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'] ?? '')) {
-            return ['ok' => false, 'error' => 'Falha no envio da imagem (limite do servidor?).'];
+        $err = (int) ($file['error'] ?? 0);
+        if ($err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE) {
+            $limit = $err === UPLOAD_ERR_INI_SIZE
+                ? (string) ini_get('upload_max_filesize')
+                : round($maxBytes / 1048576, 1) . ' MB';
+            return ['ok' => false, 'error' => 'Imagem maior que o limite de envio (' . $limit . ').'];
+        }
+        if ($err === UPLOAD_ERR_PARTIAL) {
+            return ['ok' => false, 'error' => 'O envio foi interrompido; tente novamente.'];
+        }
+        if ($err !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'] ?? '')) {
+            return ['ok' => false, 'error' => 'Falha no envio da imagem.'];
         }
         if (($file['size'] ?? 0) > $maxBytes) {
             return ['ok' => false, 'error' => 'Imagem maior que ' . round($maxBytes / 1048576, 1) . ' MB.'];

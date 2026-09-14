@@ -17,6 +17,34 @@ use Core\Csrf;
 use Core\Flash;
 
 /** Campos de imagem: chave => [rótulo, ajuda, formatos] */
+/**
+ * Tamanho máximo real de um envio neste servidor: o menor entre o limite do
+ * módulo (2 MB) e o do PHP (upload_max_filesize / post_max_size).
+ */
+function core_appearance_upload_limit(): string
+{
+    $toBytes = static function (string $v): int {
+        $v = trim($v);
+        if ($v === '') {
+            return 0;
+        }
+        $n = (int) $v;
+        return match (strtolower(substr($v, -1))) {
+            'g'     => $n * 1073741824,
+            'm'     => $n * 1048576,
+            'k'     => $n * 1024,
+            default => $n,
+        };
+    };
+    $limits = array_filter([
+        2097152,
+        $toBytes((string) ini_get('upload_max_filesize')),
+        $toBytes((string) ini_get('post_max_size')),
+    ]);
+    $bytes = $limits ? min($limits) : 2097152;
+    return number_format($bytes / 1048576, 1, ',', '.') . ' MB';
+}
+
 function core_appearance_images(): array
 {
     return [
@@ -189,6 +217,8 @@ function core_admin_appearance(): string
                         </div>
 
                         <hr class="my-4">
+                        <p class="text-muted small">Cada imagem pode ter até <?= core_e(core_appearance_upload_limit()) ?>
+                           (limite deste servidor).</p>
                         <div class="row g-3">
                             <?php foreach ($images as $key => $img):
                                 $path = $b[$key] ?? ''; ?>
