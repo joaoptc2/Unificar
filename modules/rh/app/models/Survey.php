@@ -262,7 +262,7 @@ class Survey extends Model
 
     public static function emailHtml(array $s): string
     {
-        $org  = (string)(Core\Settings::get('org_name', core_config('app.name', 'Portal')) ?? 'Portal');
+        $org  = Core\Branding::name();
         $link = core_url('index.php?m=rh&page=my&action=survey&id=' . (int)$s['id']);
         $until = !empty($s['ends_at']) ? '<p style="color:#555;font-size:13px">Disponível até ' . Sanitize::formatDate($s['ends_at']) . '.</p>' : '';
         $anon  = (int)$s['anonymous'] ? '<p style="color:#555;font-size:13px">🔒 Esta pesquisa é <strong>anônima</strong>: suas respostas não são vinculadas ao seu nome.</p>' : '';

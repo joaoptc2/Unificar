@@ -622,7 +622,7 @@ class EmployeeController
         $certificates = $stmt->fetchAll();
 
         // Nome do hospital agora vem das configurações do núcleo.
-        $hospitalName = Core\Settings::get('org_name', 'Hospital');
+        $hospitalName = Core\Branding::name();
 
         AuditLog::log('print', 'employees', $id);
 

@@ -3,14 +3,14 @@
 /* Editor com cara de folha: largura acompanha o layout escolhido */
 .intra-editor-wrap {
     background: #e9edf1;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--portal-border, #dee2e6);
     border-radius: .5rem;
     padding: 1rem;
     overflow-x: auto;
 }
 
 .intra-editor-wrap .ql-toolbar {
-    background: #fff;
+    background: var(--portal-surface, #fff);
     border-radius: .4rem .4rem 0 0;
     position: sticky;
     top: 56px; /* abaixo da topbar */
@@ -20,7 +20,7 @@
 }
 
 .intra-editor-wrap .ql-container {
-    background: #fff;
+    background: var(--portal-surface, #fff);
     max-width: min(var(--sheet-w, 210mm), 100%);
     margin: 0 auto;
     min-height: 60vh;

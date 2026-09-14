@@ -72,9 +72,18 @@ class BirthdayPoster
              . "</div>";
     }
 
+    /**
+     * CSS padrão do cartaz. As cores da marca (Administração > Aparência)
+     * entram aqui porque o cartaz é impresso — não há variáveis CSS para
+     * herdar no PDF. Quem editar o CSS na administração assume o controle:
+     * o texto salvo é usado como está.
+     */
     public static function defaultCss(): string
     {
-        return ".bd-title { text-align:center; color:#0d5c8f; font-size:22pt; margin:0 0 4mm; }\n"
+        $brand = Core\Branding::get('primary');
+        $onBrand = Core\Branding::contrastColor($brand);
+
+        return ".bd-title { text-align:center; color:{$brand}; font-size:22pt; margin:0 0 4mm; }\n"
              . ".bd-intro { text-align:center; color:#444; margin:0 0 6mm; }\n"
              . ".bd-grid { display:flex; flex-wrap:wrap; gap:4mm; justify-content:center; }\n"
              . ".bd-card { width:52mm; border:1px solid #e3e8ee; border-radius:4mm; padding:4mm 3mm; text-align:center;\n"
@@ -84,9 +93,9 @@ class BirthdayPoster
              . ".bd-photo { width:26mm; height:26mm; border-radius:50%; object-fit:cover; margin:2mm auto; display:block; border:2px solid #fff; box-shadow:0 0 0 1px #dfe5ec; }\n"
              . ".bd-name { font-weight:bold; font-size:11pt; margin-top:1mm; }\n"
              . ".bd-meta { font-size:8.5pt; color:#666; }\n"
-             . ".bd-dept { color:#0d5c8f; }\n"
+             . ".bd-dept { color:{$brand}; }\n"
              . ".bd-table { width:100%; border-collapse:collapse; }\n"
-             . ".bd-table th { background:#0d5c8f; color:#fff; text-align:left; padding:2mm; font-size:9.5pt; }\n"
+             . ".bd-table th { background:{$brand}; color:{$onBrand}; text-align:left; padding:2mm; font-size:9.5pt; }\n"
              . ".bd-table td { padding:1.5mm 2mm; border-bottom:1px solid #e3e8ee; font-size:9.5pt; }\n"
              . ".bd-empty { text-align:center; color:#888; padding:10mm 0; }";
     }
@@ -122,7 +131,7 @@ class BirthdayPoster
         $cfg   = array_merge(self::settings(), $override);
         $month = ($month >= 1 && $month <= 12) ? $month : (int)date('n');
         $year  = $year > 1900 ? $year : (int)date('Y');
-        $org   = (string)(Core\Settings::get('org_name', core_config('app.name', '')) ?? '');
+        $org   = Core\Branding::name();
         $rows  = self::employees($month, $department, (string)$cfg['order']);
 
         $vars = [

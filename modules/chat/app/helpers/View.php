@@ -61,7 +61,7 @@ class View
     /** Nome exibido para o chat: nome da organização (ou do app). */
     public static function appName(): string
     {
-        return (string) \Core\Settings::get('org_name', core_config('app.name', 'Comunicação'));
+        return \Core\Branding::name();
     }
 
     /** CSS do módulo (Bootstrap/Icons já vêm do layout do núcleo). */

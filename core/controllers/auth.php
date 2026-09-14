@@ -505,7 +505,7 @@ function core_auth_render_security(): void
                     <?php elseif ($setupSecret): ?>
                         <p class="small text-muted">1. Adicione a chave abaixo no Google/Microsoft Authenticator (ou leia o QR):</p>
                         <div class="p-2 bg-light border rounded font-monospace small mb-2"><?= core_e($setupSecret) ?></div>
-                        <?php $uri = Core\Totp::provisioningUri($setupSecret, (string) $user['email'], Core\Settings::get('org_name', 'Portal')); ?>
+                        <?php $uri = Core\Totp::provisioningUri($setupSecret, (string) $user['email'], Core\Branding::name()); ?>
                         <div class="text-center mb-3">
                             <img alt="QR Code 2FA" width="180" height="180"
                                  src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&amp;data=<?= urlencode($uri) ?>">

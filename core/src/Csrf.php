@@ -39,9 +39,31 @@ final class Csrf
 
     public static function check(?string $token = null): void
     {
-        if (!self::validate($token)) {
-            http_response_code(419);
-            exit('Sessão expirada ou token inválido. Volte e tente novamente.');
+        if (self::validate($token)) {
+            return;
         }
+        // Envio maior que post_max_size: o PHP descarta o corpo inteiro (e com
+        // ele o token), então sem esta checagem o usuário veria "sessão
+        // expirada" ao mandar um arquivo grande demais.
+        if (self::postWasDiscarded()) {
+            http_response_code(413);
+            $limit = (string) ini_get('post_max_size');
+            exit('O envio é maior que o limite do servidor (' . htmlspecialchars($limit, ENT_QUOTES)
+               . '). Volte, use um arquivo menor e tente novamente.');
+        }
+        http_response_code(419);
+        exit('Sessão expirada ou token inválido. Volte e tente novamente.');
+    }
+
+    /** O corpo do POST chegou, mas o PHP o descartou por exceder o limite? */
+    private static function postWasDiscarded(): bool
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            return false;
+        }
+        if ($_POST !== [] || $_FILES !== []) {
+            return false;
+        }
+        return (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0;
     }
 }

@@ -1,6 +1,11 @@
 /* ============================================================
    PLATAFORMA UNIFICADA — Design padrão
    Topbar fixa (seletor de módulos) + sidebar por módulo.
+
+   TODAS as cores, a fonte, os cantos e as medidas vêm das variáveis
+   --portal-* geradas pela identidade visual (Administração → Aparência,
+   Core\Branding). Os valores abaixo são apenas o retrato padrão para o
+   caso de a folha ser usada sem o bloco de variáveis.
    ============================================================ */
 
 :root {
@@ -8,38 +13,77 @@
     --portal-sidebar-w: 248px;
     --portal-primary: #0d5c8f;
     --portal-primary-dark: #0a4a74;
+    --portal-primary-light: #6295b6;
+    --portal-primary-soft: #e2ebf2;
+    --portal-primary-rgb: 13, 92, 143;
+    --portal-on-primary: #ffffff;
+    --portal-accent: #0f9d8f;
+    --portal-accent-rgb: 15, 157, 143;
+    --portal-on-accent: #ffffff;
+    --portal-topbar-bg: linear-gradient(90deg, #0a4a74, #0d5c8f);
+    --portal-topbar-text: #ffffff;
     --portal-sidebar-bg: #ffffff;
+    --portal-sidebar-text: #495057;
+    --portal-sidebar-hover: #f0f4f8;
+    --portal-sidebar-active-bg: #e8f1f8;
+    --portal-sidebar-active: #0a4a74;
+    --portal-sidebar-heading: #8a94a3;
+    --portal-sidebar-border: rgba(0, 0, 0, .06);
     --portal-body-bg: #f4f6f9;
+    --portal-surface: #ffffff;
+    --portal-text: #212529;
+    --portal-muted: #6c757d;
+    --portal-border: rgba(0, 0, 0, .09);
+    --portal-radius: 8px;
+    --portal-radius-sm: 5px;
+    --portal-font: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    --portal-density: 1;
 }
 
 body.portal-body {
     background: var(--portal-body-bg);
+    color: var(--portal-text);
+    font-family: var(--portal-font);
     padding-top: var(--portal-topbar-h);
     min-height: 100vh;
 }
 
 /* ---------- Topbar ---------- */
 .portal-topbar {
-    background: linear-gradient(90deg, var(--portal-primary-dark), var(--portal-primary));
+    background: var(--portal-topbar-bg);
+    color: var(--portal-topbar-text);
     min-height: var(--portal-topbar-h);
     box-shadow: 0 1px 6px rgba(0, 0, 0, .18);
 }
 
-.portal-topbar .navbar-brand { font-size: 1rem; }
+.portal-topbar .navbar-brand,
+.portal-topbar .nav-link,
+.portal-topbar .btn-link { color: var(--portal-topbar-text); }
+
+.portal-topbar .navbar-brand { font-size: 1rem; display: flex; align-items: center; gap: .5rem; }
+.portal-topbar .portal-brand-logo {
+    max-height: calc(var(--portal-topbar-h) - 20px);
+    max-width: 180px;
+    width: auto;
+    display: block;
+}
 
 .portal-module-nav .nav-link {
-    color: rgba(255, 255, 255, .82);
-    border-radius: .5rem;
+    color: color-mix(in srgb, var(--portal-topbar-text) 82%, transparent);
+    border-radius: var(--portal-radius-sm);
     padding: .35rem .75rem;
     margin: 0 .1rem;
     white-space: nowrap;
 }
 
-.portal-module-nav .nav-link:hover { color: #fff; background: rgba(255, 255, 255, .12); }
+.portal-module-nav .nav-link:hover {
+    color: var(--portal-topbar-text);
+    background: color-mix(in srgb, var(--portal-topbar-text) 14%, transparent);
+}
 
 .portal-module-nav .nav-link.active {
-    color: #fff;
-    background: rgba(255, 255, 255, .22);
+    color: var(--portal-topbar-text);
+    background: color-mix(in srgb, var(--portal-topbar-text) 24%, transparent);
     font-weight: 600;
 }
 
@@ -50,8 +94,8 @@ body.portal-body {
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, .25);
-    color: #fff;
+    background: color-mix(in srgb, var(--portal-topbar-text) 25%, transparent);
+    color: var(--portal-topbar-text);
     font-weight: 600;
     font-size: .85rem;
 }
@@ -65,7 +109,7 @@ body.portal-body {
 .portal-sidebar {
     width: var(--portal-sidebar-w);
     background: var(--portal-sidebar-bg);
-    border-right: 1px solid #e3e7ec;
+    border-right: 1px solid var(--portal-sidebar-border);
 }
 
 @media (min-width: 992px) {
@@ -84,7 +128,7 @@ body.portal-body {
     align-items: center;
     padding: .9rem 1rem .5rem;
     font-weight: 700;
-    color: var(--portal-primary-dark);
+    color: var(--portal-sidebar-active);
     font-size: .95rem;
 }
 
@@ -94,26 +138,29 @@ body.portal-body {
     font-weight: 700;
     letter-spacing: .06em;
     text-transform: uppercase;
-    color: #8a94a3;
+    color: var(--portal-sidebar-heading);
 }
 
 .portal-sidebar-nav .nav-link {
     display: flex;
     align-items: center;
     gap: .6rem;
-    color: #3d4756;
-    padding: .5rem 1rem;
+    color: var(--portal-sidebar-text);
+    padding: calc(.5rem * var(--portal-density)) 1rem;
     font-size: .92rem;
     border-left: 3px solid transparent;
 }
 
 .portal-sidebar-nav .nav-link i { font-size: 1.05rem; width: 1.2rem; text-align: center; }
 
-.portal-sidebar-nav .nav-link:hover { background: #f0f4f8; color: var(--portal-primary-dark); }
+.portal-sidebar-nav .nav-link:hover {
+    background: var(--portal-sidebar-hover);
+    color: var(--portal-sidebar-active);
+}
 
 .portal-sidebar-nav .nav-link.active {
-    background: #e8f1f8;
-    color: var(--portal-primary-dark);
+    background: var(--portal-sidebar-active-bg);
+    color: var(--portal-sidebar-active);
     font-weight: 600;
     border-left-color: var(--portal-primary);
 }
@@ -121,23 +168,41 @@ body.portal-body {
 /* ---------- Conteúdo ---------- */
 .portal-main { flex: 1 1 auto; min-width: 0; }
 
-.portal-content { padding: 1.25rem; max-width: 1400px; }
+.portal-content { padding: calc(1.25rem * var(--portal-density)); max-width: 1400px; }
 .portal-content-fluid { padding: 0; height: calc(100vh - var(--portal-topbar-h)); overflow: hidden; }
 
 .portal-main > .alert { margin: 1rem 1.25rem 0; }
 
 /* ---------- Login / páginas bare ---------- */
-body.portal-bare { background: linear-gradient(135deg, var(--portal-primary-dark), var(--portal-primary) 60%, #1178b5); }
-.portal-bare-card { width: 420px; max-width: 94vw; border: 0; border-radius: 1rem; }
+body.portal-bare {
+    background: linear-gradient(135deg, var(--portal-primary-dark), var(--portal-primary) 65%, var(--portal-accent));
+    font-family: var(--portal-font);
+}
+.portal-bare-card {
+    width: 420px; max-width: 94vw; border: 0;
+    border-radius: calc(var(--portal-radius) * 1.6);
+    background: var(--portal-surface);
+    color: var(--portal-text);
+}
 .portal-bare-logo {
     width: 56px; height: 56px; margin: 0 auto;
     display: flex; align-items: center; justify-content: center;
-    border-radius: 1rem; font-size: 1.6rem; color: #fff;
-    background: linear-gradient(135deg, var(--portal-primary), #1178b5);
+    border-radius: calc(var(--portal-radius) * 1.4);
+    font-size: 1.6rem; color: var(--portal-on-primary);
+    background: linear-gradient(135deg, var(--portal-primary), var(--portal-accent));
 }
+.portal-bare-logo img { max-width: 100%; max-height: 100%; border-radius: inherit; }
+.portal-bare-logo.has-image { background: none; width: auto; height: auto; max-height: 90px; }
+.portal-bare-logo.has-image img { max-height: 90px; width: auto; }
 
 /* ---------- Utilidades comuns aos módulos ---------- */
-.card { border: 1px solid #e6eaef; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+.card {
+    border: 1px solid var(--portal-border);
+    border-radius: var(--portal-radius);
+    background: var(--portal-surface);
+    color: var(--portal-text);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+}
 .table > :not(caption) > * > * { vertical-align: middle; }
 
 /* Portal home: cartões de módulos */
@@ -145,10 +210,158 @@ body.portal-bare { background: linear-gradient(135deg, var(--portal-primary-dark
     transition: transform .12s ease, box-shadow .12s ease;
     text-decoration: none;
 }
-.portal-module-card:hover { transform: translateY(-3px); box-shadow: 0 8px 22px rgba(13, 92, 143, .15); }
+.portal-module-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 22px rgba(var(--portal-primary-rgb), .18);
+}
 .portal-module-card .module-icon {
-    width: 52px; height: 52px; border-radius: .9rem;
+    width: 52px; height: 52px; border-radius: calc(var(--portal-radius) * 1.2);
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.5rem; color: #fff;
-    background: linear-gradient(135deg, var(--portal-primary), #1178b5);
+    font-size: 1.5rem; color: var(--portal-on-primary);
+    background: linear-gradient(135deg, var(--portal-primary), var(--portal-accent));
+}
+
+/* ============================================================
+   Bootstrap seguindo a identidade visual
+   Os componentes do Bootstrap 5.3 são coloridos em tempo de compilação;
+   aqui as variáveis de cada componente são reapontadas para a marca, o
+   que faz botões, abas, paginação e afins acompanharem as cores sem
+   recompilar o framework nem mexer no código dos módulos.
+   ============================================================ */
+.btn-primary {
+    --bs-btn-bg: var(--portal-primary);
+    --bs-btn-border-color: var(--portal-primary);
+    --bs-btn-color: var(--portal-on-primary);
+    --bs-btn-hover-bg: var(--portal-primary-dark);
+    --bs-btn-hover-border-color: var(--portal-primary-dark);
+    --bs-btn-hover-color: var(--portal-on-primary);
+    --bs-btn-active-bg: var(--portal-primary-dark);
+    --bs-btn-active-border-color: var(--portal-primary-dark);
+    --bs-btn-active-color: var(--portal-on-primary);
+    --bs-btn-disabled-bg: var(--portal-primary);
+    --bs-btn-disabled-border-color: var(--portal-primary);
+    --bs-btn-disabled-color: var(--portal-on-primary);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--portal-primary);
+    --bs-btn-border-color: var(--portal-primary);
+    --bs-btn-hover-bg: var(--portal-primary);
+    --bs-btn-hover-border-color: var(--portal-primary);
+    --bs-btn-hover-color: var(--portal-on-primary);
+    --bs-btn-active-bg: var(--portal-primary);
+    --bs-btn-active-border-color: var(--portal-primary);
+    --bs-btn-active-color: var(--portal-on-primary);
+    --bs-btn-disabled-color: var(--portal-primary);
+    --bs-btn-disabled-border-color: var(--portal-primary);
+}
+
+.text-primary { color: var(--portal-primary) !important; }
+.bg-primary { background-color: var(--portal-primary) !important; color: var(--portal-on-primary); }
+.border-primary { border-color: var(--portal-primary) !important; }
+.link-primary { color: var(--portal-primary) !important; }
+.text-bg-primary { background-color: var(--portal-primary) !important; color: var(--portal-on-primary) !important; }
+.badge.bg-primary { color: var(--portal-on-primary); }
+
+a { color: var(--bs-link-color, var(--portal-primary)); }
+a:hover { color: var(--bs-link-hover-color, var(--portal-primary-dark)); }
+
+.nav-tabs .nav-link.active {
+    color: var(--portal-primary);
+    border-bottom-color: var(--portal-surface);
+}
+.nav-tabs .nav-link:not(.active):hover { color: var(--portal-primary-dark); }
+
+.nav-pills {
+    --bs-nav-pills-link-active-bg: var(--portal-primary);
+    --bs-nav-pills-link-active-color: var(--portal-on-primary);
+}
+
+.page-item.active .page-link {
+    background-color: var(--portal-primary);
+    border-color: var(--portal-primary);
+    color: var(--portal-on-primary);
+}
+.page-link { color: var(--portal-primary); }
+
+.list-group-item.active {
+    background-color: var(--portal-primary);
+    border-color: var(--portal-primary);
+    color: var(--portal-on-primary);
+}
+
+.form-check-input:checked {
+    background-color: var(--portal-primary);
+    border-color: var(--portal-primary);
+}
+.form-check-input:focus,
+.form-control:focus,
+.form-select:focus,
+.btn:focus-visible,
+.form-control:focus-visible {
+    border-color: var(--portal-primary-light);
+    box-shadow: 0 0 0 .2rem rgba(var(--portal-primary-rgb), .25);
+}
+.form-range::-webkit-slider-thumb { background-color: var(--portal-primary); }
+.form-range::-moz-range-thumb { background-color: var(--portal-primary); }
+
+.progress-bar { background-color: var(--portal-primary); }
+
+.dropdown-menu {
+    --bs-dropdown-link-active-bg: var(--portal-primary);
+    --bs-dropdown-link-active-color: var(--portal-on-primary);
+    --bs-dropdown-border-radius: var(--portal-radius);
+}
+
+.alert-primary {
+    --bs-alert-color: var(--portal-primary-dark);
+    --bs-alert-bg: var(--portal-primary-soft);
+    --bs-alert-border-color: var(--portal-primary-light);
+}
+
+.accordion {
+    --bs-accordion-active-color: var(--portal-primary-dark);
+    --bs-accordion-active-bg: var(--portal-primary-soft);
+    --bs-accordion-btn-focus-box-shadow: 0 0 0 .2rem rgba(var(--portal-primary-rgb), .25);
+}
+
+.table {
+    --bs-table-hover-bg: rgba(var(--portal-primary-rgb), .05);
+    --bs-table-active-bg: rgba(var(--portal-primary-rgb), .08);
+}
+
+.btn { border-radius: var(--portal-radius-sm); }
+.form-control, .form-select, .input-group-text { border-radius: var(--portal-radius-sm); }
+.modal-content, .offcanvas { border-radius: var(--portal-radius); background: var(--portal-surface); color: var(--portal-text); }
+
+/* Fundo escuro: componentes claros do Bootstrap acompanham a superfície */
+.portal-body .card-header.bg-white,
+.portal-body .bg-white { background-color: var(--portal-surface) !important; }
+.portal-body .text-muted { color: var(--portal-muted) !important; }
+
+/* ============================================================
+   IMPRESSÃO — o papel é sempre branco.
+   Um tema escuro vale só na tela: etiquetas, cartazes A4, relatórios
+   e documentos voltam ao fundo branco com texto preto ao imprimir.
+   ============================================================ */
+@media print {
+    :root {
+        --portal-body-bg: #ffffff;
+        --portal-surface: #ffffff;
+        --portal-text: #000000;
+        --portal-muted: #444444;
+        --portal-border: #cccccc;
+        --portal-sidebar-bg: #ffffff;
+        --portal-sidebar-text: #000000;
+        --bs-body-bg: #ffffff;
+        --bs-body-color: #000000;
+    }
+
+    body.portal-body,
+    body.portal-bare {
+        background: #fff !important;
+        background-image: none !important;
+        color: #000;
+        padding-top: 0;
+    }
 }

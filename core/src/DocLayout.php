@@ -160,7 +160,7 @@ final class DocLayout
         }
         $map = [
             '{{logo}}'    => $logo,
-            '{{org}}'     => core_e((string) Settings::get('org_name', core_config('app.name', ''))),
+            '{{org}}'     => core_e(Branding::name()),
             '{{titulo}}'  => core_e((string) ($meta['title'] ?? '')),
             '{{autor}}'   => core_e((string) ($meta['author'] ?? '')),
             '{{data}}'    => core_e((string) ($meta['date'] ?? date('d/m/Y'))),

@@ -121,7 +121,7 @@ final class Auth
 
         // Compatibilidade com módulos multi-tenant legados (hospital único)
         $_SESSION['hospital_id']   = (int) Settings::get('default_hospital_id', '1');
-        $_SESSION['hospital_name'] = (string) Settings::get('org_name', core_config('app.name', 'Portal'));
+        $_SESSION['hospital_name'] = Branding::name();
 
         DB::execute('UPDATE users SET last_login_at = NOW() WHERE id = ?', [$user['id']]);
         Audit::log('login', 'users', (string) $user['id'], null, (int) $user['id']);

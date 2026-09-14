@@ -6,7 +6,9 @@
  * $user, $module_slug, $topbar_active, $manifest, $sidebar, $modules_nav,
  * $unread, $flash, $admin_link, $migrations_pending
  */
-$appName = Core\Settings::get('org_name', core_config('app.name', 'Portal Corporativo'));
+$appName    = Core\Branding::name();
+$shortName  = Core\Branding::shortName();
+$brandLogo  = Core\Branding::topbarLogoUrl();
 $moodleLink = core_config('moodle.enabled') ? core_config('moodle.url') : null;
 $hasSidebar = !empty($sidebar);
 ?>
@@ -23,7 +25,10 @@ $hasSidebar = !empty($sidebar);
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="<?= core_asset('core/app.css') ?>">
+    <?= Core\Branding::faviconTag() ?>
+    <?= Core\Branding::fontTag() ?>
     <?= $head ?>
+    <?= Core\Branding::cssVariables() ?>
 </head>
 <body class="portal-body <?= core_e($body_class) ?>">
 
@@ -36,9 +41,14 @@ $hasSidebar = !empty($sidebar);
         </button>
         <?php endif; ?>
 
-        <a class="navbar-brand d-flex align-items-center gap-2" href="<?= core_url('index.php') ?>">
-            <i class="bi bi-grid-3x3-gap-fill"></i>
-            <span class="fw-semibold"><?= core_e($appName) ?></span>
+        <a class="navbar-brand" href="<?= core_url('index.php') ?>">
+            <?php if ($brandLogo !== ''): ?>
+                <img src="<?= core_e($brandLogo) ?>" alt="<?= core_e($appName) ?>" class="portal-brand-logo">
+                <span class="visually-hidden"><?= core_e($appName) ?></span>
+            <?php else: ?>
+                <i class="bi bi-grid-3x3-gap-fill"></i>
+                <span class="fw-semibold"><?= core_e($shortName) ?></span>
+            <?php endif; ?>
         </a>
 
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topbarNav" aria-label="Alternar navegação">

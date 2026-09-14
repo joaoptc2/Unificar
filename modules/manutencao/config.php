@@ -135,7 +135,7 @@ function manOrgName(): string
     $name = (string) ($_SESSION['hospital_name'] ?? '');
     if ($name === '') {
         try {
-            $name = (string) (Core\Settings::get('org_name') ?? '');
+            $name = Core\Branding::name();
         } catch (Throwable $ex) {
             $name = '';
         }
