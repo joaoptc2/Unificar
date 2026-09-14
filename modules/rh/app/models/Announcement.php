@@ -162,9 +162,9 @@ class Announcement extends Model
     /** HTML do e-mail do comunicado. */
     public static function emailHtml(array $a): string
     {
-        $org   = (string)(Core\Settings::get('org_name', core_config('app.name', 'Portal')) ?? 'Portal');
+        $org   = Core\Branding::name();
         $link  = core_url('index.php?m=rh&page=my&action=announcement&id=' . (int)$a['id']);
-        $color = match ($a['type']) { 'urgente' => '#dc3545', 'celebracao' => '#198754', default => '#0d6efd' };
+        $color = match ($a['type']) { 'urgente' => '#dc3545', 'celebracao' => '#198754', default => Core\Branding::get('primary') };
         $label = self::TYPES[$a['type']] ?? ucfirst((string)$a['type']);
         $body  = !empty($a['body_html']) ? $a['body_html'] : nl2br(Sanitize::e((string)$a['body']));
         $img   = !empty($a['image_path'])

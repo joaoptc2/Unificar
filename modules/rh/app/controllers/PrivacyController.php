@@ -8,7 +8,7 @@ class PrivacyController
     public function index(): void
     {
         try {
-            $hospitalName = Core\Settings::get('org_name', 'Hospital');
+            $hospitalName = Core\Branding::name();
         } catch (\Throwable $e) {
             $hospitalName = 'Hospital';
         }

@@ -39,10 +39,11 @@ class Mailer
 
     private static function wrapTemplate(string $title, string $innerHtml): string
     {
-        $appName = Core\Settings::get('org_name', 'RH');
+        $appName = Core\Branding::name();
+        $primary = Core\Branding::get('primary');
         return '<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;color:#333;margin:0;padding:16px">' .
                '<div style="max-width:600px;margin:0 auto;border:1px solid #eee;border-radius:8px;padding:20px">' .
-               '<h2 style="color:#0d6efd;margin-top:0">' . htmlspecialchars($title) . '</h2>' .
+               '<h2 style="color:' . htmlspecialchars($primary) . ';margin-top:0">' . htmlspecialchars($title) . '</h2>' .
                $innerHtml .
                '<p style="margin-top:24px;color:#888;font-size:11px">Este é um e-mail automático do módulo RH — ' . htmlspecialchars((string)$appName) . '.</p>' .
                '</div></body></html>';

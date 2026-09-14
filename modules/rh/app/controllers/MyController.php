@@ -118,7 +118,7 @@ class MyController
     private function renderPortal(string $view, array $data): void
     {
         View::renderRaw($view, array_merge([
-            'hospitalName' => Core\Settings::get('org_name', core_config('app.name', 'Portal')),
+            'hospitalName' => Core\Branding::name(),
             'flashSuccess' => Session::flash('success'),
             'flashError'   => Session::flash('error'),
             'unread'       => Core\Notifications::unreadCount((int)Session::userId()),

@@ -146,10 +146,50 @@ administração central mesmo sem ser administrador global.
 | RH | Departamentos, Cargos, Acessos dos funcionários, Aniversariantes (A4) |
 | Manutenção | Setores, Categorias de equipamentos |
 
-Também na Administração: **Padronização → Layouts de documentos** (papel
-timbrado compartilhado por Documentos e Intranet), **Atualizações de
-banco** e **Fila de e-mails** (comunicados, pesquisas e alertas são
+Também na Administração: **Aparência** (identidade visual — cores,
+logotipo, favicon, nome; ver a seção abaixo), **Padronização → Layouts
+de documentos** (papel timbrado compartilhado por Documentos e
+Intranet), **Atualizações de banco** e **Fila de e-mails** (comunicados, pesquisas e alertas são
 enfileirados e enviados pelo cron).
+
+## Identidade visual (Administração → Aparência)
+
+Tudo o que dá cara ao sistema fica em **Administração → Aparência**
+(somente administradores globais). O que é escolhido lá vale para o
+núcleo, para os seis módulos e para a tela de login, sem editar CSS:
+
+- **Identidade** — nome da organização (aparece no título das páginas,
+  nos e-mails e nos documentos), nome curto do topo, mensagem da tela de
+  login, **logotipo**, **logotipo para fundo escuro**, **favicon** e
+  **imagem de fundo do login**.
+- **Cores** — cor principal, cor de destaque, fundo das páginas, fundo e
+  texto do menu lateral, estilo do topo (degradê, sólido, escuro, claro)
+  e cor própria do topo.
+- **Tipografia e formas** — família tipográfica, densidade (compacta,
+  normal, confortável), raio dos cantos, largura do menu e altura do
+  topo.
+- **Temas prontos** — Azul institucional, Verde saúde, Teal moderno,
+  Índigo, Bordô, Grafite (escuro) e Alto contraste. Aplicar um tema
+  preenche o formulário; o botão **Restaurar padrão** volta tudo ao
+  original (com a opção de manter as imagens enviadas).
+
+A pré-visualização ao lado do formulário mostra topo, menu, cartão,
+botões e etiquetas com as cores digitadas antes de salvar.
+
+**Como funciona por dentro.** `Core\Branding` guarda as escolhas em
+`settings` (prefixo `brand.`) e publica um bloco `<style>` com as
+variáveis `--portal-*` (e as `--bs-*` correspondentes) em todas as
+páginas. As folhas do núcleo e dos módulos leem essas variáveis, então
+uma cor nova alcança botões, abas, links, paginação, tabelas e
+formulários de uma vez. As cores derivadas — tons claro/escuro, fundo
+suave e **cor do texto sobre cada fundo** — são calculadas no servidor
+pela razão de contraste da WCAG, de modo que a leitura continua legível
+mesmo com cores claras (âmbar, amarelo) ou com um tema escuro. Ao
+imprimir, o papel volta a ser branco com texto preto.
+
+As imagens ficam em `uploads/branding/` (execução bloqueada por
+`.htaccess`); SVG enviado é sanitizado (script, `on*`, referências
+externas e afins são removidos) e o favicon aceita também `.ico`.
 
 ## Layouts de documentos (papel timbrado)
 
