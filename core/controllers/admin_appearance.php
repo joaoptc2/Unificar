@@ -14,6 +14,7 @@ use Core\Audit;
 use Core\Auth;
 use Core\Branding;
 use Core\Csrf;
+use Core\CssSanitizer;
 use Core\Flash;
 
 /** Campos de imagem: chave => [rótulo, ajuda, formatos] */
@@ -96,6 +97,11 @@ function core_admin_appearance_save(): void
         core_redirect('index.php?m=admin&a=appearance');
     }
 
+    if ($op === 'import') {
+        core_admin_appearance_import();
+        core_redirect('index.php?m=admin&a=appearance');
+    }
+
     // Remoções marcadas
     foreach (array_keys(core_appearance_images()) as $key) {
         if (!empty($_POST['remove_' . $key])) {
@@ -115,8 +121,24 @@ function core_admin_appearance_save(): void
         }
     }
 
+    // Antes/depois na auditoria: "identidade visual atualizada" não diz o que
+    // mudou nem permite voltar atrás.
+    $antes = Branding::all();
     Branding::save($_POST);
-    Audit::log('branding.save', 'settings', null, 'Identidade visual atualizada');
+    $depois = Branding::all();
+    $mudou  = [];
+    foreach ($depois as $k => $v) {
+        if (($antes[$k] ?? '') !== $v) {
+            $mudou[$k] = ['de' => $antes[$k] ?? '', 'para' => $v];
+        }
+    }
+    Audit::log('branding.save', 'settings', null, $mudou !== []
+        ? ['alterados' => array_keys($mudou), 'valores' => $mudou]
+        : 'Identidade visual salva sem alterações');
+
+    if (($_POST['custom_css'] ?? '') !== '' && CssSanitizer::wouldChange((string) $_POST['custom_css'])) {
+        $errors[] = 'parte do CSS foi removida pelo filtro de segurança (@import, endereço externo ou script).';
+    }
 
     if ($errors) {
         Flash::set('warning', 'Aparência salva, mas: ' . implode(' ', $errors));
@@ -124,6 +146,45 @@ function core_admin_appearance_save(): void
         Flash::set('success', 'Aparência salva.');
     }
     core_redirect('index.php?m=admin&a=appearance');
+}
+
+/**
+ * Importa um tema exportado por outra instalação.
+ *
+ * O arquivo passa por Branding::save(), que valida campo a campo — é a mesma
+ * fronteira do formulário. As chaves ausentes voltam ao padrão, para o
+ * resultado ser reprodutível: importar duas vezes o mesmo arquivo em
+ * instalações diferentes tem de dar a mesma tela.
+ */
+function core_admin_appearance_import(): void
+{
+    $file = $_FILES['theme_file'] ?? null;
+    if (!$file || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        Flash::set('danger', 'Nenhum arquivo de tema recebido.');
+        return;
+    }
+    if (($file['size'] ?? 0) > 262144 || !is_uploaded_file($file['tmp_name'])) {
+        Flash::set('danger', 'Arquivo de tema inválido.');
+        return;
+    }
+    $dados = json_decode((string) file_get_contents($file['tmp_name']), true);
+    if (!is_array($dados)) {
+        Flash::set('danger', 'O arquivo não é um tema válido (JSON esperado).');
+        return;
+    }
+
+    // Toda chave conhecida é escrita: ausente = valor padrão, nunca "o que já
+    // estava lá" — senão o resultado dependeria do que havia antes.
+    $valores = [];
+    foreach (Branding::DEFAULTS as $k => $padrao) {
+        if (in_array($k, ['logo', 'logo_light', 'favicon', 'login_bg'], true)) {
+            continue; // imagens continuam por upload
+        }
+        $valores[$k] = is_scalar($dados[$k] ?? null) ? (string) $dados[$k] : $padrao;
+    }
+    Branding::save($valores);
+    Audit::log('branding.import', 'settings', null, 'Tema importado de arquivo');
+    Flash::set('success', 'Tema importado. As imagens (logotipo, favicon) continuam as desta instalação.');
 }
 
 /** Tela de Aparência. */
@@ -242,7 +303,7 @@ function core_admin_appearance(): string
                 </div>
 
                 <div class="card mb-3">
-                    <div class="card-header">Cores</div>
+                    <div class="card-header">Cores da marca</div>
                     <div class="card-body">
                         <div class="row g-3">
                             <?= $color('primary', 'Cor primária', $b['primary'], 'Botões, links e destaques.') ?>
@@ -260,9 +321,53 @@ function core_admin_appearance(): string
                             </div>
                             <?= $color('topbar_bg', 'Cor do topo (opcional)', $b['topbar_bg'] !== '' ? $b['topbar_bg'] : $b['primary'], 'Vazio = usa a primária.') ?>
                         </div>
-                        <div class="alert alert-light border mt-3 mb-0 small">
-                            O sistema calcula sozinho os tons de foco e a cor do texto sobre cada fundo, então o contraste
-                            continua legível mesmo com cores claras.
+                        <?= core_appearance_contrast_warnings($b) ?>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Cores de estado</div>
+                    <div class="card-body">
+                        <p class="small text-muted">São as cores de significado, usadas em mais de oitocentos lugares
+                        nos módulos: selos de "conforme" e "vencido", alertas, barras de progresso e as colunas de
+                        situação das tabelas. Os valores de fábrica são os do Bootstrap.</p>
+                        <div class="row g-3">
+                            <?php foreach (Branding::STATES as $k => $lbl): ?>
+                                <?= $color($k, $lbl, $b[$k]) ?>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Tema claro e escuro</div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label small fw-semibold">Modo</label>
+                                <select class="form-select form-select-sm" name="theme_mode" id="f_theme_mode">
+                                    <?php foreach (Branding::THEME_MODES as $k => $lbl): ?>
+                                        <option value="<?= core_e($k) ?>" <?= $b['theme_mode'] === $k ? 'selected' : '' ?>><?= core_e($lbl) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div class="form-text small">"Seguir o aparelho" usa a preferência do celular ou do
+                                computador de cada pessoa — plantão noturno com tela escura, expediente com tela clara.</div>
+                            </div>
+                            <div class="col-12 col-md-6 d-flex align-items-center">
+                                <div class="form-check form-switch mt-3">
+                                    <input type="hidden" name="theme_toggle" value="0">
+                                    <input class="form-check-input" type="checkbox" role="switch" value="1"
+                                           name="theme_toggle" id="f_theme_toggle"
+                                           <?= $b['theme_toggle'] === '1' ? 'checked' : '' ?>>
+                                    <label class="form-check-label small" for="f_theme_toggle">
+                                        Deixar cada pessoa alternar o tema pelo menu do usuário
+                                    </label>
+                                </div>
+                            </div>
+                            <?= $color('dark_body_bg', 'Fundo no tema escuro', $b['dark_body_bg']) ?>
+                            <?= $color('dark_sidebar_bg', 'Menu no tema escuro', $b['dark_sidebar_bg']) ?>
+                            <?= $color('dark_primary', 'Cor primária no escuro', $b['dark_primary'] !== '' ? $b['dark_primary'] : $b['primary'],
+                                       'Vazio = o sistema clareia a primária só o quanto for preciso.') ?>
                         </div>
                     </div>
                 </div>
@@ -275,11 +380,11 @@ function core_admin_appearance(): string
                                 <label class="form-label small fw-semibold">Fonte</label>
                                 <select class="form-select form-select-sm" name="font" id="f_font">
                                     <?php foreach (Branding::FONTS as $k => $f): ?>
-                                        <option value="<?= core_e($k) ?>" data-stack="<?= core_e($f['stack']) ?>" <?= $b['font'] === $k ? 'selected' : '' ?>><?= core_e($f['label']) ?></option>
+                                        <option value="<?= core_e($k) ?>" <?= $b['font'] === $k ? 'selected' : '' ?>><?= core_e($f['label']) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <div class="col-12 col-md-6">
+                            <div class="col-12 col-md-3">
                                 <label class="form-label small fw-semibold">Densidade</label>
                                 <select class="form-select form-select-sm" name="density" id="f_density">
                                     <?php foreach (Branding::DENSITIES as $k => $d): ?>
@@ -287,174 +392,302 @@ function core_admin_appearance(): string
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <div class="col-12 col-md-4">
-                                <label class="form-label small fw-semibold">Cantos arredondados: <span id="v_radius"><?= core_e($b['radius']) ?></span> px</label>
+                            <div class="col-12 col-md-3">
+                                <label class="form-label small fw-semibold">Sombras</label>
+                                <select class="form-select form-select-sm" name="shadow" id="f_shadow">
+                                    <?php foreach (Branding::SHADOWS as $k => $sh): ?>
+                                        <option value="<?= core_e($k) ?>" <?= $b['shadow'] === $k ? 'selected' : '' ?>><?= core_e($sh['label']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label class="form-label small fw-semibold">Tamanho da letra:
+                                    <span id="v_font_size"><?= core_e($b['font_size']) ?></span> px</label>
+                                <input type="range" class="form-range" min="13" max="20" step="1"
+                                       name="font_size" id="f_font_size" value="<?= core_e($b['font_size']) ?>">
+                                <div class="form-text small">Vale para o sistema inteiro.</div>
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label class="form-label small fw-semibold">Cantos:
+                                    <span id="v_radius"><?= core_e($b['radius']) ?></span> px</label>
                                 <input type="range" class="form-range" min="0" max="24" step="1" name="radius" id="f_radius" value="<?= core_e($b['radius']) ?>">
                             </div>
-                            <div class="col-12 col-md-4">
-                                <label class="form-label small fw-semibold">Largura do menu: <span id="v_sidebar_width"><?= core_e($b['sidebar_width']) ?></span> px</label>
+                            <div class="col-12 col-md-3">
+                                <label class="form-label small fw-semibold">Largura do menu:
+                                    <span id="v_sidebar_width"><?= core_e($b['sidebar_width']) ?></span> px</label>
                                 <input type="range" class="form-range" min="180" max="360" step="4" name="sidebar_width" id="f_sidebar_width" value="<?= core_e($b['sidebar_width']) ?>">
                             </div>
-                            <div class="col-12 col-md-4">
-                                <label class="form-label small fw-semibold">Altura do topo: <span id="v_topbar_height"><?= core_e($b['topbar_height']) ?></span> px</label>
+                            <div class="col-12 col-md-3">
+                                <label class="form-label small fw-semibold">Altura do topo:
+                                    <span id="v_topbar_height"><?= core_e($b['topbar_height']) ?></span> px</label>
                                 <input type="range" class="form-range" min="44" max="88" step="2" name="topbar_height" id="f_topbar_height" value="<?= core_e($b['topbar_height']) ?>">
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <button class="btn btn-primary"><i class="bi bi-check2 me-1"></i>Salvar aparência</button>
-                <a class="btn btn-link" href="<?= core_url('index.php') ?>">Ver o portal</a>
+                <div class="card mb-3">
+                    <div class="card-header">Menu lateral</div>
+                    <div class="card-body">
+                        <label class="form-label small fw-semibold">Comportamento no computador</label>
+                        <select class="form-select form-select-sm" name="sidebar_mode" id="f_sidebar_mode">
+                            <?php foreach (Branding::SIDEBAR_MODES as $k => $lbl): ?>
+                                <option value="<?= core_e($k) ?>" <?= $b['sidebar_mode'] === $k ? 'selected' : '' ?>><?= core_e($lbl) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text small">Em telas de 1366 px — posto de enfermagem, recepção — o menu em
+                        ícones devolve espaço útil para as tabelas. No celular o menu continua deslizando pela lateral,
+                        como hoje.</div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Tela de entrada</div>
+                    <div class="card-body row g-3">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-semibold">Layout</label>
+                            <select class="form-select form-select-sm" name="login_layout" id="f_login_layout">
+                                <?php foreach (Branding::LOGIN_LAYOUTS as $k => $lbl): ?>
+                                    <option value="<?= core_e($k) ?>" <?= $b['login_layout'] === $k ? 'selected' : '' ?>><?= core_e($lbl) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text small">O formato lado a lado exige a imagem de fundo enviada acima.</div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-semibold">Largura do cartão:
+                                <span id="v_login_card_width"><?= core_e($b['login_card_width']) ?></span> px</label>
+                            <input type="range" class="form-range" min="340" max="620" step="10"
+                                   name="login_card_width" id="f_login_card_width" value="<?= core_e($b['login_card_width']) ?>">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold">Rodapé da tela de entrada</label>
+                            <input class="form-control form-control-sm" name="login_footer" maxlength="400"
+                                   value="<?= core_e($b['login_footer']) ?>"
+                                   placeholder="Uso restrito aos colaboradores — LGPD (Lei 13.709/2018) · Suporte: ramal 1234">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <span>CSS do administrador</span>
+                        <span class="badge text-bg-light border">avançado</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-2">Para o ajuste que nenhum campo cobre: esconder uma coluna na
+                        impressão, aumentar a letra de uma tela vista de longe no centro cirúrgico, destacar um selo.
+                        O texto é servido como folha de estilo própria e passa por um filtro que remove
+                        <code>@import</code>, <code>expression()</code>, <code>javascript:</code> e endereços externos.</p>
+                        <textarea class="form-control form-control-sm" name="custom_css" id="f_custom_css" rows="6"
+                                  spellcheck="false" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace"
+                                  placeholder=".portal-content { max-width: 1600px; }"><?= core_e($b['custom_css']) ?></textarea>
+                        <div class="form-text small">Até 16 KB. Um erro aqui só afeta a aparência: para voltar atrás,
+                        limpe o campo e salve.</div>
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <button class="btn btn-primary"><i class="bi bi-check2 me-1"></i>Salvar aparência</button>
+                    <a class="btn btn-outline-secondary" href="<?= core_module_url('admin', ['a' => 'appearance_export']) ?>">
+                        <i class="bi bi-download me-1"></i>Exportar tema
+                    </a>
+                    <label class="btn btn-outline-secondary mb-0">
+                        <i class="bi bi-upload me-1"></i>Importar tema
+                        <input type="file" name="theme_file" accept="application/json,.json" hidden
+                               onchange="this.form.op.value='import'; this.form.submit();">
+                    </label>
+                    <a class="btn btn-link" href="<?= core_url('index.php') ?>">Ver o portal</a>
+                </div>
             </div>
 
-            <!-- Pré-visualização -->
+            <!-- Pré-visualização: a página real, não um desenho dela -->
             <div class="col-12 col-xl-5">
                 <div class="card position-sticky" style="top:76px">
-                    <div class="card-header">Pré-visualização</div>
-                    <div class="card-body">
-                        <div id="brandPreview" class="brand-preview">
-                            <div class="bp-topbar">
-                                <span class="bp-brand"><?= core_e(Branding::shortName()) ?></span>
-                                <span class="bp-nav"><span class="bp-nav-item bp-active">Documentos</span><span class="bp-nav-item">RH</span><span class="bp-nav-item">Chat</span></span>
-                            </div>
-                            <div class="bp-body">
-                                <div class="bp-side">
-                                    <div class="bp-side-title">Principal</div>
-                                    <div class="bp-side-item bp-side-active">Dashboard</div>
-                                    <div class="bp-side-item">Documentos</div>
-                                    <div class="bp-side-item">Indicadores</div>
-                                </div>
-                                <div class="bp-main">
-                                    <div class="bp-card">
-                                        <div class="bp-card-title">Documentos vencendo</div>
-                                        <div class="bp-text">Exemplo de conteúdo com <span class="bp-link">um link</span>.</div>
-                                        <div class="bp-actions">
-                                            <span class="bp-btn">Botão primário</span>
-                                            <span class="bp-btn bp-btn-outline">Secundário</span>
-                                            <span class="bp-badge">12</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <span>Pré-visualização</span>
+                        <div class="btn-group btn-group-sm ms-auto" role="group" id="bpEsquema">
+                            <button type="button" class="btn btn-outline-secondary active" data-esquema="claro">claro</button>
+                            <button type="button" class="btn btn-outline-secondary" data-esquema="escuro">escuro</button>
                         </div>
-                        <p class="small text-muted mt-2 mb-0">A pré-visualização usa as cores do formulário; o resultado
-                            final aparece em todo o sistema depois de salvar.</p>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="bpAtualizar">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+                    <div class="card-body p-2">
+                        <!-- A amostra é renderizada em 1280px e reduzida: dentro de uma
+                             coluna estreita, a página real reflui para o formato de
+                             celular e deixaria de mostrar o menu lateral. -->
+                        <div style="overflow:hidden;border:1px solid var(--portal-border);border-radius:8px;height:560px">
+                            <iframe id="brandPreview" title="Pré-visualização da aparência"
+                                    style="width:1280px;height:1000px;border:0;background:#fff;
+                                           transform:scale(.56);transform-origin:0 0"
+                                    src="<?= core_module_url('admin', ['a' => 'appearance_preview']) ?>"></iframe>
+                        </div>
+                        <p class="small text-muted mt-2 mb-0">Esta é a página real, montada com as mesmas regras do
+                        sistema e com os valores do formulário — inclusive tabelas, formulários, alertas, selos de
+                        estado e gráfico. Nada é salvo até você clicar em <em>Salvar aparência</em>.</p>
                     </div>
                 </div>
             </div>
         </div>
     </form>
 
-    <style>
-    .brand-preview { border: 1px solid var(--portal-border); border-radius: 10px; overflow: hidden; font-size: .78rem; }
-    .brand-preview .bp-topbar { display: flex; align-items: center; gap: .75rem; padding: 0 .75rem; height: var(--bp-topbar-h, 44px); background: var(--bp-topbar-bg); color: var(--bp-topbar-text); }
-    .brand-preview .bp-brand { font-weight: 700; }
-    .brand-preview .bp-nav { display: flex; gap: .25rem; }
-    .brand-preview .bp-nav-item { padding: .15rem .5rem; border-radius: var(--bp-radius-sm, 5px); opacity: .85; }
-    .brand-preview .bp-nav-item.bp-active { background: rgba(255,255,255,.22); opacity: 1; font-weight: 600; }
-    .brand-preview .bp-body { display: flex; min-height: 190px; background: var(--bp-body-bg); }
-    .brand-preview .bp-side { width: 40%; max-width: 150px; background: var(--bp-side-bg); color: var(--bp-side-text); padding: .5rem 0; }
-    .brand-preview .bp-side-title { font-size: .62rem; text-transform: uppercase; letter-spacing: .06em; opacity: .6; padding: .25rem .6rem; }
-    .brand-preview .bp-side-item { padding: .3rem .6rem; border-left: 3px solid transparent; }
-    .brand-preview .bp-side-item.bp-side-active { background: var(--bp-side-active-bg); color: var(--bp-side-active); border-left-color: var(--bp-primary); font-weight: 600; }
-    .brand-preview .bp-main { flex: 1; padding: .6rem; }
-    .brand-preview .bp-card { background: var(--bp-surface); color: var(--bp-text); border: 1px solid rgba(0,0,0,.08); border-radius: var(--bp-radius, 8px); padding: .6rem; }
-    .brand-preview .bp-card-title { font-weight: 600; margin-bottom: .3rem; }
-    .brand-preview .bp-text { opacity: .8; margin-bottom: .5rem; }
-    .brand-preview .bp-link { color: var(--bp-primary); text-decoration: underline; }
-    .brand-preview .bp-actions { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
-    .brand-preview .bp-btn { background: var(--bp-primary); color: var(--bp-on-primary); padding: .2rem .6rem; border-radius: var(--bp-radius-sm, 5px); }
-    .brand-preview .bp-btn-outline { background: transparent; color: var(--bp-primary); border: 1px solid var(--bp-primary); }
-    .brand-preview .bp-badge { background: var(--bp-accent); color: var(--bp-on-accent); padding: .1rem .45rem; border-radius: 10px; }
-    </style>
-
     <script>
     (function () {
         var form = document.getElementById('brandForm');
-        if (!form) return;
+        if (!form) { return; }
 
-        // Sincroniza o seletor de cor com o campo de texto (hex)
+        // Campo de cor e campo de texto andam juntos.
         form.querySelectorAll('[data-color-for]').forEach(function (picker) {
-            var target = document.getElementById('f_' + picker.dataset.colorFor);
-            if (!target) return;
-            picker.addEventListener('input', function () { target.value = picker.value; paint(); });
-            target.addEventListener('input', function () {
-                if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(target.value)) { picker.value = target.value; paint(); }
+            var alvo = document.getElementById('f_' + picker.getAttribute('data-color-for'));
+            if (!alvo) { return; }
+            picker.addEventListener('input', function () { alvo.value = picker.value; agenda(); });
+            alvo.addEventListener('input', function () {
+                if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(alvo.value)) { picker.value = alvo.value; }
+                agenda();
             });
         });
-        ['f_font', 'f_density', 'f_topbar_style', 'f_short_name'].forEach(function (id) {
-            var el = document.getElementById(id);
-            if (el) el.addEventListener('input', paint);
-            if (el) el.addEventListener('change', paint);
-        });
-        [['f_radius', 'v_radius'], ['f_sidebar_width', 'v_sidebar_width'], ['f_topbar_height', 'v_topbar_height']].forEach(function (pair) {
-            var el = document.getElementById(pair[0]), out = document.getElementById(pair[1]);
-            if (!el) return;
-            el.addEventListener('input', function () { if (out) out.textContent = el.value; paint(); });
+
+        // Números ao lado dos controles deslizantes.
+        ['radius', 'sidebar_width', 'topbar_height', 'font_size', 'login_card_width'].forEach(function (k) {
+            var campo = document.getElementById('f_' + k), saida = document.getElementById('v_' + k);
+            if (campo && saida) {
+                campo.addEventListener('input', function () { saida.textContent = campo.value; });
+            }
         });
 
-        function hex2rgb(hex) {
-            hex = (hex || '').replace('#', '');
-            if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-            if (hex.length !== 6) hex = '0d5c8f';
-            return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
-        }
-        function shade(hex, f) {
-            var c = hex2rgb(hex), t = f > 0 ? 255 : 0, a = Math.abs(f);
-            return '#' + c.map(function (v) {
-                return Math.round(v + (t - v) * a).toString(16).padStart(2, '0');
-            }).join('');
-        }
-        function lum(hex) {
-            return hex2rgb(hex).map(function (v) {
-                v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-            }).reduce(function (acc, v, i) { return acc + v * [0.2126, 0.7152, 0.0722][i]; }, 0);
-        }
-        // Mesma régua do servidor (Core\Branding::contrastColor): compara a
-        // razão de contraste com o claro e com o escuro em vez do brilho médio.
-        function on(hex) {
-            var bg = lum(hex), dl = lum('#1f2937');
-            var light = 1.05 / (bg + 0.05);
-            var dark = (Math.max(bg, dl) + 0.05) / (Math.min(bg, dl) + 0.05);
-            return dark > light ? '#1f2937' : '#ffffff';
-        }
-        function isDark(hex) { return on(hex) === '#ffffff'; }
-        function val(id, fallback) { var el = document.getElementById(id); return el && el.value ? el.value : fallback; }
+        /* A pré-visualização é a PÁGINA REAL renderizada pelo servidor com os
+           valores do formulário. Antes era um desenho em HTML com a matemática
+           de cor reescrita em JavaScript — duas implementações da mesma regra,
+           que podiam divergir, e que não mostravam tabela, alerta nem gráfico. */
+        var quadro = document.getElementById('brandPreview');
+        var base = quadro ? quadro.getAttribute('src') : '';
+        var esquema = 'claro';
+        var timer = null;
 
-        function paint() {
-            var p = val('f_primary', '#0d5c8f'), a = val('f_accent', '#0f9d8f');
-            var side = val('f_sidebar_bg', '#ffffff'), sideText = val('f_sidebar_text', '#495057');
-            var body = val('f_body_bg', '#f4f6f9'), style = val('f_topbar_style', 'gradient');
-            var topBase = val('f_topbar_bg', p) || p;
-            var topBg = style === 'solid' ? topBase
-                      : style === 'dark' ? 'linear-gradient(90deg,#111827,#1f2937)'
-                      : style === 'light' ? '#ffffff'
-                      : 'linear-gradient(90deg,' + shade(topBase, -0.22) + ',' + topBase + ')';
-            var topText = style === 'light' ? '#1f2937' : style === 'dark' ? '#f8fafc' : on(topBase);
-            var sideDark = isDark(side), bodyDark = isDark(body);
-            var el = document.getElementById('brandPreview');
-            var font = document.getElementById('f_font');
-            var set = function (k, v) { el.style.setProperty(k, v); };
-            set('--bp-primary', p); set('--bp-on-primary', on(p));
-            set('--bp-accent', a); set('--bp-on-accent', on(a));
-            set('--bp-topbar-bg', topBg); set('--bp-topbar-text', topText);
-            set('--bp-side-bg', side); set('--bp-side-text', sideText);
-            set('--bp-side-active-bg', sideDark ? 'rgba(255,255,255,.12)' : shade(p, 0.88));
-            set('--bp-side-active', sideDark ? '#ffffff' : shade(p, -0.18));
-            set('--bp-body-bg', body);
-            set('--bp-surface', bodyDark ? '#1f2937' : '#ffffff');
-            set('--bp-text', bodyDark ? '#e5e7eb' : '#212529');
-            set('--bp-radius', val('f_radius', '8') + 'px');
-            set('--bp-radius-sm', Math.round(val('f_radius', '8') * 0.6) + 'px');
-            set('--bp-topbar-h', Math.max(36, val('f_topbar_height', '56') * 0.8) + 'px');
-            if (font && font.selectedOptions[0]) el.style.fontFamily = font.selectedOptions[0].dataset.stack || '';
-            var brand = el.querySelector('.bp-brand');
-            var short = document.getElementById('f_short_name'), name = document.getElementById('f_name');
-            if (brand) brand.textContent = (short && short.value) || (name && name.value) || 'Portal';
+        function url() {
+            var dados = new FormData(form);
+            var p = new URLSearchParams();
+            dados.forEach(function (v, k) {
+                if (k !== '_csrf_token' && k !== 'op' && typeof v === 'string') { p.append(k, v); }
+            });
+            p.append('esquema', esquema);
+            return base + '&' + p.toString();
         }
-        paint();
+        function atualiza() { if (quadro) { quadro.src = url(); } }
+        function agenda() { clearTimeout(timer); timer = setTimeout(atualiza, 350); }
+
+        form.addEventListener('input', agenda);
+        form.addEventListener('change', agenda);
+
+        var botao = document.getElementById('bpAtualizar');
+        if (botao) { botao.addEventListener('click', atualiza); }
+
+        var grupo = document.getElementById('bpEsquema');
+        if (grupo) {
+            grupo.addEventListener('click', function (e) {
+                var b = e.target.closest('[data-esquema]');
+                if (!b) { return; }
+                esquema = b.getAttribute('data-esquema');
+                grupo.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+                b.classList.add('active');
+                atualiza();
+            });
+        }
+        atualiza();
     })();
     </script>
     <?php
     return (string) ob_get_clean();
+}
+
+/**
+ * Avisos de contraste: nada impede o administrador de salvar texto branco
+ * sobre fundo branco e cegar o menu de todo o hospital. O sistema já sabe
+ * calcular contraste — aqui ele avisa antes, em vez de deixar acontecer.
+ *
+ * @param array<string,string> $b
+ */
+function core_appearance_contrast_warnings(array $b): string
+{
+    $pares = [
+        ['sidebar_text', 'sidebar_bg', 'O texto do menu lateral'],
+        ['primary', 'body_bg', 'A cor primária sobre o fundo da área de trabalho'],
+    ];
+    $avisos = [];
+    foreach ($pares as [$frente, $fundo, $rotulo]) {
+        $c1 = $b[$frente] ?? '';
+        $c2 = $b[$fundo] ?? '';
+        if ($c1 === '' || $c2 === '') {
+            continue;
+        }
+        $r = Branding::contrastRatio($c1, $c2);
+        if ($r < 3.0) {
+            $avisos[] = sprintf('%s quase some no fundo escolhido (contraste %.1f:1; o mínimo legível é 4,5:1).',
+                $rotulo, $r);
+        } elseif ($r < 4.5) {
+            $avisos[] = sprintf('%s está no limite da legibilidade (contraste %.1f:1).', $rotulo, $r);
+        }
+    }
+
+    if ($avisos === []) {
+        return '<div class="alert alert-light border mt-3 mb-0 small">'
+             . 'O sistema calcula sozinho os tons de foco e a cor do texto sobre cada fundo, então o contraste '
+             . 'continua legível mesmo com cores claras.</div>';
+    }
+    $html = '<div class="alert alert-warning mt-3 mb-0 small"><strong>Atenção ao contraste</strong><ul class="mb-0 mt-1">';
+    foreach ($avisos as $a) {
+        $html .= '<li>' . core_e($a) . '</li>';
+    }
+    return $html . '</ul></div>';
+}
+
+/**
+ * Exporta o tema como arquivo JSON, para levar a identidade de homologação
+ * para produção sem redigitar tudo — e para ter uma cópia das escolhas.
+ * As imagens não vão junto: continuam por upload.
+ */
+function core_admin_appearance_export(): void
+{
+    Auth::requireGlobalAdmin();
+
+    $b    = Branding::all();
+    $tema = ['_formato' => 'tema-plataforma-unificada/1', '_gerado_em' => date('c')];
+    foreach (Branding::DEFAULTS as $k => $_) {
+        if (in_array($k, ['logo', 'logo_light', 'favicon', 'login_bg'], true)) {
+            continue;
+        }
+        $tema[$k] = $b[$k];
+    }
+
+    $nome = 'tema-' . preg_replace('/[^a-z0-9]+/i', '-', mb_strtolower(Branding::name())) . '-' . date('Y-m-d') . '.json';
+    header('Content-Type: application/json; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $nome . '"');
+    echo json_encode($tema, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+/**
+ * Pré-visualização: renderiza uma página de amostra com as MESMAS regras do
+ * sistema, a partir dos valores que estão no formulário. Nada é gravado.
+ *
+ * Tudo o que chega por querystring passa por Branding::normalizeAll() antes de
+ * virar CSS — sem isso, um valor cru entraria num bloco <style> servido pelo
+ * próprio portal, que é injeção de CSS.
+ */
+function core_admin_appearance_preview(): void
+{
+    Auth::requireGlobalAdmin();
+
+    $valores = Branding::normalizeAll($_GET);
+    if (($_GET['esquema'] ?? 'claro') === 'escuro') {
+        $valores['theme_mode'] = 'escuro';
+    } elseif ($valores['theme_mode'] === 'auto') {
+        $valores['theme_mode'] = 'claro';
+    }
+
+    header('Content-Type: text/html; charset=utf-8');
+    header('X-Frame-Options: SAMEORIGIN');
+    require CORE_PATH . '/views/appearance_preview.php';
+    exit;
 }

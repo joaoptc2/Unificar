@@ -209,16 +209,56 @@ núcleo, para os seis módulos e para a tela de login, sem editar CSS:
 - **Cores** — cor principal, cor de destaque, fundo das páginas, fundo e
   texto do menu lateral, estilo do topo (degradê, sólido, escuro, claro)
   e cor própria do topo.
-- **Tipografia e formas** — família tipográfica, densidade (compacta,
-  normal, confortável), raio dos cantos, largura do menu e altura do
-  topo.
+- **Cores de estado** — sucesso, alerta, erro e informação. São as cores de
+  significado, usadas em mais de oitocentos lugares nos módulos (selos de
+  "conforme" e "vencido", alertas, barras de progresso, colunas de situação).
+  Os valores de fábrica são os do Bootstrap, então atualizar não muda nada em
+  quem nunca abriu a tela.
+- **Tema claro e escuro** — "sempre claro", "sempre escuro" ou **seguir o
+  aparelho de cada pessoa** (plantão noturno com tela escura, expediente com
+  tela clara). Opcionalmente cada pessoa alterna pelo menu do usuário, e a
+  escolha fica no navegador dela. As cores do tema escuro (fundo, menu e a
+  cor da marca) são configuráveis; deixando a cor da marca em branco, o
+  sistema a clareia só o quanto for preciso para continuar legível sobre o
+  fundo escuro.
+- **Tipografia e formas** — família tipográfica, **tamanho da letra** (13 a
+  20 px, e como todo o CSS usa `rem` isso escala o sistema inteiro),
+  densidade, sombras, raio dos cantos, largura do menu e altura do topo.
+- **Menu lateral** — sempre aberto, aberto com botão para recolher em ícones,
+  ou só ícones abrindo ao passar o mouse. Em telas de 1366 px — posto de
+  enfermagem, recepção — isso devolve espaço útil para as tabelas. No celular
+  o menu continua deslizando pela lateral.
+- **Tela de entrada** — cartão centralizado ou **imagem de um lado e
+  formulário do outro**, largura do cartão e um rodapé institucional (aviso
+  de uso restrito, LGPD, ramal do suporte).
+- **CSS do administrador** — a válvula de escape para o ajuste que nenhum
+  campo cobre. É servido como folha de estilo própria (não embutido na
+  página), e passa por um filtro que remove `@import`, `expression()`,
+  `javascript:` e endereços externos.
+- **Exportar e importar tema** — leva a identidade de homologação para
+  produção sem redigitar, e serve de cópia das escolhas. As imagens continuam
+  por upload.
 - **Temas prontos** — Azul institucional, Verde saúde, Teal moderno,
   Índigo, Bordô, Grafite (escuro) e Alto contraste. Aplicar um tema
   preenche o formulário; o botão **Restaurar padrão** volta tudo ao
   original (com a opção de manter as imagens enviadas).
 
-A pré-visualização ao lado do formulário mostra topo, menu, cartão,
-botões e etiquetas com as cores digitadas antes de salvar.
+A pré-visualização ao lado do formulário é a **página real** — montada pelo
+servidor com as mesmas regras do sistema e com os valores que estão no
+formulário —, com topo, menu, tabela, formulário, os quatro alertas, selos de
+estado, botões e gráfico, e um botão para ver o mesmo no tema escuro. Nada é
+salvo até clicar em *Salvar aparência*. Se uma combinação de cores ficar
+ilegível (texto do menu quase sumindo no fundo escolhido), a tela avisa antes,
+com a razão de contraste medida.
+
+Ainda na **Administração → Módulos**: cada módulo pode receber o nome e o
+ícone que o hospital usa ("Manutenção" vira "Engenharia Clínica") e pode sair
+da barra superior sem perder o acesso — continua na tela inicial e por link
+direto.
+
+No celular, a barra do navegador recebe a cor da marca e o portal pode ser
+instalado na tela inicial com o nome e o ícone do hospital (manifesto gerado
+pelo PHP, em `?m=auth&a=manifest`).
 
 **Como funciona por dentro.** `Core\Branding` guarda as escolhas em
 `settings` (prefixo `brand.`) e publica um bloco `<style>` com as

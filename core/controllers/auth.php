@@ -25,6 +25,32 @@ if ($action === '') {
 
 switch ($action) {
 
+    // ===== Recursos públicos da identidade visual =====
+    // Ficam aqui (e não na administração) porque a TELA DE LOGIN também
+    // precisa deles, e lá ninguém está autenticado ainda.
+
+    /**
+     * CSS livre do administrador (Administração > Aparência).
+     * Servido como folha própria em vez de embutido na página: assim não
+     * existe o ataque de fechar o <style> e abrir um <script>, e o navegador
+     * ainda guarda em cache. A URL carrega a versão do conteúdo.
+     */
+    case 'brand_css':
+        header('Content-Type: text/css; charset=utf-8');
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: public, max-age=604800');
+        echo "/* Administração > Aparência — CSS do administrador */\n";
+        echo Core\Branding::customCss();
+        exit;
+
+    /** Manifesto do aplicativo (PWA): nome, ícone e cor da marca no celular. */
+    case 'manifest':
+        header('Content-Type: application/manifest+json; charset=utf-8');
+        header('Cache-Control: public, max-age=3600');
+        echo json_encode(Core\Branding::manifest(),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        exit;
+
     // ================= LOGIN =================
     case 'login':
         if (Auth::check()) {

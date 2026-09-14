@@ -36,9 +36,23 @@
     --portal-border: rgba(0, 0, 0, .09);
     --portal-radius: 8px;
     --portal-radius-sm: 5px;
+    --portal-font-size: 16px;
+    --portal-sidebar-w-min: 64px;
+    --portal-surface-2: #f8fafc;
+    --portal-shadow-card: 0 1px 2px rgba(16, 24, 40, .04);
+    --portal-shadow-topbar: 0 1px 6px rgba(0, 0, 0, .18);
+    --portal-shadow-hover: 0 8px 22px rgba(16, 24, 40, .10);
+    --portal-login-card-w: 420px;
+    --portal-success: #198754;
+    --portal-warning: #ffc107;
+    --portal-danger: #dc3545;
+    --portal-info: #0dcaf0;
     --portal-font: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
     --portal-density: 1;
 }
+
+/* O tamanho da fonte base escala o sistema inteiro: todo o CSS usa rem. */
+html { font-size: var(--portal-font-size); }
 
 body.portal-body {
     background: var(--portal-body-bg);
@@ -53,7 +67,7 @@ body.portal-body {
     background: var(--portal-topbar-bg);
     color: var(--portal-topbar-text);
     min-height: var(--portal-topbar-h);
-    box-shadow: 0 1px 6px rgba(0, 0, 0, .18);
+    box-shadow: var(--portal-shadow-topbar);
 }
 
 .portal-topbar .navbar-brand,
@@ -165,6 +179,65 @@ body.portal-body {
     border-left-color: var(--portal-primary);
 }
 
+/* ---------- Menu lateral: modos de exibição ----------
+   O estado fica no <html> (data-portal-sidebar), escrito por um script
+   curtíssimo no <head> — no fim do <body> a barra pintaria aberta e
+   saltaria para fechada na frente do usuário. */
+@media (min-width: 992px) {
+    .portal-sidebar-toggle { display: inline-flex; }
+
+    /* Recolhido (por escolha de quem usa) ou modo "só ícones" */
+    html[data-portal-sidebar="recolhido"] .portal-shell.has-sidebar .portal-sidebar,
+    html[data-portal-sidebar-mode="icones"] .portal-shell.has-sidebar .portal-sidebar {
+        width: var(--portal-sidebar-w-min);
+        overflow-x: hidden;
+        transition: width .16s ease;
+    }
+    html[data-portal-sidebar="recolhido"] .portal-shell.has-sidebar .portal-main,
+    html[data-portal-sidebar-mode="icones"] .portal-shell.has-sidebar .portal-main {
+        margin-left: var(--portal-sidebar-w-min);
+        transition: margin-left .16s ease;
+    }
+    html[data-portal-sidebar="recolhido"] .portal-sidebar .portal-sidebar-label,
+    html[data-portal-sidebar="recolhido"] .portal-sidebar .portal-sidebar-heading,
+    html[data-portal-sidebar="recolhido"] .portal-sidebar .portal-sidebar-brand span,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar .portal-sidebar-label,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar .portal-sidebar-heading,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar .portal-sidebar-brand span {
+        display: none;
+    }
+    html[data-portal-sidebar="recolhido"] .portal-sidebar-nav .nav-link,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar-nav .nav-link {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    /* No modo "só ícones" a barra se abre ao passar o mouse, sobrepondo o
+       conteúdo — assim nada precisa ser recalculado e não há salto. */
+    html[data-portal-sidebar-mode="icones"] .portal-shell.has-sidebar .portal-sidebar:hover,
+    html[data-portal-sidebar-mode="icones"] .portal-shell.has-sidebar .portal-sidebar:focus-within {
+        width: var(--portal-sidebar-w);
+        box-shadow: var(--portal-shadow-hover);
+    }
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar:hover .portal-sidebar-label,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar:focus-within .portal-sidebar-label,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar:hover .portal-sidebar-heading,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar:focus-within .portal-sidebar-heading {
+        display: block;
+    }
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar:hover .portal-sidebar-nav .nav-link,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar:focus-within .portal-sidebar-nav .nav-link {
+        justify-content: flex-start;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
+@media (max-width: 991.98px) {
+    /* No celular o menu já é um painel deslizante: os modos não se aplicam. */
+    .portal-sidebar-toggle { display: none; }
+}
+
 /* ---------- Conteúdo ---------- */
 .portal-main { flex: 1 1 auto; min-width: 0; }
 
@@ -179,7 +252,7 @@ body.portal-bare {
     font-family: var(--portal-font);
 }
 .portal-bare-card {
-    width: 420px; max-width: 94vw; border: 0;
+    width: var(--portal-login-card-w); max-width: 94vw; border: 0;
     border-radius: calc(var(--portal-radius) * 1.6);
     background: var(--portal-surface);
     color: var(--portal-text);
@@ -195,13 +268,86 @@ body.portal-bare {
 .portal-bare-logo.has-image { background: none; width: auto; height: auto; max-height: 90px; }
 .portal-bare-logo.has-image img { max-height: 90px; width: auto; }
 
+/* Entrada em duas colunas: imagem de um lado, formulário do outro.
+   Abaixo de 768px vira uma coluna só — o cartão continua legível no
+   celular, que é como boa parte do hospital entra no sistema. */
+body.portal-bare.is-split {
+    display: block;
+    padding: 0;
+}
+.portal-bare-split {
+    display: flex;
+    min-height: 100vh;
+}
+.portal-bare-split .portal-bare-visual {
+    flex: 1 1 55%;
+    background: inherit;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: flex-end;
+    padding: 2.5rem;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, .5);
+}
+.portal-bare-split .portal-bare-panel {
+    flex: 0 0 min(var(--portal-login-card-w), 92vw);
+    background: var(--portal-surface);
+    color: var(--portal-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.5rem;
+}
+.portal-bare-split .portal-bare-card {
+    box-shadow: none;
+    background: transparent;
+    width: 100%;
+}
+@media (max-width: 767.98px) {
+    .portal-bare-split { flex-direction: column; min-height: 100vh; }
+    .portal-bare-split .portal-bare-visual { flex: 0 0 26vh; padding: 1.25rem; }
+    .portal-bare-split .portal-bare-panel { flex: 1 1 auto; }
+}
+
+.portal-bare-footer {
+    margin-top: 1.5rem;
+    font-size: .8rem;
+    color: var(--portal-muted);
+    text-align: center;
+}
+body.portal-bare:not(.is-split) .portal-bare-footer { color: rgba(255, 255, 255, .85); }
+
+/* ---------- Acessibilidade ---------- */
+/* Balcão e posto de enfermagem navegam muito por teclado: o foco precisa
+   aparecer, e precisa haver um jeito de pular o menu inteiro. */
+.portal-skip {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 2000;
+    padding: .6rem 1rem;
+    background: var(--portal-surface);
+    color: var(--portal-text);
+    border-radius: 0 0 var(--portal-radius) 0;
+}
+.portal-skip:focus { left: 0; }
+
+.portal-sidebar-nav .nav-link:focus-visible,
+.portal-topbar .nav-link:focus-visible,
+.portal-topbar .navbar-brand:focus-visible,
+.portal-skip:focus-visible {
+    outline: 2px solid var(--portal-accent);
+    outline-offset: -2px;
+}
+
 /* ---------- Utilidades comuns aos módulos ---------- */
 .card {
     border: 1px solid var(--portal-border);
     border-radius: var(--portal-radius);
     background: var(--portal-surface);
     color: var(--portal-text);
-    box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+    box-shadow: var(--portal-shadow-card);
 }
 .table > :not(caption) > * > * { vertical-align: middle; }
 

@@ -36,7 +36,7 @@ $isGlobal = Auth::isGlobalAdmin();
 $coreActions = [
     'users', 'user_form', 'user_save', 'user_delete', 'user_perms', 'user_perms_save',
     'groups', 'group_form', 'group_save', 'group_delete',
-    'modules', 'settings', 'appearance', 'appearance_save', 'audit',
+    'modules', 'settings', 'appearance', 'appearance_save', 'appearance_export', 'audit',
     'migrations', 'migrations_apply',
     'mailqueue', 'mailqueue_process', 'mailqueue_retry',
     'mail', 'mail_save', 'mail_test', 'mail_probe',
@@ -409,12 +409,17 @@ switch ($action) {
 
     case 'appearance':
     case 'appearance_save':
+    case 'appearance_export':
+    case 'appearance_preview':
         require CORE_PATH . '/controllers/admin_appearance.php';
         match ($action) {
-            'appearance'      => admin_render('Aparência', core_admin_appearance(), 'appearance'),
-            'appearance_save' => core_admin_appearance_save(),
+            'appearance'         => admin_render('Aparência', core_admin_appearance(), 'appearance'),
+            'appearance_save'    => core_admin_appearance_save(),
+            'appearance_export'  => core_admin_appearance_export(),
+            'appearance_preview' => core_admin_appearance_preview(),
         };
         break;
+
 
     // ================= USUÁRIOS =================
 
@@ -913,9 +918,21 @@ switch ($action) {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Csrf::check();
             foreach ((array) ($_POST['mod'] ?? []) as $slug => $data) {
+                // label/custom_icon vazios significam "usar o do manifesto".
+                $label = trim((string) ($data['label'] ?? ''));
+                $icon  = trim((string) ($data['icon'] ?? ''));
                 DB::execute(
-                    'UPDATE modules SET active = ?, sort_order = ? WHERE slug = ?',
-                    [!empty($data['active']) ? 1 : 0, (int) ($data['sort'] ?? 0), (string) $slug]
+                    'UPDATE modules
+                        SET active = ?, sort_order = ?, show_in_topbar = ?, label = ?, custom_icon = ?
+                      WHERE slug = ?',
+                    [
+                        !empty($data['active']) ? 1 : 0,
+                        (int) ($data['sort'] ?? 0),
+                        !empty($data['topbar']) ? 1 : 0,
+                        $label !== '' ? mb_substr($label, 0, 100) : null,
+                        $icon !== '' && preg_match('/^bi-[a-z0-9-]{1,50}$/', $icon) ? $icon : null,
+                        (string) $slug,
+                    ]
                 );
             }
             Flash::set('success', 'Módulos atualizados.');
@@ -937,15 +954,35 @@ switch ($action) {
             <div class="card">
                 <div class="table-responsive">
                     <table class="table mb-0 align-middle">
-                        <thead><tr><th>Módulo</th><th style="width:120px">Ordem</th><th class="text-center" style="width:100px">Ativo</th></tr></thead>
+                        <thead><tr>
+                            <th>Módulo</th>
+                            <th style="width:200px">Nome no sistema</th>
+                            <th style="width:140px">Ícone</th>
+                            <th style="width:90px">Ordem</th>
+                            <th class="text-center" style="width:90px">No topo</th>
+                            <th class="text-center" style="width:80px">Ativo</th>
+                        </tr></thead>
                         <tbody>
                         <?php foreach ($rows as $r): $m = Modules::manifest((string) $r['slug']); ?>
                             <tr>
-                                <td><i class="bi <?= core_e($r['icon'] ?? '') ?> me-2"></i><?= core_e($r['name']) ?>
+                                <td><i class="bi <?= core_e($r['custom_icon'] ?: ($r['icon'] ?? '')) ?> me-2"></i><?= core_e($r['label'] ?: $r['name']) ?>
                                     <?php if (!$m): ?><span class="badge text-bg-warning">arquivos ausentes</span><?php endif; ?>
                                     <?php if ($m && !empty($m['description'])): ?><div class="small text-muted"><?= core_e($m['description']) ?></div><?php endif; ?>
                                 </td>
+                                <td>
+                                    <input class="form-control form-control-sm" name="mod[<?= core_e($r['slug']) ?>][label]"
+                                           value="<?= core_e($r['label'] ?? '') ?>" maxlength="100"
+                                           placeholder="<?= core_e($m['name'] ?? $r['name']) ?>">
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm" name="mod[<?= core_e($r['slug']) ?>][icon]"
+                                           value="<?= core_e($r['custom_icon'] ?? '') ?>" maxlength="60"
+                                           placeholder="<?= core_e($m['icon'] ?? 'bi-app') ?>">
+                                </td>
                                 <td><input type="number" class="form-control form-control-sm" name="mod[<?= core_e($r['slug']) ?>][sort]" value="<?= (int) $r['sort_order'] ?>"></td>
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input" name="mod[<?= core_e($r['slug']) ?>][topbar]" value="1" <?= ($r['show_in_topbar'] ?? 1) ? 'checked' : '' ?>>
+                                </td>
                                 <td class="text-center">
                                     <input type="checkbox" class="form-check-input" name="mod[<?= core_e($r['slug']) ?>][active]" value="1" <?= $r['active'] ? 'checked' : '' ?>>
                                 </td>

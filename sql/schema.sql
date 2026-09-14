@@ -36,11 +36,14 @@ CREATE TABLE IF NOT EXISTS users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS modules (
-    slug        VARCHAR(40)  PRIMARY KEY,
-    name        VARCHAR(100) NOT NULL,
-    icon        VARCHAR(60)  NULL,
-    sort_order  INT          NOT NULL DEFAULT 0,
-    active      TINYINT(1)   NOT NULL DEFAULT 1
+    slug           VARCHAR(40)  PRIMARY KEY,
+    name           VARCHAR(100) NOT NULL COMMENT 'Nome do manifesto (reescrito a cada leitura)',
+    label          VARCHAR(100) NULL COMMENT 'Nome escolhido pelo hospital (vazio = o do manifesto)',
+    icon           VARCHAR(60)  NULL,
+    custom_icon    VARCHAR(60)  NULL COMMENT 'Ícone escolhido (vazio = o do manifesto)',
+    sort_order     INT          NOT NULL DEFAULT 0,
+    active         TINYINT(1)   NOT NULL DEFAULT 1,
+    show_in_topbar TINYINT(1)   NOT NULL DEFAULT 1 COMMENT 'Aparece na barra superior'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Grupos de usuários (as permissões atribuídas a um grupo valem para
