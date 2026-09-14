@@ -38,10 +38,21 @@ if ($only === '' || $only === 'core') {
     echo "[core] fila de e-mails...\n";
     try {
         $mq = Core\MailQueue::process(300);
-        echo "[core] e-mails: {$mq['sent']} enviado(s), {$mq['failed']} falha(s), {$mq['retried']} reagendado(s)\n";
+        printf("[core] e-mails: %d enviado(s), %d falha(s), %d reagendado(s), %d retida(s)\n",
+            $mq['sent'], $mq['failed'], $mq['retried'], $mq['held'] ?? 0);
+        if (($mq['held'] ?? 0) > 0) {
+            echo "[core] as retidas esperam conserto da configuração (Administração > E-mail)\n";
+        }
     } catch (Throwable $e) {
         echo "[core] ERRO na fila de e-mails: {$e->getMessage()}\n";
         error_log('cron mail_queue: ' . $e->getMessage());
+    }
+
+    // Marcador de execução: é o que permite à Administração dizer "o cron não
+    // está agendado" em vez de deixar tudo pendente em silêncio.
+    try {
+        Core\Settings::set('cron.last_run_at', date('Y-m-d H:i:s'));
+    } catch (Throwable) {
     }
 }
 

@@ -147,10 +147,54 @@ administração central mesmo sem ser administrador global.
 | Manutenção | Setores, Categorias de equipamentos |
 
 Também na Administração: **Aparência** (identidade visual — cores,
-logotipo, favicon, nome; ver a seção abaixo), **Padronização → Layouts
+logotipo, favicon, nome; ver a seção abaixo), **E-mail** (configuração do
+SMTP, teste de entrega, fila e diagnóstico), **Padronização → Layouts
 de documentos** (papel timbrado compartilhado por Documentos e
-Intranet), **Atualizações de banco** e **Fila de e-mails** (comunicados, pesquisas e alertas são
+Intranet), **Atualizações de banco** (comunicados, pesquisas e alertas são
 enfileirados e enviados pelo cron).
+
+## E-mail (Administração → E-mail)
+
+Uma tela só para o e-mail, com cinco abas:
+
+- **Configuração** — servidor SMTP, porta, segurança (STARTTLS, SSL/TLS ou
+  sem criptografia), usuário e senha, endereço e nome do remetente,
+  "responder para", nome na apresentação (EHLO) e tempo limite. O que é
+  gravado aqui **sobrepõe** o bloco `mail` de `config/config.php`, e cada
+  campo mostra de onde vem o valor em uso (tela, arquivo ou padrão). A senha
+  fica cifrada no banco (AES-256-GCM com a `app.key`). Para travar tudo no
+  arquivo, acrescente `'lock' => true` ao bloco `mail`.
+- **Teste de entrega** — envia uma mensagem de teste, com assunto e corpo
+  fixos escritos pelo próprio sistema, por um destes caminhos: direto pelo
+  SMTP, pela função `mail()` do PHP ou **pela fila** (este último é o que
+  prova que o cron está agendado na hospedagem). Limite de 12 testes por
+  hora, para o botão não virar ferramenta de disparo.
+- **Fila** — pendentes, retidas, falhas e enviadas, com o motivo de cada
+  falha e a via usada (SMTP ou `mail()`). É a antiga tela "Fila de e-mails";
+  a rota `?m=admin&a=mailqueue` continua funcionando e cai aqui.
+- **Diagnóstico** — o que dá para verificar sem sair do servidor (OpenSSL,
+  sockets, `mail()`, tempo de execução, alinhamento entre o remetente e o
+  servidor de saída, saúde da fila e do cron) e, sob clique, o que precisa de
+  rede: **SPF, DKIM e DMARC** do domínio do remetente e **quais portas de
+  saída** a hospedagem libera (25, 465, 587, 2525). A tela também diz, com
+  todas as letras, o que **não** é possível saber daqui — como se a mensagem
+  caiu na caixa de entrada ou no spam do destinatário.
+- **Histórico de testes** — cada teste com o tempo de cada etapa (DNS,
+  conexão, saudação, EHLO, TLS, autenticação, envelope, mensagem) e a
+  **conversa completa com o servidor**, com usuário e senha mascarados.
+  Os registros são apagados depois de 90 dias.
+
+Quando um teste falha, a tela mostra o código do erro e o que fazer: porta
+bloqueada pela hospedagem, certificado inválido, senha de aplicativo exigida
+pelo provedor, remetente fora do domínio da conta, relay negado, e assim por
+diante.
+
+**Fila confiável.** Duas correções sentidas em produção: o processador agora
+*reserva* as linhas antes de enviar (duas execuções sobrepostas — o cron e o
+botão "Processar agora" — não mandam mais a mesma mensagem duas vezes), e uma
+falha de **configuração** (envio desligado, sem servidor, senha recusada) não
+gasta tentativa: a mensagem fica *retida* e sai sozinha assim que a
+configuração for corrigida, em vez de virar "falha" permanente.
 
 ## Identidade visual (Administração → Aparência)
 

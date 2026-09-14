@@ -39,6 +39,7 @@ $coreActions = [
     'modules', 'settings', 'appearance', 'appearance_save', 'audit',
     'migrations', 'migrations_apply',
     'mailqueue', 'mailqueue_process', 'mailqueue_retry',
+    'mail', 'mail_save', 'mail_test', 'mail_probe',
 ];
 if (in_array($action, $coreActions, true)) {
     Auth::requireGlobalAdmin();
@@ -61,7 +62,7 @@ function admin_sidebar(): array
         $core[] = ['label' => 'Configurações',       'url' => core_module_url('admin', ['a' => 'settings']),   'icon' => 'bi-sliders',      'key' => 'settings'];
         $core[] = ['label' => 'Aparência',           'url' => core_module_url('admin', ['a' => 'appearance']), 'icon' => 'bi-palette',      'key' => 'appearance'];
         $core[] = ['label' => 'Atualizações de banco','url' => core_module_url('admin', ['a' => 'migrations']),'icon' => 'bi-database-up',  'key' => 'migrations'];
-        $core[] = ['label' => 'Fila de e-mails',     'url' => core_module_url('admin', ['a' => 'mailqueue']),  'icon' => 'bi-envelope-paper','key' => 'mailqueue'];
+        $core[] = ['label' => 'E-mail',              'url' => core_module_url('admin', ['a' => 'mail']),       'icon' => 'bi-envelope-at',  'key' => 'mail'];
         $core[] = ['label' => 'Auditoria',           'url' => core_module_url('admin', ['a' => 'audit']),      'icon' => 'bi-journal-text', 'key' => 'audit'];
     }
     $sections[] = ['heading' => 'Administração', 'items' => $core];
@@ -273,7 +274,7 @@ switch ($action) {
             <div class="alert alert-info py-2 small">
                 <i class="bi bi-envelope-paper me-1"></i>Fila de e-mails: <strong><?= $mailStats['pending'] ?></strong> pendente(s),
                 <strong><?= $mailStats['failed'] ?></strong> com falha —
-                <a href="<?= core_module_url('admin', ['a' => 'mailqueue']) ?>">gerenciar</a>.
+                <a href="<?= core_module_url('admin', ['a' => 'mail', 'tab' => 'queue']) ?>">gerenciar</a>.
             </div>
         <?php endif; ?>
         <div class="card">
@@ -386,6 +387,21 @@ switch ($action) {
             'layout_save'    => core_admin_layouts_save(),
             'layout_delete'  => core_admin_layouts_delete(),
             'layout_preview' => core_admin_layout_preview(),
+        };
+        break;
+
+    // ================= E-MAIL (configuração, teste, fila, diagnóstico) =================
+
+    case 'mail':
+    case 'mail_save':
+    case 'mail_test':
+    case 'mail_probe':
+        require CORE_PATH . '/controllers/admin_mail.php';
+        match ($action) {
+            'mail'       => admin_render('E-mail', core_admin_mail(), 'mail'),
+            'mail_save'  => core_admin_mail_save(),
+            'mail_test'  => core_admin_mail_test(),
+            'mail_probe' => core_admin_mail_probe(),
         };
         break;
 
@@ -987,7 +1003,7 @@ switch ($action) {
                             <p><span class="badge text-bg-secondary">Desabilitado</span></p>
                             <p class="small text-muted mb-0">Habilite em <code>config/config.php</code> (bloco <code>mail</code>) para o envio de comunicados,
                                 pesquisas, alertas de vencimento e redefinição de senha. Os envios ficam na
-                                <a href="<?= core_module_url('admin', ['a' => 'mailqueue']) ?>">fila de e-mails</a>.</p>
+                                <a href="<?= core_module_url('admin', ['a' => 'mail', 'tab' => 'queue']) ?>">fila de e-mails</a>.</p>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -1123,65 +1139,24 @@ switch ($action) {
     // ================= FILA DE E-MAILS =================
 
     case 'mailqueue':
-        $stats  = MailQueue::stats();
-        $recent = MailQueue::recent(60);
-        ob_start(); ?>
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-            <h1 class="h4 mb-0"><i class="bi bi-envelope-paper me-2"></i>Fila de e-mails</h1>
-            <div class="d-flex gap-2">
-                <form method="post" action="<?= core_module_url('admin', ['a' => 'mailqueue_process']) ?>">
-                    <?= Csrf::field() ?>
-                    <button class="btn btn-primary btn-sm" <?= $stats['pending'] ? '' : 'disabled' ?>><i class="bi bi-send me-1"></i>Processar agora</button>
-                </form>
-                <form method="post" action="<?= core_module_url('admin', ['a' => 'mailqueue_retry']) ?>">
-                    <?= Csrf::field() ?>
-                    <button class="btn btn-outline-secondary btn-sm" <?= $stats['failed'] ? '' : 'disabled' ?>><i class="bi bi-arrow-repeat me-1"></i>Reenfileirar falhas</button>
-                </form>
-            </div>
-        </div>
-        <div class="row g-3 mb-3">
-            <?php foreach ([['Pendentes', $stats['pending'], 'warning'], ['Enviados', $stats['sent'], 'success'], ['Falhas', $stats['failed'], 'danger']] as [$l, $v, $c]): ?>
-                <div class="col-4"><div class="card"><div class="card-body py-2"><div class="fs-4 fw-semibold text-<?= $c ?>"><?= (int) $v ?></div><div class="small text-muted"><?= $l ?></div></div></div></div>
-            <?php endforeach; ?>
-        </div>
-        <p class="text-muted small">Os e-mails são enviados pelo cron unificado (<code>cron.php</code>, a cada execução) ou pelo botão acima.
-            <?php if (!core_config('mail.enabled')): ?><strong class="text-danger">O envio de e-mail está desabilitado em config/config.php (mail.enabled).</strong><?php endif; ?></p>
-        <div class="card">
-            <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0 align-middle">
-                    <thead><tr><th>Quando</th><th>Para</th><th>Assunto</th><th>Origem</th><th class="text-center">Status</th><th>Erro</th></tr></thead>
-                    <tbody>
-                    <?php if (!$recent): ?><tr><td colspan="6" class="text-center text-muted py-4">Fila vazia.</td></tr><?php endif; ?>
-                    <?php foreach ($recent as $r): ?>
-                        <tr>
-                            <td class="text-nowrap small"><?= core_e(date('d/m H:i', strtotime((string) $r['created_at']))) ?></td>
-                            <td class="small"><?= core_e($r['to_email']) ?></td>
-                            <td class="small"><?= core_e($r['subject']) ?></td>
-                            <td><span class="badge text-bg-light border"><?= core_e($r['module'] ?? '—') ?></span></td>
-                            <td class="text-center"><span class="badge text-bg-<?= ['pending' => 'warning', 'sent' => 'success', 'failed' => 'danger'][$r['status']] ?? 'secondary' ?>"><?= core_e($r['status']) ?></span></td>
-                            <td class="small text-muted"><?= core_e(mb_substr((string) ($r['last_error'] ?? ''), 0, 80)) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        <?php
-        admin_render('Fila de e-mails', (string) ob_get_clean(), 'mailqueue');
+        // A fila virou uma aba da tela de E-mail (onde também ficam a
+        // configuração, o teste de entrega e o diagnóstico). A rota antiga
+        // continua valendo para links salvos e para o alerta da visão geral.
+        core_redirect('index.php?m=admin&a=mail&tab=queue');
         break;
 
     case 'mailqueue_process':
         Csrf::check();
         $s = MailQueue::process(200);
         Flash::set('success', "Processado: {$s['sent']} enviado(s), {$s['failed']} falha(s), {$s['retried']} reagendado(s).");
-        core_redirect('index.php?m=admin&a=mailqueue');
+        core_redirect('index.php?m=admin&a=mail&tab=queue');
         break;
 
     case 'mailqueue_retry':
         Csrf::check();
         $n = MailQueue::retryFailed();
         Flash::set('success', "{$n} e-mail(s) reenfileirado(s).");
-        core_redirect('index.php?m=admin&a=mailqueue');
+        core_redirect('index.php?m=admin&a=mail&tab=queue');
         break;
 
     default:

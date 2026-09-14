@@ -169,13 +169,40 @@ CREATE TABLE IF NOT EXISTS mail_queue (
     module     VARCHAR(40) NULL,
     ref_type   VARCHAR(60) NULL,
     ref_id     INT UNSIGNED NULL,
-    status     ENUM('pending','sent','failed') NOT NULL DEFAULT 'pending',
-    attempts   TINYINT UNSIGNED NOT NULL DEFAULT 0,
-    last_error VARCHAR(500) NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    sent_at    DATETIME NULL,
+    status      ENUM('pending','sent','failed') NOT NULL DEFAULT 'pending',
+    attempts    TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    reserved_by VARCHAR(40) NULL COMMENT 'Bilhete da rodada que reservou a linha',
+    reserved_at DATETIME NULL COMMENT 'Quando foi reservada (expira em 10 min)',
+    last_error  VARCHAR(500) NULL,
+    error_code  VARCHAR(40) NULL COMMENT 'Core\\Mailer::ERR_*',
+    delivery    VARCHAR(10) NULL COMMENT 'smtp | mail (função do PHP)',
+    is_test     TINYINT(1) NOT NULL DEFAULT 0,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at     DATETIME NULL,
     KEY idx_mq_status (status, id),
-    KEY idx_mq_ref (module, ref_type, ref_id)
+    KEY idx_mq_ref (module, ref_type, ref_id),
+    KEY idx_mq_reserved (reserved_by)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Histórico dos testes de entrega de e-mail (Administração > E-mail).
+CREATE TABLE IF NOT EXISTS mail_tests (
+    id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_at   DATETIME NULL,
+    user_id       INT UNSIGNED NULL,
+    user_name     VARCHAR(150) NULL,
+    to_email      VARCHAR(190) NOT NULL,
+    path          ENUM('smtp','mail','queue') NOT NULL DEFAULT 'smtp',
+    result        ENUM('running','ok','fail') NOT NULL DEFAULT 'running',
+    error_code    VARCHAR(40) NULL,
+    error_message VARCHAR(500) NULL,
+    duration_ms   INT UNSIGNED NULL,
+    steps         TEXT NULL COMMENT 'JSON: etapa => ms',
+    transcript    MEDIUMTEXT NULL COMMENT 'Conversa SMTP (segredos já removidos)',
+    queue_id      BIGINT UNSIGNED NULL,
+    ip            VARCHAR(45) NULL,
+    KEY idx_mt_created (created_at),
+    KEY idx_mt_user (user_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Layouts de documentos (papel timbrado) — compartilhados por Documentos,

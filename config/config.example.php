@@ -65,15 +65,36 @@ return [
         'link_label'   => 'Moodle',
     ],
 
+    /**
+     * E-mail. Estes valores são o PADRÃO: a tela Administração > E-mail pode
+     * sobrescrever cada campo sem editar arquivo (a senha é guardada cifrada
+     * no banco). Para travar tudo aqui — quando a hospedagem gerencia o
+     * envio — acrescente 'lock' => true.
+     */
     'mail' => [
         'enabled'    => false,
         'host'       => 'smtp.exemplo.com.br',
         'port'       => 587,
         'user'       => '',
         'pass'       => '',
-        'encryption' => 'tls', // tls | ssl | ''
+        'encryption' => 'tls', // tls | ssl | '' (sem criptografia)
         'from'       => 'nao-responda@exemplo.com.br',
         'from_name'  => 'Portal Corporativo',
+        'reply_to'   => '',
+        // Nome usado na apresentação ao servidor (vazio = nome da máquina).
+        'ehlo'       => '',
+        'timeout'    => 15,
+        /**
+         * Se o SMTP falhar, tentar a função mail() do PHP?
+         * 'auto' (padrão) só recorre a ela quando NÃO há servidor configurado.
+         * Deixar sempre ligado mascara problemas: a mensagem sai pelo sendmail
+         * local e o sistema marca como enviada mesmo com o SMTP quebrado.
+         */
+        'fallback_mail' => 'auto', // auto | true | false
+        // Seletor DKIM do provedor, se souber — habilita a conferência na
+        // aba Diagnóstico (ex.: 'default', 'google', 'selector1').
+        'dkim_selector' => '',
+        // 'lock'    => true,
     ],
 
     'security' => [
