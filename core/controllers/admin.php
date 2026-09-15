@@ -37,6 +37,7 @@ $coreActions = [
     'users', 'user_form', 'user_save', 'user_delete', 'user_perms', 'user_perms_save',
     'groups', 'group_form', 'group_save', 'group_delete',
     'modules', 'settings', 'appearance', 'appearance_save', 'appearance_export', 'audit',
+    'theme_save', 'theme_apply', 'theme_delete', 'theme_preview',
     'migrations', 'migrations_apply', 'health', 'cleanup_save', 'cleanup_run',
     'backup', 'backup_create', 'backup_download', 'backup_delete', 'backup_verify',
     'backup_schedule_save',
@@ -448,12 +449,20 @@ switch ($action) {
     case 'appearance_save':
     case 'appearance_export':
     case 'appearance_preview':
+    case 'theme_save':
+    case 'theme_apply':
+    case 'theme_delete':
+    case 'theme_preview':
         require CORE_PATH . '/controllers/admin_appearance.php';
         match ($action) {
             'appearance'         => admin_render('Aparência', core_admin_appearance(), 'appearance'),
             'appearance_save'    => core_admin_appearance_save(),
             'appearance_export'  => core_admin_appearance_export(),
             'appearance_preview' => core_admin_appearance_preview(),
+            'theme_save'         => core_admin_theme_save(),
+            'theme_apply'        => core_admin_theme_apply(),
+            'theme_delete'       => core_admin_theme_delete(),
+            'theme_preview'      => core_admin_theme_preview(),
         };
         break;
 

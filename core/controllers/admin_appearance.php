@@ -250,22 +250,131 @@ function core_admin_appearance(): string
     <p class="text-muted">As escolhas abaixo valem para todo o sistema — topo, menus, botões, tabelas e telas de todos os
         módulos — e também para a tela de login. A pré-visualização ao lado acompanha as mudanças antes de salvar.</p>
 
-    <!-- Temas prontos -->
+    <!-- Temas salvos -->
+    <?php
+    Core\Themes::seedPresets();                 // primeira vez: traz os prontos
+    $temas    = Core\Themes::all();
+    $temaAtual = Core\Themes::atual();
+    $proprios = array_values(array_filter($temas, fn ($t) => !$t['is_snapshot']));
+    $retornos = array_values(array_filter($temas, fn ($t) => $t['is_snapshot']));
+    /** Bolinhas com as cores do tema, para reconhecer sem aplicar. */
+    $bolinhas = static function (array $t): string {
+        $v = Core\Themes::values($t);
+        $out = '';
+        foreach (['primary', 'accent', 'body_bg'] as $k) {
+            $cor = Core\Tokens::color((string) ($v[$k] ?? ''), '#cccccc');
+            $out .= '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;'
+                  . 'background:' . $cor . ';border:1px solid rgba(0,0,0,.15)"></span>';
+        }
+        return $out;
+    };
+    ?>
     <div class="card mb-3">
-        <div class="card-header">Temas prontos</div>
-        <div class="card-body d-flex flex-wrap gap-2">
-            <?php foreach ($presets as $key => $preset): ?>
-                <form method="post" action="<?= core_module_url('admin', ['a' => 'appearance_save']) ?>">
+        <div class="card-header d-flex flex-wrap align-items-center gap-2">
+            <span><i class="bi bi-collection me-1"></i>Temas salvos</span>
+            <span class="small text-muted">
+                Aplicar troca a aparência inteira — e o que estava valendo é guardado para desfazer.
+            </span>
+            <button class="btn btn-sm btn-outline-primary ms-auto" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#novoTema">
+                <i class="bi bi-plus-lg me-1"></i>Salvar a aparência atual como tema
+            </button>
+        </div>
+
+        <div class="collapse" id="novoTema">
+            <div class="card-body border-bottom bg-body-tertiary">
+                <form method="post" action="<?= core_module_url('admin', ['a' => 'theme_save']) ?>"
+                      class="row g-2 align-items-end">
                     <?= Csrf::field() ?>
-                    <input type="hidden" name="op" value="preset">
-                    <input type="hidden" name="preset" value="<?= core_e($key) ?>">
-                    <button class="btn btn-sm <?= $current === $key ? 'btn-primary' : 'btn-outline-secondary' ?> d-flex align-items-center gap-2">
-                        <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:<?= core_e($preset['values']['primary']) ?>"></span>
-                        <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:<?= core_e($preset['values']['accent']) ?>"></span>
-                        <?= core_e($preset['label']) ?>
-                    </button>
+                    <div class="col-12 col-md-4">
+                        <label class="form-label small" for="tmNome">Nome do tema</label>
+                        <input class="form-control form-control-sm" name="nome" id="tmNome" maxlength="80"
+                               placeholder="Ex.: Campanha Outubro Rosa" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small" for="tmDesc">Descrição (opcional)</label>
+                        <input class="form-control form-control-sm" name="descricao" id="tmDesc" maxlength="255">
+                    </div>
+                    <div class="col-12 col-md-2">
+                        <button class="btn btn-primary btn-sm w-100"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-text">Guarda TODOS os valores de aparência que estão valendo agora — não só as cores.</div>
+                    </div>
                 </form>
-            <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="card-body">
+            <?php if (!$proprios): ?>
+                <p class="text-muted small mb-0">Nenhum tema salvo ainda.</p>
+            <?php else: ?>
+            <div class="row g-2">
+                <?php foreach ($proprios as $t): $ativo = (int) $t['id'] === $temaAtual; ?>
+                <div class="col-12 col-md-6 col-xl-4">
+                    <div class="border rounded p-2 h-100 d-flex flex-column gap-2 <?= $ativo ? 'border-primary bg-primary-subtle' : '' ?>">
+                        <div class="d-flex align-items-center gap-2">
+                            <?= $bolinhas($t) ?>
+                            <strong class="small text-truncate" title="<?= core_e($t['name']) ?>"><?= core_e($t['name']) ?></strong>
+                            <?php if ($ativo): ?><span class="badge text-bg-primary ms-auto">em uso</span><?php endif; ?>
+                        </div>
+                        <?php if (!empty($t['description'])): ?>
+                            <div class="small text-muted"><?= core_e($t['description']) ?></div>
+                        <?php endif; ?>
+                        <div class="d-flex flex-wrap gap-1 mt-auto">
+                            <form method="post" action="<?= core_module_url('admin', ['a' => 'theme_apply']) ?>"
+                                  onsubmit="return confirm('Aplicar o tema \'<?= core_e(addslashes($t['name'])) ?>\'? A aparência atual será guardada para desfazer.')">
+                                <?= Csrf::field() ?>
+                                <input type="hidden" name="id" value="<?= (int) $t['id'] ?>">
+                                <button class="btn btn-sm btn-primary" <?= $ativo ? 'disabled' : '' ?>>
+                                    <i class="bi bi-check2-circle me-1"></i>Aplicar
+                                </button>
+                            </form>
+                            <a class="btn btn-sm btn-outline-secondary"
+                               href="<?= core_module_url('admin', ['a' => 'theme_preview', 'id' => (int) $t['id']]) ?>"
+                               target="_blank" title="Ver antes de aplicar">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <form method="post" action="<?= core_module_url('admin', ['a' => 'theme_delete']) ?>"
+                                  onsubmit="return confirm('Excluir o tema \'<?= core_e(addslashes($t['name'])) ?>\'? A aparência em uso não muda.')">
+                                <?= Csrf::field() ?>
+                                <input type="hidden" name="id" value="<?= (int) $t['id'] ?>">
+                                <button class="btn btn-sm btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($retornos): ?>
+            <div class="mt-3">
+                <button class="btn btn-link btn-sm p-0 text-decoration-none" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#temasRetorno">
+                    <i class="bi bi-clock-history me-1"></i>Desfazer — <?= count($retornos) ?> estado(s) guardado(s) automaticamente
+                </button>
+                <div class="collapse mt-2" id="temasRetorno">
+                    <p class="small text-muted mb-2">
+                        Cada vez que um tema é aplicado, a aparência anterior é guardada aqui. Ficam os
+                        <?= count($retornos) ?> mais recentes.
+                    </p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <?php foreach ($retornos as $t): ?>
+                        <form method="post" action="<?= core_module_url('admin', ['a' => 'theme_apply']) ?>"
+                              onsubmit="return confirm('Voltar para esta aparência?')">
+                            <?= Csrf::field() ?>
+                            <input type="hidden" name="id" value="<?= (int) $t['id'] ?>">
+                            <button class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2">
+                                <?= $bolinhas($t) ?>
+                                <span class="small"><?= core_e($t['name']) ?></span>
+                            </button>
+                        </form>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -708,6 +817,76 @@ function core_admin_appearance_preview(): void
     if (($entrada['esquema'] ?? 'claro') === 'escuro') {
         $valores['theme_mode'] = 'escuro';
     } elseif ($valores['theme_mode'] === 'auto') {
+        $valores['theme_mode'] = 'claro';
+    }
+
+    header('Content-Type: text/html; charset=utf-8');
+    header('X-Frame-Options: SAMEORIGIN');
+    require CORE_PATH . '/views/appearance_preview.php';
+    exit;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  TEMAS NOMEADOS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** POST: guarda a aparência atual como um tema. */
+function core_admin_theme_save(): void
+{
+    Auth::requireGlobalAdmin();
+    Csrf::check();
+
+    $id = Core\Themes::save(
+        (string) ($_POST['nome'] ?? ''),
+        (string) ($_POST['descricao'] ?? '')
+    );
+    Flash::set($id > 0 ? 'success' : 'error',
+        $id > 0 ? 'Tema salvo. Ele guarda todos os valores de aparência que estão valendo agora.'
+                : 'Não foi possível salvar o tema.');
+    core_redirect('index.php?m=admin&a=appearance');
+}
+
+/** POST: aplica um tema (guardando o atual para desfazer). */
+function core_admin_theme_apply(): void
+{
+    Auth::requireGlobalAdmin();
+    Csrf::check();
+
+    $r = Core\Themes::apply((int) ($_POST['id'] ?? 0));
+    Flash::set($r['ok'] ? 'success' : 'error',
+        $r['ok'] ? 'Tema aplicado. A aparência anterior ficou guardada em "Desfazer".'
+                 : ($r['erro'] ?: 'Não foi possível aplicar o tema.'));
+    core_redirect('index.php?m=admin&a=appearance');
+}
+
+/** POST: exclui um tema (não muda a aparência em uso). */
+function core_admin_theme_delete(): void
+{
+    Auth::requireGlobalAdmin();
+    Csrf::check();
+
+    $ok = Core\Themes::delete((int) ($_POST['id'] ?? 0));
+    Flash::set($ok ? 'success' : 'error',
+        $ok ? 'Tema excluído. A aparência em uso não mudou.' : 'Tema não encontrado.');
+    core_redirect('index.php?m=admin&a=appearance');
+}
+
+/**
+ * Pré-visualização de um tema SEM aplicá-lo: a mesma amostra da tela, mas
+ * montada com os valores do tema. É o que permite escolher pela aparência em
+ * vez de pelo nome.
+ */
+function core_admin_theme_preview(): void
+{
+    Auth::requireGlobalAdmin();
+
+    $tema = Core\Themes::find((int) ($_GET['id'] ?? 0));
+    if (!$tema) {
+        Layout::renderError(404, 'Tema não encontrado.');
+        return;
+    }
+    $valores = Branding::normalizeAll(Core\Themes::values($tema));
+    if (($valores['theme_mode'] ?? '') === 'auto') {
         $valores['theme_mode'] = 'claro';
     }
 

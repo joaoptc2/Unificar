@@ -71,6 +71,23 @@ CREATE TABLE IF NOT EXISTS user_group_members (
 --   group → allowed=1 concede
 -- O catálogo de permissões de cada módulo é declarado no manifesto
 -- (modules/<slug>/module.php, chave 'permissions').
+-- Temas nomeados da identidade visual (Administração > Aparência). Guardam o
+-- conjunto INTEIRO de valores, e não um delta: aplicar um tema precisa dar o
+-- mesmo resultado independentemente do que estava valendo antes.
+CREATE TABLE IF NOT EXISTS brand_themes (
+    id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    name        VARCHAR(80)  NOT NULL,
+    description VARCHAR(255) DEFAULT NULL,
+    values_json MEDIUMTEXT   NOT NULL,
+    is_snapshot TINYINT(1)   NOT NULL DEFAULT 0 COMMENT 'Gerado antes de aplicar outro tema (o desfazer)',
+    created_by  INT UNSIGNED DEFAULT NULL,
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    applied_at  DATETIME     DEFAULT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_brand_theme_nome (name),
+    INDEX idx_brand_theme_snap (is_snapshot, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS permission_grants (
     id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     subject_type ENUM('user','group') NOT NULL,
