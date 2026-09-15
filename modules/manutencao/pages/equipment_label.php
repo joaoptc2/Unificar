@@ -6,6 +6,7 @@
  * ?page=equipment&action=label&ids=1,2,3       lote
  * &size=50x30 | 70x40 | 100x50 | a4            tamanho (padrão 50x30)
  * &hide=org,sector,bar                         elementos ocultos
+ * &tinta=cor | preto                           cor da marca ou preto puro
  *
  * Elementos (todos podem ser ocultados um a um, na barra de ferramentas):
  *   org     nome da organização
@@ -22,6 +23,13 @@
  * ao código em texto, passava da altura útil da etiqueta — 34,8 mm de
  * conteúdo em 27 mm de papel na 50 × 30 —, e o overflow:hidden cortava
  * justamente o QR.
+ *
+ * IDENTIDADE VISUAL: a etiqueta segue a marca do hospital (Core\Tokens →
+ * paleta de impressão): cor, fonte e logotipo saem da mesma fonte que o
+ * resto do portal, em vez do Arial preto fixo de antes. Impressora térmica
+ * costuma ser monocromática, então há o modo "preto puro" — e ele é o
+ * PADRÃO nos tamanhos térmicos, porque imprimir um azul institucional numa
+ * térmica preta e branca só produz um cinza que borra o código.
  *
  * Sem dependências externas (SVG inline) — imprime fiel em impressoras
  * térmicas (uma etiqueta por página) ou em folha A4 com grade.
@@ -50,10 +58,26 @@ $size = $_GET['size'] ?? '50x30';
 if (!isset($sizes[$size])) $size = '50x30';
 $cfg = $sizes[$size];
 
+// ── Identidade visual ──────────────────────────────────────────────────────
+// A paleta de impressão vem dos tokens do portal (a mesma da qual saem o
+// papel timbrado e o cartaz do RH). Em etiqueta térmica o padrão é preto
+// puro: a cor da marca vira um cinza chapado que prejudica a leitura do
+// código de barras.
+$paleta = Core\Tokens::printPalette();
+$tintaPadrao = $cfg['grid'] ? 'cor' : 'preto';
+$tinta = in_array($_GET['tinta'] ?? '', ['cor', 'preto'], true) ? $_GET['tinta'] : $tintaPadrao;
+
+$corDestaque = $tinta === 'preto' ? '#000000' : $paleta['primary'];
+$corTexto    = $tinta === 'preto' ? '#000000' : $paleta['text'];
+$corFraca    = $tinta === 'preto' ? '#333333' : $paleta['muted'];
+$fonteEtiq   = $paleta['font'];
+$logoEtiq    = $tinta === 'preto' ? '' : (string) Core\Branding::logoUrl();
+
 // ── Elementos ocultos ──────────────────────────────────────────────────────
 // Vêm na URL para que a escolha sobreviva à impressão e possa ser guardada
 // nos favoritos; o JS mantém a URL em dia enquanto se marca e desmarca.
 $elementos = [
+    'logo'   => 'Logotipo',
     'org'    => 'Organização',
     'name'   => 'Nome do equipamento',
     'sector' => 'Setor e código interno',
@@ -90,15 +114,15 @@ $orgName = manOrgName();
 $baseParams = ($ids !== [] ? (count($ids) > 1 ? ['ids' => implode(',', $ids)] : ['id' => $ids[0]]) : []);
 $selfUrl = url('equipment', ['action' => 'label'] + $baseParams);
 /** URL desta mesma página com outro tamanho, preservando os elementos ocultos. */
-$urlCom = function (array $extra) use ($selfUrl, $size, $ocultos): string {
-    $q = ['size' => $size];
+$urlCom = function (array $extra) use ($selfUrl, $size, $ocultos, $tinta): string {
+    $q = ['size' => $size, 'tinta' => $tinta];
     if ($ocultos) $q['hide'] = implode(',', array_keys($ocultos));
     return $selfUrl . '&' . http_build_query(array_merge($q, $extra));
 };
 
 // Só há linha de baixo se algo dela estiver visível.
 $temRodape = $mostra('bar') || $mostra('code');
-$temTexto  = $mostra('org') || $mostra('name') || $mostra('sector');
+$temTexto  = $mostra('logo') || $mostra('org') || $mostra('name') || $mostra('sector');
 
 header('Content-Type: text/html; charset=UTF-8');
 ?>
@@ -110,7 +134,7 @@ header('Content-Type: text/html; charset=UTF-8');
 <title>Etiquetas de equipamento (<?php echo count($items); ?>)</title>
 <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { background: #e5e7eb; font-family: Arial, Helvetica, sans-serif; color: #000; }
+    html, body { background: #e5e7eb; font-family: <?php echo $fonteEtiq; ?>; color: <?php echo $corTexto; ?>; }
 
     .toolbar { background: #fff; border-bottom: 1px solid #cbd5e1; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; font-size: 14px; }
     .toolbar a, .toolbar button { padding: 6px 12px; border: 1px solid #94a3b8; background: #f8fafc; border-radius: 6px; cursor: pointer; text-decoration: none; color: #0f172a; font-size: 14px; }
@@ -132,9 +156,11 @@ header('Content-Type: text/html; charset=UTF-8');
 
     .label .top { display: flex; gap: 1.5mm; flex: 1 1 auto; min-height: 0; align-items: stretch; }
     .label .txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.3mm; }
-    .label .org    { font-size: 2.1mm; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .label .name   { font-weight: bold; font-size: 3.2mm; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-    .label .sector { font-size: 2.4mm; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .label .marca  { display: flex; align-items: center; gap: 1mm; min-width: 0; }
+    .label .marca img { height: 3.2mm; width: auto; max-width: 16mm; object-fit: contain; display: block; }
+    .label .org    { font-size: 2.1mm; color: <?php echo $corFraca; ?>; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .label .name   { font-weight: bold; font-size: 3.2mm; line-height: 1.15; color: <?php echo $corTexto; ?>; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .label .sector { font-size: 2.4mm; color: <?php echo $corFraca; ?>; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* O QR ocupa a altura disponível e fica quadrado. Sem texto ao lado ele
        centraliza e cresce; com texto, divide a linha.                      */
@@ -144,7 +170,7 @@ header('Content-Type: text/html; charset=UTF-8');
     .label .bottom { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 0.3mm; }
     .label .bar { width: 100%; max-height: <?php echo max(4, $cfg['h'] * 0.24); ?>mm; }
     .label .bar svg { display: block; width: 100%; height: 100%; max-height: <?php echo max(4, $cfg['h'] * 0.24); ?>mm; }
-    .label .code { font-family: "Courier New", Courier, monospace; font-weight: bold; font-size: <?php echo $cfg['h'] >= 40 ? '4' : '3.2'; ?>mm; letter-spacing: 0.3mm; text-align: center; line-height: 1.05; white-space: nowrap; }
+    .label .code { font-family: "Courier New", Courier, monospace; font-weight: bold; font-size: <?php echo $cfg['h'] >= 40 ? '4' : '3.2'; ?>mm; letter-spacing: 0.3mm; text-align: center; line-height: 1.05; white-space: nowrap; color: <?php echo $corTexto; ?>; }
 
     /* Só o QR: ele toma a etiqueta inteira, centralizado. */
     .label.qr-only .top { justify-content: center; }
@@ -157,7 +183,7 @@ header('Content-Type: text/html; charset=UTF-8');
     /* A4 com grade 3 × 8 */
     .sheet { width: 210mm; min-height: 297mm; background: #fff; padding: 0; page-break-after: always; break-after: page; }
     .grid { display: grid; grid-template-columns: repeat(3, 70mm); grid-auto-rows: 37mm; }
-    .grid .label { border: 0.2mm dashed #bbb; width: 70mm; height: 37mm; }
+    .grid .label { border: 0.2mm dashed #bbb; width: 70mm; height: 37mm; border-left: 1mm solid <?php echo $corDestaque; ?>; }
     @page { size: A4 portrait; margin: 0; }
     @media print { .sheet { margin: 0; } .grid .label { border-color: #ddd; } }
     <?php else: ?>
@@ -195,6 +221,13 @@ header('Content-Type: text/html; charset=UTF-8');
         <?php endforeach; ?>
     </div>
     <div class="sep"></div>
+    <div class="grupo">
+        <strong>Tinta:</strong>
+        <a href="<?php echo e($urlCom(['tinta' => 'cor'])); ?>" class="<?php echo $tinta === 'cor' ? 'active' : ''; ?>">Cores da marca</a>
+        <a href="<?php echo e($urlCom(['tinta' => 'preto'])); ?>" class="<?php echo $tinta === 'preto' ? 'active' : ''; ?>">Preto puro</a>
+        <span class="muted">Térmica monocromática: use preto puro.</span>
+    </div>
+    <div class="sep"></div>
     <div class="grupo" style="width:100%">
         <button type="button" class="btn-print" onclick="window.print()">&#9113; Imprimir</button>
         <button type="button" id="btnTudo">Mostrar tudo</button>
@@ -229,7 +262,12 @@ header('Content-Type: text/html; charset=UTF-8');
             <div class="top">
                 <?php if ($temTexto): ?>
                 <div class="txt">
-                    <?php if ($mostra('org')): ?>
+                    <?php if ($mostra('logo') && $logoEtiq !== ''): ?>
+                        <div class="marca">
+                            <img src="<?php echo e(core_url($logoEtiq)); ?>" alt="">
+                            <?php if ($mostra('org')): ?><span class="org"><?php echo e($orgName); ?></span><?php endif; ?>
+                        </div>
+                    <?php elseif ($mostra('org')): ?>
                         <div class="org"><?php echo e($orgName); ?></div>
                     <?php endif; ?>
                     <?php if ($mostra('name')): ?>
