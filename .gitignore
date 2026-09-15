@@ -34,3 +34,6 @@ modules/*/storage/cache/*
 !/storage/backups/.gitkeep
 modules/*/logs/*
 !modules/*/logs/.gitkeep
+
+# Saída do teste visual (imagens do que mudou) — as referências ficam em scripts/visual-ref/
+.visual-out/

@@ -38,6 +38,7 @@ $coreActions = [
     'groups', 'group_form', 'group_save', 'group_delete',
     'modules', 'settings', 'appearance', 'appearance_save', 'appearance_export', 'audit',
     'theme_save', 'theme_apply', 'theme_delete', 'theme_preview', 'appearance_unit_save',
+    'surfaces',
     'migrations', 'migrations_apply', 'health', 'cleanup_save', 'cleanup_run',
     'backup', 'backup_create', 'backup_download', 'backup_delete', 'backup_verify',
     'backup_schedule_save',
@@ -1344,6 +1345,12 @@ switch ($action) {
             ($simular ? 'Simulação — seriam removidos ' : 'Limpeza concluída — removidos ')
             . $r['total'] . ' registro(s). ' . $resumo);
         core_redirect('index.php?m=admin&a=settings');
+        break;
+
+    case 'surfaces':
+        ob_start();
+        require CORE_PATH . '/views/surfaces.php';
+        admin_render('Galeria de superfícies', (string) ob_get_clean(), 'appearance');
         break;
 
     case 'health':

@@ -700,6 +700,9 @@ function core_admin_appearance(): string
                         <input type="file" name="theme_file" accept="application/json,.json" hidden
                                onchange="this.form.op.value='import'; this.form.submit();">
                     </label>
+                    <a class="btn btn-outline-secondary" href="<?= core_module_url('admin', ['a' => 'surfaces']) ?>">
+                        <i class="bi bi-grid-3x3-gap me-1"></i>Galeria de superfícies
+                    </a>
                     <a class="btn btn-link" href="<?= core_url('index.php') ?>">Ver o portal</a>
                 </div>
             </div>
