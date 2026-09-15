@@ -45,7 +45,7 @@ function api_sectors($param = null) {
     if (!is_logged_in()) json_response(['error' => 'Não autenticado'], 401);
     $sectors = [];
     try {
-        foreach (sector_list(get_hospital_id()) as $s) {
+        foreach (sector_list_for_user(get_hospital_id()) as $s) {
             $sectors[] = ['id' => (int) $s['id'], 'name' => $s['name'], 'code' => $s['code']];
         }
     } catch (Exception $ex) {

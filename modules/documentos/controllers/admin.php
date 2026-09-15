@@ -8,9 +8,11 @@
  * admin/categories) redirecionam para lá; os POSTs continuam aqui e, ao
  * terminar, voltam para o painel central.
  *
- * "Usuários & Setores" (doc_user_sectors) e "Unidades/Hospitais" foram
- * DESCONTINUADOS: usuários são globais (?m=admin&a=users) e o filtro por
- * setor é o seletor global do módulo.
+ * "Usuários do setor" (doc_user_sectors) define QUEM enxerga o setor: os
+ * setores são independentes e cada usuário só vê os documentos, indicadores
+ * e planos de ação dos setores em que foi incluído (ver models/sector.php).
+ * O cadastro de usuários em si continua sendo global (?m=admin&a=users);
+ * aqui só se define o vínculo. "Unidades/Hospitais" segue descontinuado.
  */
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -65,6 +67,39 @@ function admin_render_sectors() {
     view('admin/sectors', [
         'page_title' => 'Setores',
         'sectors'    => $sectors,
+        'menu_key'   => 'module-settings',
+    ]);
+}
+
+/**
+ * Tela "Usuários do setor": define quem enxerga o setor. A lista de
+ * candidatos é a de usuários ativos da plataforma — o vínculo é só
+ * visibilidade, não cria nem altera cadastro.
+ */
+function admin_render_sector_users() {
+    core_require('sectors.view');
+
+    $sector_id = (int) ($_GET['sector'] ?? 0);
+    $sector    = $sector_id ? sector_find($sector_id) : null;
+    if (!$sector || (int) $sector['hospital_id'] !== get_hospital_id()) {
+        set_flash('error', 'Setor não encontrado.');
+        _admin_back('sectors');
+    }
+
+    $linked = [];
+    $users  = [];
+    try {
+        $linked = sector_user_ids($sector_id);
+        $users  = sector_candidate_users();
+    } catch (Exception $ex) {
+        log_error('admin_sector_users', $ex);
+    }
+
+    view('admin/sector_users', [
+        'page_title' => 'Usuários do setor — ' . $sector['name'],
+        'sector'     => $sector,
+        'users'      => $users,
+        'linked'     => $linked,
         'menu_key'   => 'module-settings',
     ]);
 }
@@ -171,6 +206,40 @@ function admin_sector_delete($param = null) {
         set_flash('error', 'Erro ao remover setor.');
     }
     _admin_back('sectors');
+}
+
+/**
+ * Grava a lista completa de usuários do setor. Vem da tela acima: os
+ * marcados ficam, os desmarcados saem — por isso a ausência do campo
+ * significa "nenhum usuário", e não "não mexer".
+ */
+function admin_sector_users_save($param = null) {
+    core_require('sectors.assign');
+    if (!is_post()) _admin_back('sectors');
+    csrf_validate();
+
+    $sector_id = sanitize_int(input('sector_id'));
+    $sector    = $sector_id ? sector_find($sector_id) : null;
+    if (!$sector || (int) $sector['hospital_id'] !== get_hospital_id()) {
+        set_flash('error', 'Setor não encontrado.');
+        _admin_back('sectors');
+    }
+
+    $ids = $_POST['user_ids'] ?? [];
+    if (!is_array($ids)) $ids = [];
+
+    try {
+        $r = sector_set_users($sector_id, $ids);
+        audit_log('sector_users_saved', "sector=$sector_id, add={$r['added']}, remove={$r['removed']}");
+        set_flash('success', sprintf(
+            'Usuários do setor atualizados (%d incluído(s), %d removido(s)).',
+            $r['added'], $r['removed']
+        ));
+    } catch (Exception $ex) {
+        log_error('admin_sector_users_save', $ex);
+        set_flash('error', 'Erro ao gravar os usuários do setor.');
+    }
+    core_redirect(core_admin_url('documentos', 'sector_users', ['sector' => $sector_id]));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

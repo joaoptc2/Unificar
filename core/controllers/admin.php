@@ -357,6 +357,12 @@ switch ($action) {
         </div>
         <ul class="nav nav-tabs mb-3 admin-module-tabs">
             <?php foreach ($tabs as $key => $t): ?>
+                <?php
+                // Aba 'hidden': tela de detalhe alcançada por um botão de
+                // dentro de outra aba (ex.: "Usuários do setor"). Continua
+                // navegável e com permissão própria — só não ocupa a barra.
+                if (!empty($t['hidden']) && $key !== $tab) { continue; }
+                ?>
                 <li class="nav-item">
                     <a class="nav-link <?= $key === $tab ? 'active' : '' ?>" href="<?= AdminPanel::url($slug, (string) $key) ?>">
                         <?php if (!empty($t['icon'])): ?><i class="bi <?= core_e($t['icon']) ?> me-1"></i><?php endif; ?>

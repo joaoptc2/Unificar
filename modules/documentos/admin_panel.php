@@ -10,8 +10,9 @@
  * o conteúdo da aba ativa, renderizado pelo view() do módulo.
  *
  * Abas:
- *   sectors    — CRUD de setores (sectors.*)
- *   categories — CRUD de categorias de documentos (categories.*)
+ *   sectors      — CRUD de setores (sectors.*)
+ *   sector_users — usuários incluídos em um setor (sectors.view/assign)
+ *   categories   — CRUD de categorias de documentos (categories.*)
  *
  * Os POSTs continuam nas rotas do módulo (?m=documentos&url=admin/sector-store
  * etc. — controllers/admin.php) e, ao terminar, redirecionam para cá.
@@ -37,7 +38,7 @@ require_once CONTROLLERS_PATH . '/admin.php';
 
 // ── Aba ativa ───────────────────────────────────────────────────────────────
 $tab = (string) (core_admin_tab() ?? 'sectors');
-if (!in_array($tab, ['sectors', 'categories'], true)) {
+if (!in_array($tab, ['sectors', 'sector_users', 'categories'], true)) {
     Core\Layout::renderError(404, 'Aba de configuração desconhecida.');
     exit;
 }
@@ -45,6 +46,8 @@ if (!in_array($tab, ['sectors', 'categories'], true)) {
 try {
     if ($tab === 'categories') {
         admin_render_categories();
+    } elseif ($tab === 'sector_users') {
+        admin_render_sector_users();
     } else {
         admin_render_sectors();
     }

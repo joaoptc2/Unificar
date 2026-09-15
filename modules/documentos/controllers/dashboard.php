@@ -75,14 +75,14 @@ function dashboard_index($param = null) {
         }
 
         // Planos de ação abertos / atrasados
+        [$asql, $aparams] = doc_sector_where('i.', $sector_id);
         $ar = db_query_one(
             "SELECT SUM(CASE WHEN a.status IN ('pending','in_progress') THEN 1 ELSE 0 END) AS open_n,
                     SUM(CASE WHEN a.status IN ('pending','in_progress') AND a.due_date IS NOT NULL AND a.due_date < CURDATE() THEN 1 ELSE 0 END) AS overdue_n
              FROM doc_indicator_actions a
              JOIN doc_indicators i ON i.id = a.indicator_id
-             WHERE a.deleted_at IS NULL AND i.deleted_at IS NULL AND i.hospital_id = ?"
-             . ($sector_id > 0 ? " AND i.sector_id = ?" : ""),
-            $sector_id > 0 ? [$hospital_id, $sector_id] : [$hospital_id]
+             WHERE a.deleted_at IS NULL AND i.deleted_at IS NULL AND i.hospital_id = ?" . $asql,
+            array_merge([$hospital_id], $aparams)
         );
         $actions_open    = (int) ($ar['open_n'] ?? 0);
         $actions_overdue = (int) ($ar['overdue_n'] ?? 0);
@@ -130,7 +130,9 @@ function dashboard_switch_sector($param = null) {
     $name = '';
     if ($sector_id > 0) {
         $s = sector_find_active($sector_id, get_hospital_id());
-        if (!$s) {
+        if (!$s || !doc_sector_allowed($sector_id)) {
+            // Fora do escopo do usuário o setor não existe para ele — a
+            // mensagem é a mesma de um setor inexistente, de propósito.
             set_flash('error', 'Setor não encontrado ou inativo.');
             $sector_id = 0;
         } else {

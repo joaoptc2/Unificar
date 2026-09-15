@@ -91,7 +91,7 @@ function doc_sectors_for_selector() {
     static $cache = null;
     if ($cache !== null) return $cache;
     try {
-        $cache = sector_list(get_hospital_id());
+        $cache = sector_list_for_user(get_hospital_id());
     } catch (Exception $ex) {
         $cache = [];
     }
@@ -115,7 +115,8 @@ function _doc_sector_selector_html() {
     $html .= '<input type="hidden" name="return" value="' . e($return) . '">';
     $html .= '<label class="form-label mb-0 small text-muted" for="doc-sector-select"><i class="bi bi-diagram-3 me-1"></i>Setor em foco:</label>';
     $html .= '<select name="sector_id" id="doc-sector-select" class="form-select form-select-sm" style="min-width:200px;max-width:320px" onchange="this.form.submit()">';
-    $html .= '<option value="0"' . ($current === 0 ? ' selected' : '') . '>Todos os setores</option>';
+    $todos = doc_sector_scope_is_full() ? 'Todos os setores' : 'Todos os meus setores';
+    $html .= '<option value="0"' . ($current === 0 ? ' selected' : '') . '>' . e($todos) . '</option>';
     foreach ($sectors as $s) {
         $label = $s['name'] . (!empty($s['code']) ? ' (' . $s['code'] . ')' : '');
         $html .= '<option value="' . (int) $s['id'] . '"' . ((int) $s['id'] === $current ? ' selected' : '') . '>' . e($label) . '</option>';
@@ -125,8 +126,17 @@ function _doc_sector_selector_html() {
     $html .= '</form>';
     if ($current > 0) {
         $html .= '<span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-funnel me-1"></i>Filtrando por: ' . e(get_sector_name()) . '</span>';
-    } else {
+    } elseif (doc_sector_scope_is_full()) {
         $html .= '<span class="text-muted small"><i class="bi bi-info-circle me-1"></i>Sem filtro de setor</span>';
+    } elseif ($sectors === []) {
+        // Nada de "lista vazia sem explicação": quem não foi incluído em
+        // setor algum precisa saber a quem pedir.
+        $html .= '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">'
+               . '<i class="bi bi-exclamation-triangle me-1"></i>Você não está incluído em nenhum setor — '
+               . 'peça ao administrador para incluí-lo</span>';
+    } else {
+        $html .= '<span class="text-muted small"><i class="bi bi-person-check me-1"></i>'
+               . count($sectors) . ' setor(es) atribuído(s) a você</span>';
     }
     $html .= '</div>';
     return $html;

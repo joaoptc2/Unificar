@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS `doc_hospitals` (
 
 -- ════════════════════════════════════════════════════════════════════════════
 --  2. SETORES (departamentos/unidades) + vínculo usuário↔setor
---     (doc_user_sectors: a aba "Usuários & Setores" foi descontinuada — o
+--     (doc_user_sectors: define QUEM enxerga cada setor — os setores são
 --      seletor de setor mostra todos os setores ativos; a tabela é mantida
 --      apenas para importação de dados legados)
 -- ════════════════════════════════════════════════════════════════════════════

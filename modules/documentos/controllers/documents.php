@@ -117,7 +117,7 @@ function _documents_layouts_data() {
 
 function _documents_form_data($document, $editing, $is_controlled) {
     $sectors = [];
-    try { $sectors = sector_list(get_hospital_id()); } catch (Exception $ex) {}
+    try { $sectors = sector_list_for_user(get_hospital_id()); } catch (Exception $ex) {}
     return array_merge([
         'page_title' => $editing ? 'Editar documento' : ($is_controlled ? 'Novo documento controlado' : 'Novo documento não controlado'),
         'document'   => $document,
@@ -633,8 +633,10 @@ function _documents_collect_form($existing = null) {
     $is_controlled = sanitize_int(input('is_controlled', 1)) === 1 ? 1 : 0;
     $source = (string) input('source', 'upload') === 'editor' ? 'editor' : 'upload';
 
+    // O setor precisa existir, estar ativo E estar no escopo do usuário:
+    // ninguém arquiva documento em setor que não enxerga.
     $sector_id = sanitize_int(input('sector_id')) ?: null;
-    if ($sector_id && !sector_find_active($sector_id, get_hospital_id())) {
+    if ($sector_id && (!sector_find_active($sector_id, get_hospital_id()) || !doc_sector_allowed($sector_id))) {
         $sector_id = null;
     }
 

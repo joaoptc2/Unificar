@@ -16,6 +16,8 @@ namespace Core;
  *       'tabs'  => [
  *           'sectors'    => ['label' => 'Setores',    'icon' => 'bi-diagram-3', 'perm' => 'sectors.view'],
  *           'categories' => ['label' => 'Categorias', 'icon' => 'bi-tags',      'perm' => ['categories.view']],
+ *           // 'hidden' => true: tela de detalhe, navegável mas fora da barra
+ *           'sector_users' => ['label' => 'Usuários', 'perm' => 'sectors.view', 'hidden' => true],
  *       ],
  *   ],
  *

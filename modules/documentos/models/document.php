@@ -48,10 +48,10 @@ function document_filter_where($hospital_id, $filter, $search, $category, $statu
         $sql .= " AND is_controlled = ?";
         $params[] = (int) $is_controlled;
     }
-    if ((int) $sector_id > 0) {
-        $sql .= " AND sector_id = ?";
-        $params[] = (int) $sector_id;
-    }
+    // Escopo de setor do usuário + setor em foco (models/sector.php).
+    [$ssql, $sparams] = doc_sector_where('', $sector_id);
+    $sql .= $ssql;
+    $params = array_merge($params, $sparams);
 
     if ($filter === 'expired') {
         $sql .= " AND expiration_date IS NOT NULL AND expiration_date < CURDATE()";
@@ -116,6 +116,11 @@ function document_find($id, $hospital_id) {
          WHERE d.id = ? AND d.hospital_id = ? AND d.deleted_at IS NULL",
         [(int) $id, (int) $hospital_id]
     );
+    // Setor fora do escopo do usuário: some como se não existisse. Sem isto,
+    // o id na URL contornaria a independência entre setores.
+    if ($row && !doc_sector_allowed($row['sector_id'] ?? 0)) {
+        return null;
+    }
     return document_hydrate($row);
 }
 
@@ -228,8 +233,7 @@ function document_mark_reviewed($id, $hospital_id, $interval_months = 12) {
 
 /** Fragmento SQL + params do filtro de setor (0 = sem filtro). */
 function _document_sector_sql($sector_id, $alias = '') {
-    if ((int) $sector_id <= 0) return ['', []];
-    return [" AND {$alias}sector_id = ?", [(int) $sector_id]];
+    return doc_sector_where($alias, $sector_id);
 }
 
 function document_stats($hospital_id, $sector_id = 0) {
