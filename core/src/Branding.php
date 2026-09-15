@@ -482,6 +482,17 @@ final class Branding
             $vars['--portal-' . $estado . '-soft'] = $dark
                 ? 'rgba(' . self::rgbTriplet($cor) . ',.18)'
                 : self::shade($cor, 0.86);
+            // Versão para TEXTO: a cor do estado escrita sobre o fundo suave
+            // dela mesma é ilegível quando ela é clara — âmbar sobre âmbar
+            // pálido dá 1,5:1. Escurece (ou clareia, no tema escuro) até
+            // alcançar contraste de leitura.
+            $vars['--portal-' . $estado . '-text'] = self::lightenFor(
+                $cor,
+                // No escuro o fundo do alerta é o próprio corpo com um véu;
+                // no claro, o tom suave da cor.
+                $dark ? $bodyBg : self::shade($cor, 0.86),
+                4.5
+            );
             // É daqui que .bg-success, .text-danger, .alert-warning e
             // .btn-outline-info passam a seguir a identidade, sem recompilar
             // o Bootstrap: são mais de 800 usos nos módulos.
@@ -515,6 +526,15 @@ final class Branding
             // placeholders ficavam escuros sobre fundo escuro.
             '--bs-body-color-rgb'         => self::rgbTriplet($text),
             '--bs-emphasis-color'         => $text,
+            // O Bootstrap 5.3 grava estas com o VALOR já resolvido (não como
+            // rgba(var(--bs-body-color-rgb), …)), então redefinir a cor do
+            // corpo não as alcança: no tema escuro os textos de apoio
+            // (.form-text, .text-body-secondary) ficavam quase pretos sobre
+            // fundo escuro.
+            '--bs-secondary-color'        => 'rgba(' . self::rgbTriplet($text) . ', .75)',
+            '--bs-tertiary-color'         => 'rgba(' . self::rgbTriplet($text) . ', .5)',
+            '--bs-emphasis-color-rgb'     => self::rgbTriplet($text),
+            '--bs-secondary-color-rgb'    => self::rgbTriplet($muted),
             '--bs-secondary-bg'           => $dark ? self::shade($bodyBg, 0.14) : '#e9ecef',
             '--bs-tertiary-bg'            => $dark ? self::shade($bodyBg, 0.10) : '#f8f9fa',
             // Ícone do botão de menu no celular: recolorido conforme o topo.

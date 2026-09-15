@@ -33,100 +33,18 @@ body {
 }
 
 /* ============================================================
-   NAVBAR
+   SHELL LEGADO — REMOVIDO
+   ------------------------------------------------------------
+   As regras .navbar / .sidebar / .main-content vinham do ManuHosp
+   original, que tinha barra e menu próprios. Desde a unificação quem
+   desenha o topo e o menu é o núcleo (assets/core/app.css), e nenhum
+   markup do módulo usa essas classes — as três páginas públicas
+   (track-os, qr-scan, anonymous-os) nem navbar têm.
+
+   Ficavam fazendo estrago em silêncio: `.navbar.fixed-top { height: … }`
+   alcançava a barra DO NÚCLEO e anulava a "Altura do topo" escolhida na
+   Aparência enquanto o módulo estivesse aberto.
    ============================================================ */
-/* Só a barra do próprio módulo (shell legado das páginas públicas).
-   Sem o `.man-shell`, esta regra alcançava a topbar DO NÚCLEO e anulava a
-   "Altura do topo" escolhida na Aparência enquanto o módulo estava aberto. */
-.man-shell .navbar.fixed-top {
-    height: var(--navbar-height);
-}
-.navbar-brand {
-    font-weight: 700;
-}
-
-/* ============================================================
-   SIDEBAR
-   ============================================================ */
-.sidebar {
-    background: var(--sidebar-bg);
-    width: var(--sidebar-width);
-}
-@media (min-width: 992px) {
-    .sidebar {
-        position: fixed;
-        top: var(--navbar-height);
-        left: 0;
-        bottom: 0;
-        overflow-y: auto;
-        z-index: 1030;
-    }
-    .sidebar.offcanvas-lg {
-        transform: none !important;
-        visibility: visible !important;
-    }
-}
-
-.sidebar-nav {
-    padding: 0.5rem 0;
-}
-.sidebar-nav .nav-link {
-    color: var(--sidebar-text);
-    padding: 0.6rem 1rem;
-    font-size: 0.85rem;
-    border-left: 3px solid transparent;
-    display: flex;
-    align-items: center;
-    transition: background .15s ease, color .15s ease, border-color .15s ease;
-}
-.sidebar-nav .nav-link:hover {
-    color: var(--portal-sidebar-active, #fff);
-    background: var(--sidebar-hover-bg);
-}
-.sidebar-nav .nav-link.active {
-    color: var(--sidebar-active);
-    background: var(--sidebar-hover-bg);
-    border-left-color: var(--primary-color);
-    font-weight: 600;
-}
-.sidebar-nav .nav-header {
-    padding: 0.25rem 1rem;
-}
-.sidebar-nav .nav-header small {
-    color: var(--portal-sidebar-heading, #475569) !important;
-    letter-spacing: 0.5px;
-    font-size: 0.7rem;
-}
-
-.sidebar::-webkit-scrollbar {
-    width: 4px;
-}
-.sidebar::-webkit-scrollbar-thumb {
-    background: var(--portal-muted, #475569);
-    border-radius: 2px;
-}
-.sidebar::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-/* ============================================================
-   MAIN CONTENT + FOOTER
-   ============================================================ */
-.main-content {
-    margin-top: var(--navbar-height);
-    min-height: calc(100vh - var(--navbar-height));
-}
-.main-footer {
-    border-top: 1px solid var(--portal-border, #e2e8f0);
-    background: var(--portal-surface, #fff);
-}
-
-@media (min-width: 992px) {
-    .main-content,
-    .main-footer {
-        margin-left: var(--sidebar-width);
-    }
-}
 
 /* ============================================================
    PAGE HEADER
@@ -242,7 +160,10 @@ body {
 .badge-in_progress  { background-color: var(--portal-warning, #f59e0b) !important; color: var(--portal-on-warning, #fff); }
 /* "Aguardando peça" tem laranja próprio de propósito: se virasse --portal-warning
    ficaria idêntico a "em andamento" e os dois estados deixariam de se distinguir. */
-.badge-waiting_part { background-color: #f97316 !important; color: #fff; }
+/* Laranja próprio, de propósito (ver nota acima): com --portal-warning ele
+   ficaria igual a "em andamento" e a informação se perderia. O que muda é o
+   texto — branco sobre este laranja dá 2,8:1, ilegível. */
+.badge-waiting_part { background-color: #f97316 !important; color: #1f2937 !important; }
 .badge-completed    { background-color: var(--portal-success, #10b981) !important; color: var(--portal-on-success, #fff); }
 /* Cinza neutro (sem situação): não há variável de estado para "neutro" e
    --portal-muted clareia no tema escuro, o que apagaria o texto branco. */
@@ -428,3 +349,10 @@ a.text-decoration-none-hover:hover { text-decoration: none !important; }
 .man-timeline-dot.bg-info    { color: var(--portal-on-info, #1f2937); }
 .man-timeline-dot.bg-warning { color: var(--portal-on-warning, #1f2937); }
 .man-timeline-body { background: var(--portal-surface-2, #f8fafc); border: 1px solid var(--portal-border, #e2e8f0); border-radius: 0.5rem; padding: 0.5rem 0.75rem; }
+
+/* Células fora do mês no calendário. Era um style inline com #f8f9fa, que no
+   tema escuro virava dois retângulos brancos no meio da grade. */
+.calendar-day.is-empty,
+td.is-empty {
+    background: var(--portal-surface-2, #f8f9fa);
+}

@@ -19,7 +19,7 @@
 .badge.plan-kind { font-weight: 500; }
 .plan-kind-objective { background: var(--portal-accent, #6f42c1); color: var(--portal-on-accent, #fff); }
 .plan-kind-goal { background: var(--portal-primary, #0d6efd); color: var(--portal-on-primary, #fff); }
-.plan-kind-action { background: #fd7e14; color: #fff; }
+.plan-kind-action { background: #fd7e14; color: #1f2937; }
 .plan-kind-task { background: #6c757d; color: #fff; }
 
 /* ---- árvore de itens ---- */

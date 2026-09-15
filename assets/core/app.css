@@ -545,13 +545,13 @@ body.portal-bare:not(.is-split) .portal-bare-footer { color: rgba(255, 255, 255,
 .portal-body .text-dark { color: var(--portal-text) !important; }
 
 /* Alertas de estado */
-.alert-success { --bs-alert-color: var(--portal-success); --bs-alert-bg: var(--portal-success-soft);
+.alert-success { --bs-alert-color: var(--portal-success-text, var(--portal-success)); --bs-alert-bg: var(--portal-success-soft);
                  --bs-alert-border-color: rgba(var(--portal-success-rgb), .35); }
-.alert-warning { --bs-alert-color: var(--portal-warning); --bs-alert-bg: var(--portal-warning-soft);
+.alert-warning { --bs-alert-color: var(--portal-warning-text, var(--portal-warning)); --bs-alert-bg: var(--portal-warning-soft);
                  --bs-alert-border-color: rgba(var(--portal-warning-rgb), .35); }
-.alert-danger  { --bs-alert-color: var(--portal-danger);  --bs-alert-bg: var(--portal-danger-soft);
+.alert-danger  { --bs-alert-color: var(--portal-danger-text, var(--portal-danger));  --bs-alert-bg: var(--portal-danger-soft);
                  --bs-alert-border-color: rgba(var(--portal-danger-rgb), .35); }
-.alert-info    { --bs-alert-color: var(--portal-info);    --bs-alert-bg: var(--portal-info-soft);
+.alert-info    { --bs-alert-color: var(--portal-info-text, var(--portal-info));    --bs-alert-bg: var(--portal-info-soft);
                  --bs-alert-border-color: rgba(var(--portal-info-rgb), .35); }
 .portal-body .alert-light, .portal-body .alert-secondary {
     --bs-alert-bg: var(--portal-surface-2); --bs-alert-color: var(--portal-text);
@@ -571,10 +571,10 @@ body.portal-bare:not(.is-split) .portal-bare-footer { color: rgba(255, 255, 255,
 .progress-bar.bg-warning { background-color: var(--portal-warning) !important; }
 .progress-bar.bg-danger  { background-color: var(--portal-danger) !important; }
 .progress-bar.bg-info    { background-color: var(--portal-info) !important; }
-.text-success { color: var(--portal-success) !important; }
-.text-warning { color: var(--portal-warning) !important; }
-.text-danger  { color: var(--portal-danger) !important; }
-.text-info    { color: var(--portal-info) !important; }
+.text-success { color: var(--portal-success-text, var(--portal-success)) !important; }
+.text-warning { color: var(--portal-warning-text, var(--portal-warning)) !important; }
+.text-danger  { color: var(--portal-danger-text, var(--portal-danger)) !important; }
+.text-info    { color: var(--portal-info-text, var(--portal-info)) !important; }
 .border-success { border-color: var(--portal-success) !important; }
 .border-warning { border-color: var(--portal-warning) !important; }
 .border-danger  { border-color: var(--portal-danger) !important; }

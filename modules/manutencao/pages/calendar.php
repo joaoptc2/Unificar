@@ -114,7 +114,7 @@ ob_start();
 <!-- Legenda -->
 <div class="d-flex gap-3 mb-3">
     <span><span class="badge bg-primary">&nbsp;</span> Manutenção preventiva</span>
-    <span><span class="badge bg-warning text-dark">&nbsp;</span> Calibração</span>
+    <span><span class="badge bg-warning">&nbsp;</span> Calibração</span>
 </div>
 
 <div class="card border-0 shadow-sm mb-4">
@@ -142,7 +142,7 @@ ob_start();
                 $cssClass  = 'calendar-day';
                 if ($isToday) $cssClass .= ' today';
             ?>
-                <td class="<?php echo $cssClass; ?>" style="height:90px;vertical-align:top;padding:4px 6px;<?php echo !$isValid ? 'background:#f8f9fa;' : ''; ?>">
+                <td class="<?php echo $cssClass; ?><?php echo !$isValid ? ' is-empty' : ''; ?>" style="height:90px;vertical-align:top;padding:4px 6px;">
                     <?php if ($isValid): ?>
                         <div class="fw-semibold small <?php echo $isToday ? 'text-primary' : ''; ?>"><?php echo $dayNum; ?></div>
                         <?php foreach (array_slice($dayEvents, 0, 3) as $ev): ?>
@@ -185,7 +185,7 @@ usort($allEvents, fn($a, $b) => strcmp($a['date'], $b['date']));
                 <?php foreach ($allEvents as $ev): ?>
                 <tr>
                     <td class="text-nowrap"><?php echo formatDate($ev['date']); ?></td>
-                    <td><span class="badge bg-<?php echo e($ev['color']); ?> <?php echo $ev['color']==='warning'?'text-dark':''; ?>"><?php echo $ev['type'] === 'maintenance' ? 'Manutenção' : 'Calibração'; ?></span></td>
+                    <td><span class="badge bg-<?php echo e($ev['color']); ?>"><?php echo $ev['type'] === 'maintenance' ? 'Manutenção' : 'Calibração'; ?></span></td>
                     <td><?php echo e($ev['title']); ?></td>
                 </tr>
                 <?php endforeach; ?>
