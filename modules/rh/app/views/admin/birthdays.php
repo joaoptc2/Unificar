@@ -130,7 +130,10 @@ $accentAtual = $settings['accent'] !== '' ? $settings['accent'] : (string) Core\
                         <div class="card-body">
                             <div class="row g-3">
                                 <div class="col-md-4">
-                                    <label class="form-label" for="bdAccent">Cor de destaque</label>
+                                    <label class="form-label d-flex align-items-center gap-2" for="bdAccent">
+                                        <span>Cor de destaque</span>
+                                        <span class="badge" data-contraste="accent|card_bg"></span>
+                                    </label>
                                     <input type="color" name="accent" id="bdAccent" class="form-control form-control-color w-100"
                                            value="<?= Sanitize::e($accentAtual) ?>">
                                     <div class="form-text">Padrão: a cor da marca.</div>
@@ -141,7 +144,10 @@ $accentAtual = $settings['accent'] !== '' ? $settings['accent'] : (string) Core\
                                            value="<?= Sanitize::e($settings['card_bg']) ?>">
                                 </div>
                                 <div class="col-md-4">
-                                    <label class="form-label" for="bdTextColor">Cor do texto</label>
+                                    <label class="form-label d-flex align-items-center gap-2" for="bdTextColor">
+                                        <span>Cor do texto</span>
+                                        <span class="badge" data-contraste="text_color|card_bg"></span>
+                                    </label>
                                     <input type="color" name="text_color" id="bdTextColor" class="form-control form-control-color w-100"
                                            value="<?= Sanitize::e($settings['text_color']) ?>">
                                 </div>
@@ -313,6 +319,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
     if (!amostra) return;
+
+    // Selos de legibilidade nos seletores de cor do cartaz.
+    PortalContraste.ligar(main);
 
     document.getElementById('bdPreviewBtn').addEventListener('click', amostra.atualizar);
     document.getElementById('bdPreviewNova').addEventListener('click', amostra.emNovaAba);

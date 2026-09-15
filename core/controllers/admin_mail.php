@@ -789,7 +789,29 @@ function core_admin_mail_layout_save(): void
     }
     MailTemplate::save($valores);
     Audit::log('mail.layout.save', 'settings', null, null, null, 'admin');
-    Flash::set('success', 'Layout dos e-mails salvo. Vale para os próximos envios, inclusive os que já estão na fila.');
+
+    // Aviso de legibilidade também no servidor: o selo da tela depende de
+    // JavaScript, e e-mail enviado não se conserta depois.
+    $cfg = MailTemplate::all();
+    $ruins = [];
+    foreach ([
+        ['Texto do cabeçalho', MailTemplate::headerText($cfg), MailTemplate::headerBg($cfg)],
+        ['Texto do corpo',     $cfg['text_color'],             $cfg['card_bg']],
+        ['Links',              MailTemplate::linkColor($cfg),  $cfg['card_bg']],
+    ] as [$rotulo, $frente, $fundo]) {
+        $r = Core\Tokens::contrastReport((string) $frente, (string) $fundo);
+        if ($r['nivel'] !== 'ok') {
+            $ruins[] = $rotulo . ' (' . $r['texto'] . ')';
+        }
+    }
+
+    Flash::set(
+        $ruins === [] ? 'success' : 'warning',
+        $ruins === []
+            ? 'Layout dos e-mails salvo. Vale para os próximos envios, inclusive os que já estão na fila.'
+            : 'Layout salvo, mas com baixo contraste em: ' . implode(', ', $ruins)
+              . '. A WCAG pede 4,5:1 para texto normal — quem abrir o e-mail pode não conseguir ler.'
+    );
     core_redirect('index.php?m=admin&a=mail&tab=layout');
 }
 
@@ -860,7 +882,10 @@ function core_admin_mail_tab_layout(): string
                                 <div class="form-text">Padrão: a cor da marca.</div>
                             </div>
                             <div class="col-6">
-                                <label class="form-label" for="mlHeaderText">Texto do cabeçalho</label>
+                                <label class="form-label d-flex align-items-center gap-2" for="mlHeaderText">
+                                    <span>Texto do cabeçalho</span>
+                                    <span class="badge" data-contraste="header_text|header_bg"></span>
+                                </label>
                                 <input type="color" class="form-control form-control-color w-100" name="header_text" id="mlHeaderText"
                                        value="<?= core_e(MailTemplate::headerText($cfg)) ?>">
                             </div>
@@ -891,11 +916,17 @@ function core_admin_mail_tab_layout(): string
                                 <input type="color" class="form-control form-control-color w-100" name="card_bg" id="mlCardBg" value="<?= core_e($cfg['card_bg']) ?>">
                             </div>
                             <div class="col-6 col-md-4">
-                                <label class="form-label" for="mlTextColor">Cor do texto</label>
+                                <label class="form-label d-flex align-items-center gap-2" for="mlTextColor">
+                                    <span>Cor do texto</span>
+                                    <span class="badge" data-contraste="text_color|card_bg"></span>
+                                </label>
                                 <input type="color" class="form-control form-control-color w-100" name="text_color" id="mlTextColor" value="<?= core_e($cfg['text_color']) ?>">
                             </div>
                             <div class="col-6 col-md-4">
-                                <label class="form-label" for="mlLinkColor">Cor dos links</label>
+                                <label class="form-label d-flex align-items-center gap-2" for="mlLinkColor">
+                                    <span>Cor dos links</span>
+                                    <span class="badge" data-contraste="link_color|card_bg"></span>
+                                </label>
                                 <input type="color" class="form-control form-control-color w-100" name="link_color" id="mlLinkColor" value="<?= core_e(MailTemplate::linkColor($cfg)) ?>">
                             </div>
                             <div class="col-6 col-md-4">
@@ -982,6 +1013,9 @@ function core_admin_mail_tab_layout(): string
             quadro: 'mailLayoutFrame',
             acao:   <?= json_encode(core_module_url('admin', ['a' => 'mail_layout_preview'])) ?>
         });
+        // Selos de legibilidade: e-mail enviado não se conserta depois.
+        PortalContraste.ligar('mailLayoutForm');
+
         if (amostra) {
             document.getElementById('mlRefresh').addEventListener('click', amostra.atualizar);
         }

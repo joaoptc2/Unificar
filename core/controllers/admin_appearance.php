@@ -205,11 +205,22 @@ function core_admin_appearance(): string
     $presets = Branding::presets();
     $current = (string) Core\Settings::get('brand.preset', '');
 
-    $color = static function (string $key, string $label, string $value, string $help = ''): string {
+    /**
+     * Campo de cor. $contra é o par "frente|fundo" que o selo de
+     * legibilidade avalia ao vivo (assets/core/contrast.js) — é o que
+     * impede o administrador de salvar texto branco sobre fundo branco e
+     * só descobrir depois, com o menu do hospital inteiro ilegível.
+     */
+    $color = static function (string $key, string $label, string $value, string $help = '', string $contra = ''): string {
         $value = $value !== '' ? $value : '#ffffff';
         ob_start(); ?>
         <div class="col-12 col-md-6 col-xl-3">
-            <label class="form-label small fw-semibold"><?= core_e($label) ?></label>
+            <label class="form-label small fw-semibold d-flex align-items-center gap-2">
+                <span><?= core_e($label) ?></span>
+                <?php if ($contra !== ''): ?>
+                    <span class="badge" data-contraste="<?= core_e($contra) ?>"></span>
+                <?php endif; ?>
+            </label>
             <div class="input-group input-group-sm">
                 <input type="color" class="form-control form-control-color" value="<?= core_e($value) ?>"
                        data-color-for="<?= core_e($key) ?>" aria-label="<?= core_e($label) ?>">
@@ -315,11 +326,11 @@ function core_admin_appearance(): string
                     <div class="card-header">Cores da marca</div>
                     <div class="card-body">
                         <div class="row g-3">
-                            <?= $color('primary', 'Cor primária', $b['primary'], 'Botões, links e destaques.') ?>
+                            <?= $color('primary', 'Cor primária', $b['primary'], 'Botões, links e destaques.', 'primary|body_bg') ?>
                             <?= $color('accent', 'Cor de destaque', $b['accent'], 'Detalhes e degradês.') ?>
-                            <?= $color('body_bg', 'Fundo da área de trabalho', $b['body_bg']) ?>
-                            <?= $color('sidebar_bg', 'Fundo do menu lateral', $b['sidebar_bg']) ?>
-                            <?= $color('sidebar_text', 'Texto do menu lateral', $b['sidebar_text']) ?>
+                            <?= $color('body_bg', 'Fundo da área de trabalho', $b['body_bg'], 'O texto do sistema é escuro sobre ele.', '#212529|body_bg') ?>
+                            <?= $color('sidebar_bg', 'Fundo do menu lateral', $b['sidebar_bg'], '', 'sidebar_text|sidebar_bg') ?>
+                            <?= $color('sidebar_text', 'Texto do menu lateral', $b['sidebar_text'], '', 'sidebar_text|sidebar_bg') ?>
                             <div class="col-12 col-md-6 col-xl-3">
                                 <label class="form-label small fw-semibold">Estilo do topo</label>
                                 <select class="form-select form-select-sm" name="topbar_style" id="f_topbar_style">
@@ -342,7 +353,7 @@ function core_admin_appearance(): string
                         situação das tabelas. Os valores de fábrica são os do Bootstrap.</p>
                         <div class="row g-3">
                             <?php foreach (Branding::STATES as $k => $lbl): ?>
-                                <?= $color($k, $lbl, $b[$k]) ?>
+                                <?= $color($k, $lbl, $b[$k], '', $k . '|body_bg') ?>
                             <?php endforeach; ?>
                         </div>
                     </div>
@@ -373,7 +384,7 @@ function core_admin_appearance(): string
                                     </label>
                                 </div>
                             </div>
-                            <?= $color('dark_body_bg', 'Fundo no tema escuro', $b['dark_body_bg']) ?>
+                            <?= $color('dark_body_bg', 'Fundo no tema escuro', $b['dark_body_bg'], 'O texto no escuro é claro sobre ele.', '#e9ecef|dark_body_bg') ?>
                             <?= $color('dark_sidebar_bg', 'Menu no tema escuro', $b['dark_sidebar_bg']) ?>
                             <?= $color('dark_primary', 'Cor primária no escuro', $b['dark_primary'] !== '' ? $b['dark_primary'] : $b['primary'],
                                        'Vazio = o sistema clareia a primária só o quanto for preciso.') ?>
@@ -583,6 +594,9 @@ function core_admin_appearance(): string
             extra:  function () { return { esquema: esquema }; }
         });
         if (!amostra) { return; }
+
+        // Selos de legibilidade ao lado dos seletores de cor.
+        PortalContraste.ligar(form);
 
         var botao = document.getElementById('bpAtualizar');
         if (botao) { botao.addEventListener('click', amostra.atualizar); }

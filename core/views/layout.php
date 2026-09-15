@@ -240,6 +240,7 @@ $temaLivre  = Core\Branding::get('theme_toggle') === '1' || Core\Branding::get('
      uma variável que nem sempre existe, e "por que a amostra não atualiza?"
      é um bug caro de achar. -->
 <script src="<?= core_asset('core/preview.js') ?>"></script>
+<script src="<?= core_asset('core/contrast.js') ?>"></script>
 <?= $scripts ?>
 </body>
 </html>
