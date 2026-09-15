@@ -301,15 +301,21 @@ function documents_view($param = null) {
 
     $document = null;
     $versions = [];
-    $ack_status = ['acknowledged' => []];
+    $ack_status = ['acknowledged' => [], 'cycle' => 1];
+    $ack_history = [];
+    $history    = [];
     $user_acked = false;
 
     try {
         $document = document_find($id, $hospital_id);
         if ($document) {
             $versions   = document_versions($id);
-            $ack_status = document_acknowledgment_status($id);
-            $user_acked = document_user_acknowledged($id, get_user_id());
+            // Passa o documento inteiro (e não o id) para que o ciclo de
+            // ciência corrente saia da linha já carregada, sem nova consulta.
+            $ack_status  = document_acknowledgment_status($document);
+            $ack_history = document_acknowledgment_history($document);
+            $history     = document_history($id);
+            $user_acked  = document_user_acknowledged($document, get_user_id());
         }
     } catch (Exception $ex) {
         log_error('documents_view', $ex);
@@ -324,8 +330,10 @@ function documents_view($param = null) {
         'page_title' => $document['title'],
         'document'   => $document,
         'versions'   => $versions,
-        'ack_status' => $ack_status,
-        'user_acked' => $user_acked,
+        'ack_status'  => $ack_status,
+        'ack_history' => $ack_history,
+        'history'     => $history,
+        'user_acked'  => $user_acked,
         'menu_key'   => (int) $document['is_controlled'] === 1 ? 'documents' : 'documents-uncontrolled',
     ]);
 }
