@@ -1056,6 +1056,28 @@ switch ($action) {
             // multiplica a carga quanto o atraso de minutos.
             Settings::set('notifications.poll_active', (string) max(2, min(120, (int) ($_POST['notif_poll_active'] ?? 5))));
             Settings::set('notifications.poll_idle',   (string) max(10, min(600, (int) ($_POST['notif_poll_idle'] ?? 20))));
+
+            // HTTPS. Ligar o redirecionamento num servidor cujo TLS ainda não
+            // funciona tranca todo mundo para fora, então o formulário só
+            // aceita ligar quando a própria página que está salvando chegou
+            // por HTTPS — a prova de que o certificado responde.
+            $seguroAgora = Core\Https::requestIsSecure();
+            $querForcar  = !empty($_POST['force_https']);
+            if ($querForcar && !$seguroAgora) {
+                Flash::set('warning', 'O redirecionamento para HTTPS não foi ligado: esta página chegou por http, '
+                    . 'o que indica que o certificado ainda não está respondendo. Ligue depois de acessar o portal por https.');
+            } else {
+                Settings::set('security.force_https', $querForcar ? '1' : '0');
+            }
+
+            $hstsDias = max(0, min(730, (int) ($_POST['hsts_days'] ?? 0)));
+            if ($hstsDias > 0 && !$seguroAgora) {
+                Flash::set('warning', 'O HSTS não foi ligado: esta página chegou por http. '
+                    . 'Ligar HSTS antes de o certificado funcionar faz o navegador se recusar a voltar ao portal.');
+            } else {
+                Settings::set('security.hsts_seconds', (string) ($hstsDias * 86400));
+                Settings::set('security.hsts_subdomains', !empty($_POST['hsts_subdomains']) ? '1' : '0');
+            }
             Flash::set('success', 'Configurações salvas.');
             core_redirect('index.php?m=admin&a=settings');
         }
@@ -1097,6 +1119,50 @@ switch ($action) {
                                 </div>
                             </div>
                             <div class="form-text mb-3">Padrão: 5 s e 20 s (a mesma ordem de grandeza do chat).</div>
+
+                            <hr>
+                            <?php
+                            $httpsAgora = Core\Https::requestIsSecure();
+                            $hstsDias   = (int) round(Core\Https::hstsSeconds() / 86400);
+                            ?>
+                            <h2 class="h6"><i class="bi bi-shield-lock me-1"></i>HTTPS</h2>
+                            <?php if (!$httpsAgora): ?>
+                                <div class="alert alert-warning py-2 small">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    Esta página chegou por <strong>http</strong>. As opções abaixo ficam bloqueadas:
+                                    ligá-las antes de o certificado funcionar trancaria todo mundo para fora do portal.
+                                    Acesse o portal por <code>https://</code> e volte aqui.
+                                </div>
+                            <?php endif; ?>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" role="switch" name="force_https"
+                                       id="forceHttps" value="1"
+                                       <?= Core\Https::forceEnabled() ? 'checked' : '' ?>
+                                       <?= $httpsAgora ? '' : 'disabled' ?>>
+                                <label class="form-check-label" for="forceHttps">Redirecionar http para https</label>
+                                <div class="form-text">Quem chegar por http é levado para a versão segura (301).</div>
+                            </div>
+                            <div class="row g-3 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label" for="hstsDias">HSTS (dias)</label>
+                                    <input type="number" class="form-control" id="hstsDias" name="hsts_days"
+                                           min="0" max="730" value="<?= $hstsDias ?>" <?= $httpsAgora ? '' : 'disabled' ?>>
+                                    <div class="form-text">
+                                        0 = desligado. Manda o navegador nunca mais usar http neste domínio.
+                                        Comece com 1 dia; suba para 365 quando tiver certeza.
+                                    </div>
+                                </div>
+                                <div class="col-6 d-flex align-items-end">
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" name="hsts_subdomains"
+                                               id="hstsSub" value="1"
+                                               <?= Settings::get('security.hsts_subdomains', '0') === '1' ? 'checked' : '' ?>
+                                               <?= $httpsAgora ? '' : 'disabled' ?>>
+                                        <label class="form-check-label" for="hstsSub">Incluir subdomínios</label>
+                                        <div class="form-text">Só se TODOS os subdomínios já atendem em https.</div>
+                                    </div>
+                                </div>
+                            </div>
 
                             <button class="btn btn-primary">Salvar</button>
                         </form>

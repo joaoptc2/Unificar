@@ -117,6 +117,10 @@ if (PHP_SAPI !== 'cli') {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: strict-origin-when-cross-origin');
+    // Redirecionamento para https e HSTS, quando ligados em Administração >
+    // Configurações. Vem ANTES da sessão: não faz sentido abrir sessão numa
+    // requisição que está prestes a ser redirecionada.
+    Core\Https::enforce();
     Core\Session::start();
 }
 

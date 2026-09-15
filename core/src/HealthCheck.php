@@ -361,12 +361,24 @@ final class HealthCheck
                 'Em produção, deixe app.debug como false — o detalhe do erro ajuda quem ataca.')
             : self::item('ok', 'Modo de depuração', 'Desligado, como deve ser em produção.');
 
-        $base = (string) Config::get('app.base_url', '');
-        $https = str_starts_with($base, 'https://');
-        $out[] = $https
-            ? self::item('ok', 'HTTPS', 'O endereço configurado usa https.')
-            : self::item('aviso', 'HTTPS', 'app.base_url não usa https: senhas e documentos trafegam sem criptografia.',
-                'Instale um certificado e ajuste app.base_url para https://');
+        // Diagnóstico de verdade: distingue desenvolvimento, proxy que não
+        // informa o esquema, base_url desatualizado e ausência real de TLS.
+        // A versão anterior só lia o texto do app.base_url e dava o mesmo
+        // conselho ("instale um certificado") nos quatro casos — errado em
+        // dois deles, e ruído em desenvolvimento.
+        $d = Https::diagnose();
+        $out[] = self::item($d['nivel'], $d['titulo'], $d['detalhe'], $d['acao']);
+
+        // A marca Secure do cookie não é teórica: sem ela o cookie de sessão
+        // acompanha uma requisição http e pode ser lido no caminho.
+        if (Https::requestIsSecure()) {
+            $p = session_get_cookie_params();
+            $out[] = !empty($p['secure'])
+                ? self::item('ok', 'Cookie de sessão', 'Marcado como Secure e HttpOnly.')
+                : self::item('erro', 'Cookie de sessão',
+                    'A conexão é HTTPS mas o cookie de sessão NÃO está marcado como Secure.',
+                    'Costuma ser proxy sem X-Forwarded-Proto: veja o item de HTTPS acima.');
+        }
 
         $out[] = MailSecret::hasStrongCrypto()
             ? self::item('ok', 'Cifra das senhas guardadas', 'AES-256-GCM disponível.')

@@ -625,7 +625,8 @@ faltando; `post_max_size` menor que `upload_max_filesize` (que faz o upload
 falhar em silêncio); pasta sem permissão de escrita; disco quase cheio;
 `install.php` esquecido no servidor; `app.key` ainda a do exemplo; `app.debug`
 ligado em produção; cron parado; fila de e-mail travada; e backup velho ou
-inexistente.
+inexistente. A situação do HTTPS tem um diagnóstico próprio, descrito em
+[HTTPS (diagnóstico e reforço)](#https-diagnóstico-e-reforço).
 
 A página **só lê** — não altera nada — e é segura de abrir a qualquer
 momento, inclusive em produção.
@@ -692,3 +693,77 @@ então a atualização ficou muito mais rápida sem multiplicar os pedidos.
   enviado é sanitizado antes de gravar e a extensão real é decidida pelo
   tipo do conteúdo, não pelo nome do arquivo;
 - Auditoria unificada (Administração → Auditoria).
+
+## HTTPS (diagnóstico e reforço)
+
+O checkup não pergunta só se `app.base_url` começa com `https://` — essa
+resposta sozinha dá o mesmo conselho ("instale um certificado") em situações
+bem diferentes, e em duas delas o conselho está errado. `Core\Https` separa
+os casos:
+
+| Situação | Nível | O que ela diz |
+| --- | --- | --- |
+| `base_url` é local (`127.0.0.1`, `.test`, `.local`) | informação | Desenvolvimento: não existe certificado para localhost e nada sai da máquina. Nada a fazer. |
+| Proxy reverso à frente, sem `trust_proxy` | aviso | O site pode já ser https sem o PHP saber — e aí **o cookie de sessão sai sem a marca `Secure`**. Conserto é no proxy, não no certificado. |
+| A visita chegou por https, mas `base_url` está em http | erro | O certificado existe; o que está errado é uma linha. Os links dos e-mails, **inclusive o de redefinição de senha**, apontam para a versão sem criptografia. |
+| Tudo em https, sem HSTS | aviso | Quem digita o endereço sem `https://` faz a primeira visita em http — e é nela que um interceptador age. |
+| Tudo em https, com HSTS | ok | Mostra por quantos dias. |
+| http de ponta a ponta | erro | Aí sim: instale um certificado (Let's Encrypt é gratuito) e ajuste `base_url`. |
+
+### Atrás de proxy reverso
+
+Quando há Nginx, Apache ou um balanceador terminando o TLS, o PHP só sabe que
+a visita veio por HTTPS se o proxy contar. Faça o proxy enviar o cabeçalho:
+
+```nginx
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+e declare que ele é confiável em `config/config.php`:
+
+```php
+'security' => [
+    'trust_proxy' => true,
+],
+```
+
+**Só ligue isso se houver mesmo um proxy à frente.** Com `trust_proxy` ligado
+e nenhum proxy, qualquer cliente pode mandar `X-Forwarded-Proto: https` e o
+sistema acredita — o que anula o redirecionamento e faz o cookie ganhar a
+marca `Secure` numa conexão que não é segura. O padrão é `false` justamente
+por isso.
+
+### Redirecionamento e HSTS (Administração → Configurações)
+
+Dois interruptores, **ambos desligados por padrão**:
+
+- **Forçar HTTPS** — responde `301` para `https://` em toda visita que chegar
+  por http;
+- **HSTS (dias)**, com *incluir subdomínios* opcional — manda o navegador
+  recusar http para este domínio pelo prazo informado.
+
+Três travas impedem que ligá-los tranque todo mundo para fora:
+
+- Os campos ficam **desabilitados enquanto a própria página não estiver em
+  HTTPS**, e o salvamento recusa a mudança de novo no servidor. Ligar
+  redirecionamento num servidor cujo TLS ainda não funciona deixaria o
+  administrador sem acesso à tela para desfazer — precisaria do banco de
+  dados para voltar atrás.
+- O **HSTS só é enviado em resposta já segura**. Enviá-lo por http é ignorado
+  pelo navegador de qualquer forma, mas enviá-lo antes de o certificado
+  funcionar deixaria o navegador se recusando a voltar ao http.
+- O redirecionamento **nunca age em requisição local** e ignora `Host`
+  suspeito (só aceita letras, números, ponto, hífen e porta), para não montar
+  um `Location` com cabeçalho injetado.
+
+Comece pelo redirecionamento, confirme que o site responde bem por alguns
+dias, e só então ligue o HSTS — ele é a parte difícil de desfazer, porque
+quem já visitou guarda a instrução pelo prazo inteiro.
+
+### Um só detector
+
+`Core\Https::requestIsSecure()` é o único lugar que decide se a visita é
+segura: o cookie de sessão (`Core\Session`), o redirecionamento, o HSTS e o
+checkup usam todos ele. Antes, a sessão tinha a sua própria cópia — que
+aceitava `X-Forwarded-Proto` de qualquer origem e divergia do que o checkup
+enxergava.

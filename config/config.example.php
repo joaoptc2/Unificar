@@ -104,6 +104,18 @@ return [
         'login_max_attempts' => 5,
         'login_window_min'   => 10,
         'login_lockout_min'  => 15,
+
+        // Proxy reverso à frente (Nginx, Cloudflare, balanceador)?
+        //
+        // Ligue SOMENTE se houver de fato um proxy e ele definir o cabeçalho
+        // X-Forwarded-Proto. Com isto ligado, o sistema passa a acreditar
+        // nesse cabeçalho para saber se a visita veio por https — e é assim
+        // que o cookie de sessão ganha a marca Secure no arranjo mais comum
+        // de hospedagem.
+        //
+        // Ligar sem proxy é um furo: qualquer cliente poderia afirmar "vim
+        // por https" e escapar do redirecionamento.
+        'trust_proxy' => false,
     ],
 
     // Segredo do cron unificado (cron.php?token=...)
