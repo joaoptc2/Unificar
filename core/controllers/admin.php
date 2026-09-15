@@ -38,6 +38,8 @@ $coreActions = [
     'groups', 'group_form', 'group_save', 'group_delete',
     'modules', 'settings', 'appearance', 'appearance_save', 'appearance_export', 'audit',
     'migrations', 'migrations_apply',
+    'backup', 'backup_create', 'backup_download', 'backup_delete', 'backup_verify',
+    'backup_schedule_save',
     'mailqueue', 'mailqueue_process', 'mailqueue_retry',
     'mail', 'mail_save', 'mail_test', 'mail_probe',
 ];
@@ -62,6 +64,7 @@ function admin_sidebar(): array
         $core[] = ['label' => 'Configurações',       'url' => core_module_url('admin', ['a' => 'settings']),   'icon' => 'bi-sliders',      'key' => 'settings'];
         $core[] = ['label' => 'Aparência',           'url' => core_module_url('admin', ['a' => 'appearance']), 'icon' => 'bi-palette',      'key' => 'appearance'];
         $core[] = ['label' => 'Atualizações de banco','url' => core_module_url('admin', ['a' => 'migrations']),'icon' => 'bi-database-up',  'key' => 'migrations'];
+        $core[] = ['label' => 'Backup',              'url' => core_module_url('admin', ['a' => 'backup']),     'icon' => 'bi-hdd-stack',    'key' => 'backup'];
         $core[] = ['label' => 'E-mail',              'url' => core_module_url('admin', ['a' => 'mail']),       'icon' => 'bi-envelope-at',  'key' => 'mail'];
         $core[] = ['label' => 'Auditoria',           'url' => core_module_url('admin', ['a' => 'audit']),      'icon' => 'bi-journal-text', 'key' => 'audit'];
     }
@@ -387,6 +390,25 @@ switch ($action) {
             'layout_save'    => core_admin_layouts_save(),
             'layout_delete'  => core_admin_layouts_delete(),
             'layout_preview' => core_admin_layout_preview(),
+        };
+        break;
+
+    // ================= BACKUP E RESTAURAÇÃO =================
+
+    case 'backup':
+    case 'backup_create':
+    case 'backup_download':
+    case 'backup_delete':
+    case 'backup_verify':
+    case 'backup_schedule_save':
+        require CORE_PATH . '/controllers/admin_backup.php';
+        match ($action) {
+            'backup'               => admin_render('Backup', core_admin_backup(), 'backup'),
+            'backup_create'        => core_admin_backup_create(),
+            'backup_download'      => core_admin_backup_download(),
+            'backup_delete'        => core_admin_backup_delete(),
+            'backup_verify'        => core_admin_backup_verify(),
+            'backup_schedule_save' => core_admin_backup_schedule_save(),
         };
         break;
 
@@ -927,7 +949,7 @@ switch ($action) {
                       WHERE slug = ?',
                     [
                         !empty($data['active']) ? 1 : 0,
-                        (int) ($data['sort'] ?? 0),
+                        max(0, min(9999, (int) ($data['sort'] ?? 0))),
                         !empty($data['topbar']) ? 1 : 0,
                         $label !== '' ? mb_substr($label, 0, 100) : null,
                         $icon !== '' && preg_match('/^bi-[a-z0-9-]{1,50}$/', $icon) ? $icon : null,
@@ -979,7 +1001,7 @@ switch ($action) {
                                            value="<?= core_e($r['custom_icon'] ?? '') ?>" maxlength="60"
                                            placeholder="<?= core_e($m['icon'] ?? 'bi-app') ?>">
                                 </td>
-                                <td><input type="number" class="form-control form-control-sm" name="mod[<?= core_e($r['slug']) ?>][sort]" value="<?= (int) $r['sort_order'] ?>"></td>
+                                <td><input type="number" class="form-control form-control-sm" min="0" max="9999" name="mod[<?= core_e($r['slug']) ?>][sort]" value="<?= (int) $r['sort_order'] ?>"></td>
                                 <td class="text-center">
                                     <input type="checkbox" class="form-check-input" name="mod[<?= core_e($r['slug']) ?>][topbar]" value="1" <?= ($r['show_in_topbar'] ?? 1) ? 'checked' : '' ?>>
                                 </td>

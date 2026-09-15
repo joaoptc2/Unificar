@@ -290,36 +290,96 @@ ob_start();
 <script>
 (function(){
     if (typeof Chart === 'undefined') return;
-    new Chart(document.getElementById('chartOsMonthly'), {
-        type: 'bar',
-        data: {
-            labels: <?php echo json_encode($labels); ?>,
-            datasets: [{
-                label: 'OS criadas',
-                data: <?php echo json_encode($vals); ?>,
-                backgroundColor: '#0d6efd',
-                borderRadius: 6
-            }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
-        }
-    });
-    new Chart(document.getElementById('chartOsStatus'), {
-        type: 'doughnut',
-        data: {
-            labels: <?php echo json_encode(array_map(fn($r)=>$statusLabels[$r['status']] ?? $r['status'], $osByStatus)); ?>,
-            datasets: [{
-                data: <?php echo json_encode(array_map(fn($r)=>(int)$r['total'], $osByStatus)); ?>,
-                backgroundColor: ['#3b82f6','#f59e0b','#f97316','#10b981','#64748b']
-            }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom' } }
-        }
+
+    var labels     = <?php echo json_encode($labels); ?>;
+    var vals       = <?php echo json_encode($vals); ?>;
+    var statusKeys = <?php echo json_encode(array_map(fn($r) => $r['status'], $osByStatus)); ?>;
+    var statusNomes= <?php echo json_encode(array_map(fn($r) => $statusLabels[$r['status']] ?? $r['status'], $osByStatus)); ?>;
+    var statusVals = <?php echo json_encode(array_map(fn($r) => (int) $r['total'], $osByStatus)); ?>;
+
+    // Cada status da OS tem um SIGNIFICADO, então a cor vem do estado
+    // escolhido na Aparência e não da posição na paleta — se o hospital
+    // trocar o verde de "conforme", "Concluídas" troca junto.
+    var ESTADO_DO_STATUS = {
+        open:         'info',     // entrou na fila: informativo
+        in_progress:  'primary',  // trabalho em curso: cor da marca
+        waiting_part: 'warning',  // parada esperando peça: atenção
+        completed:    'success',  // conforme
+        cancelled:    'muted'     // fora do fluxo: neutro
+    };
+    // Cores de antes do tema, mantidas para quando o app.js do núcleo não
+    // estiver na página (as telas públicas do módulo não o carregam).
+    var CORES_FIXAS = {
+        primary: '#0d6efd', info: '#3b82f6', warning: '#f59e0b',
+        success: '#10b981', muted: '#64748b'
+    };
+
+    var graficos = [], desenhado = false;
+
+    function desenhar() {
+        desenhado = true;
+        var T = window.PortalTheme || null;
+        if (T) { T.applyChartDefaults(); }   // rótulos, grade e fonte do tema
+
+        var cor = function (nome) {
+            return T ? T.color(nome) : (CORES_FIXAS[nome] || CORES_FIXAS.primary);
+        };
+        var paleta = T ? T.palette() : [CORES_FIXAS.primary];
+
+        // Redesenhar (troca de tema) exige descartar o gráfico anterior:
+        // dois Chart no mesmo <canvas> quebram o Chart.js.
+        while (graficos.length) { graficos.pop().destroy(); }
+
+        graficos.push(new Chart(document.getElementById('chartOsMonthly'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'OS criadas',
+                    data: vals,
+                    backgroundColor: paleta[0],
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+            }
+        }));
+
+        graficos.push(new Chart(document.getElementById('chartOsStatus'), {
+            type: 'doughnut',
+            data: {
+                labels: statusNomes,
+                datasets: [{
+                    data: statusVals,
+                    backgroundColor: statusKeys.map(function (k) {
+                        return cor(ESTADO_DO_STATUS[k] || 'muted');
+                    })
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } }
+            }
+        }));
+    }
+
+    // O app.js do núcleo entra DEPOIS do conteúdo da página; esperar o DOM
+    // pronto garante que window.PortalTheme já exista ao ler as cores.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', desenhar);
+    } else {
+        desenhar();
+    }
+    // Botão de tema claro/escuro: redesenhar é o que faz séries e rótulos
+    // acompanharem a troca sem recarregar a tela.
+    // setTimeout: o app.js do núcleo só limpa o cache de cores no próprio
+    // listener deste evento, e o desta página foi registrado antes dele —
+    // redesenhar na hora releria a cor ANTIGA.
+    window.addEventListener('portal:tema', function () {
+        if (desenhado) { setTimeout(desenhar, 0); }
     });
 })();
 </script>

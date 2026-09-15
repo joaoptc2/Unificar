@@ -142,6 +142,27 @@ final class Mailer
         $user    = $cfg['user'];
         $pass    = (string) ($opts['password'] ?? MailConfig::password());
 
+        // Orçamento TOTAL da conversa. Limitar só cada leitura não basta:
+        // contra um servidor vivo porém lento, cada etapa cabe no limite e a
+        // soma não cabe — o PHP mata o request no meio e a tela devolve 500
+        // em branco. O prazo abaixo faz o erro chegar legível antes disso.
+        $orcamento = $timeout * 3;
+        $maxExec   = (int) ini_get('max_execution_time');
+        if ($maxExec > 0) {
+            // Sempre abaixo do que a hospedagem permite: melhor um erro
+            // legível do que o request morto no meio, que deixa a tela em
+            // branco e o registro do teste preso em "em andamento".
+            $orcamento = min($orcamento, max(3, (int) floor($maxExec * 0.8)));
+        }
+        $prazo = (float) hrtime(true) + $orcamento * 1e9;
+        $sobra = static function () use ($prazo, $timeout): int {
+            $s = (int) ceil(($prazo - hrtime(true)) / 1e9);
+            if ($s <= 0) {
+                throw new \RuntimeException('TIMEOUT:A conversa com o servidor passou do tempo previsto.');
+            }
+            return max(1, min($timeout, $s));
+        };
+
         $steps = [];
         $log   = [];
         $mark  = static function (string $name, float $since) use (&$steps): float {
@@ -185,7 +206,8 @@ final class Mailer
             stream_set_timeout($fp, $timeout);
             $t = $mark('conexao', $t);
 
-            $read = static function () use ($fp, $say, $timeout): string {
+            $read = static function () use ($fp, $say, $timeout, $sobra): string {
+                stream_set_timeout($fp, $sobra());
                 $data = '';
                 while (($line = fgets($fp, 998)) !== false) {
                     $data .= $line;
@@ -202,7 +224,8 @@ final class Mailer
             };
             /** @var callable(string,array<int,int>,string,bool):string $cmd */
             $cmd = static function (string $payload, array $expect, string $label, bool $secret = false)
-                use ($fp, $read, $say, &$steps, $timeout): string {
+                use ($fp, $read, $say, &$steps, $timeout, $sobra): string {
+                $sobra(); // estoura aqui se o orçamento total acabou
                 $say('C: ' . ($secret ? '••••••' : $payload));
                 if (@fwrite($fp, $payload . "\r\n") === false) {
                     throw new \RuntimeException("ESCRITA:A conexão caiu durante {$label}.");

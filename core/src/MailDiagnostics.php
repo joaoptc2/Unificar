@@ -55,13 +55,20 @@ final class MailDiagnostics
         $from   = MailConfig::from();
         $host   = MailConfig::host();
         $dFrom  = self::domain($from);
-        $dHost  = $host !== '' ? self::baseDomain($host) : '';
+        // Relay interno informado por IP (comum em hospital) não tem domínio
+        // para comparar — comparar assim mesmo produzia um aviso sobre um
+        // "domínio" inexistente, tipo "0.1".
+        $porIp  = $host !== '' && filter_var($host, FILTER_VALIDATE_IP) !== false;
+        $dHost  = ($host !== '' && !$porIp) ? self::baseDomain($host) : '';
         if ($from === '' || $dFrom === '') {
             $add('erro', 'Endereço do remetente', 'Não configurado.');
         } elseif ($dHost !== '' && !str_ends_with('.' . $dFrom, '.' . $dHost) && $dFrom !== $dHost) {
             $add('aviso', 'Remetente e servidor em domínios diferentes',
                 "O \"De\" usa {$dFrom} e o servidor de saída é {$dHost}. Muitos provedores recusam "
                 . 'isso (ou marcam como spam). O ideal é que o remetente pertença ao domínio da conta SMTP.');
+        } elseif ($porIp) {
+            $add('info', 'Servidor informado por IP',
+                'A conferência de alinhamento de domínio não se aplica a ' . $host . '.');
         } else {
             $add('ok', 'Remetente alinhado ao servidor', $from . ' ↔ ' . ($dHost ?: 'sendmail local'));
         }
@@ -213,6 +220,22 @@ final class MailDiagnostics
         if ($host === '') {
             return [['nivel' => 'info', 'titulo' => 'Portas',
                      'detalhe' => 'Informe o servidor SMTP para testar as portas.']];
+        }
+        // A própria tela, uma linha acima, avisa quando a hospedagem fecha
+        // stream_socket_client. O botão não pode derrubar a página por causa
+        // exatamente daquilo que ele acabou de diagnosticar.
+        if (!function_exists('stream_socket_client')) {
+            return [['nivel' => 'aviso', 'titulo' => 'Não é possível testar as portas',
+                     'detalhe' => 'Esta hospedagem não permite abrir conexões pelo PHP '
+                                . '(stream_socket_client desabilitado).']];
+        }
+        // Nome que não resolve dá erro de conexão em todas as portas e faria a
+        // tela dizer "bloqueada" quatro vezes, escondendo a causa real.
+        if (!filter_var($host, FILTER_VALIDATE_IP) && function_exists('gethostbyname')
+            && gethostbyname($host) === $host) {
+            return [['nivel' => 'erro', 'titulo' => 'Nome do servidor não resolvido',
+                     'detalhe' => 'Não foi possível descobrir o endereço de "' . $host
+                                . '". Confira o nome antes de testar as portas.']];
         }
         foreach ($ports as $port) {
             $t0 = hrtime(true);

@@ -150,9 +150,15 @@ function core_admin_mail_probe(): void
     Csrf::check();
 
     $what = (string) ($_POST['what'] ?? 'dns');
-    $out  = $what === 'ports'
-        ? MailDiagnostics::ports(MailConfig::host())
-        : MailDiagnostics::dns();
+    try {
+        $out = $what === 'ports'
+            ? MailDiagnostics::ports(MailConfig::host())
+            : MailDiagnostics::dns();
+    } catch (\Throwable $e) {
+        // Segunda camada: nenhuma checagem de ambiente pode derrubar a tela.
+        $out = [['nivel' => 'erro', 'titulo' => 'A verificação não pôde ser feita',
+                 'detalhe' => $e->getMessage()]];
+    }
 
     // O resultado vive só até a próxima tela: é uma foto do momento.
     $_SESSION['mail_probe'] = ['what' => $what, 'itens' => $out, 'quando' => date('d/m/Y H:i:s')];

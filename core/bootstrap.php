@@ -55,6 +55,46 @@ if (Core\Config::get('app.debug', false)) {
 ini_set('log_errors', '1');
 ini_set('error_log', STORAGE_PATH . '/logs/php_errors.log');
 
+/**
+ * Último recurso: uma exceção que escape até aqui vira uma página legível, e
+ * não um 500 em branco.
+ *
+ * O caso que motivou isto é o banco fora do ar: quem já está logado batia em
+ * Auth::user() → PDOException e recebia uma tela vazia, sem nenhuma pista do
+ * que houve. Com debug ligado o erro continua aparecendo inteiro.
+ */
+if (PHP_SAPI !== 'cli') {
+    set_exception_handler(static function (\Throwable $e): void {
+        error_log('não tratada: ' . $e->getMessage() . ' em ' . $e->getFile() . ':' . $e->getLine());
+        if (headers_sent()) {
+            return;
+        }
+        http_response_code(500);
+        if (Core\Config::get('app.debug', false)) {
+            echo '<pre>' . htmlspecialchars((string) $e, ENT_QUOTES) . '</pre>';
+            return;
+        }
+        $indisponivel = $e instanceof \PDOException;
+        try {
+            Core\Layout::renderError(
+                500,
+                $indisponivel
+                    ? 'O sistema está temporariamente indisponível (falha ao falar com o banco de dados). '
+                      . 'Tente novamente em alguns minutos; se continuar, avise o suporte de TI.'
+                    : 'Ocorreu um erro inesperado. O ocorrido foi registrado para o suporte de TI.'
+            );
+        } catch (\Throwable) {
+            // Nem o layout conseguiu: texto puro, mas nunca uma página vazia.
+            header('Content-Type: text/html; charset=utf-8');
+            echo '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'
+               . '<title>Sistema indisponível</title></head><body style="font-family:system-ui;padding:2rem">'
+               . '<h1>Sistema temporariamente indisponível</h1>'
+               . '<p>Tente novamente em alguns minutos. Se continuar, avise o suporte de TI.</p>'
+               . '</body></html>';
+        }
+    });
+}
+
 // ---- URL base ----------------------------------------------------------
 if (!defined('BASE_URL')) {
     $configured = Core\Config::get('app.base_url');

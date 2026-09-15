@@ -16,7 +16,7 @@
 .page-header h1 {
     font-size: 1.4rem;
     font-weight: 700;
-    color: #1e293b;
+    color: var(--portal-text, #1e293b);
     margin: 0;
 }
 @media (max-width: 576px) {
@@ -34,7 +34,7 @@
 }
 .stat-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--portal-shadow-hover, 0 4px 15px rgba(0, 0, 0, 0.1));
 }
 .stat-card .stat-icon {
     width: 48px;
@@ -52,7 +52,7 @@
 }
 .stat-card .stat-label {
     font-size: 0.78rem;
-    color: #64748b;
+    color: var(--portal-muted, #64748b);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -60,20 +60,23 @@
     .stat-card .stat-value { font-size: 1.2rem; }
 }
 
-/* Background opacos para os ícones */
+/* Fundos translúcidos dos ícones. Seguem as cores de estado escolhidas em
+   Aparência; o cinza "secundário" acompanha o texto apagado do tema, porque
+   no tema escuro um cinza fixo sumia sobre a superfície. */
 .bg-primary-bg-opacity-10 { background-color: rgba(var(--portal-primary-rgb, 13, 110, 253), 0.1); }
-.bg-success-bg-opacity-10 { background-color: rgba(16, 185, 129, 0.1); }
-.bg-warning-bg-opacity-10 { background-color: rgba(245, 158, 11, 0.1); }
-.bg-danger-bg-opacity-10  { background-color: rgba(239, 68, 68, 0.1); }
-.bg-info-bg-opacity-10    { background-color: rgba(var(--portal-primary-rgb, 59, 130, 246), 0.1); }
+.bg-success-bg-opacity-10 { background-color: rgba(var(--portal-success-rgb, 16, 185, 129), 0.1); }
+.bg-warning-bg-opacity-10 { background-color: rgba(var(--portal-warning-rgb, 245, 158, 11), 0.1); }
+.bg-danger-bg-opacity-10  { background-color: rgba(var(--portal-danger-rgb, 239, 68, 68), 0.1); }
+.bg-info-bg-opacity-10    { background-color: rgba(var(--portal-info-rgb, 59, 130, 246), 0.1); }
 .bg-secondary-bg-opacity-10 { background-color: rgba(100, 116, 139, 0.1); }
+.bg-secondary-bg-opacity-10 { background-color: color-mix(in srgb, var(--portal-muted, #64748b) 10%, transparent); }
 
 /* ── Tabelas ────────────────────────────────────────────────────────────── */
 .table th {
     font-size: 0.78rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #64748b;
+    color: var(--portal-muted, #64748b);
     font-weight: 600;
     border-bottom-width: 2px;
     white-space: nowrap;
@@ -88,13 +91,17 @@
     .table th, .table td { font-size: 0.8rem; }
 }
 
-/* ── Badges de status ────────────────────────────────────────────────────── */
-.badge-ativo     { background-color: #10b981; color: #fff; }
-.badge-afastado  { background-color: #f59e0b; color: #fff; }
-.badge-desligado { background-color: #ef4444; color: #fff; }
-.badge-valido    { background-color: #10b981; color: #fff; }
-.badge-proximo   { background-color: #f59e0b; color: #fff; }
-.badge-vencido   { background-color: #ef4444; color: #fff; }
+/* ── Selos de situação ───────────────────────────────────────────────────── */
+/* São estados (válido / a vencer / vencido), não identidade de um objeto:
+   usam as cores de estado da identidade visual. O texto vem de
+   --portal-on-<estado>, que já escolhe claro ou escuro pelo contraste — num
+   âmbar claro o branco fixo de antes era praticamente ilegível. */
+.badge-ativo     { background-color: var(--portal-success, #10b981); color: var(--portal-on-success, #fff); }
+.badge-afastado  { background-color: var(--portal-warning, #f59e0b); color: var(--portal-on-warning, #fff); }
+.badge-desligado { background-color: var(--portal-danger, #ef4444);  color: var(--portal-on-danger, #fff); }
+.badge-valido    { background-color: var(--portal-success, #10b981); color: var(--portal-on-success, #fff); }
+.badge-proximo   { background-color: var(--portal-warning, #f59e0b); color: var(--portal-on-warning, #fff); }
+.badge-vencido   { background-color: var(--portal-danger, #ef4444);  color: var(--portal-on-danger, #fff); }
 
 /* ── Formulários ────────────────────────────────────────────────────────── */
 .form-label {
@@ -104,7 +111,7 @@
 }
 .required::after {
     content: ' *';
-    color: #ef4444;
+    color: var(--portal-danger, #ef4444);
 }
 .filter-panel {
     background: var(--portal-surface, #fff);
@@ -141,7 +148,7 @@
     font-size: 0.82rem;
     transition: box-shadow 0.2s;
 }
-.kanban-card:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
+.kanban-card:hover { box-shadow: var(--portal-shadow-hover, 0 2px 8px rgba(0, 0, 0, 0.08)); }
 
 /* Calendário */
 .calendar-day {
@@ -152,7 +159,7 @@
 }
 .calendar-day.today {
     background: var(--portal-primary-soft, #eff6ff);
-    border-color: #93c5fd;
+    border-color: var(--portal-primary-light, #93c5fd);
 }
 .calendar-day .day-number { font-weight: 600; font-size: 0.85rem; }
 .calendar-event {
@@ -169,12 +176,13 @@
 }
 .calendar-event:hover { background: var(--portal-primary-light, #bfdbfe); }
 
-/* Compliment / quote boxes (amber) */
+/* Caixa de elogio / citação (o âmbar é a cor de destaque do tema) */
 .compliment-card {
-    border-left: 4px solid #ffc107;
+    border-left: 4px solid var(--portal-warning, #ffc107);
     padding: 14px 18px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    box-shadow: var(--portal-shadow-card, 0 1px 3px rgba(0, 0, 0, 0.05));
     background: var(--portal-surface, #fff);
+    color: var(--portal-text, #212529);
     border-radius: 0.375rem;
 }
 .compliment-card::before {
@@ -182,7 +190,7 @@
     font-size: 2.5rem;
     line-height: 0;
     vertical-align: -0.4em;
-    color: #ffc107;
+    color: var(--portal-warning, #ffc107);
     margin-right: 0.2em;
 }
 
@@ -200,11 +208,16 @@
 }
 
 /* ── Documento escrito no sistema ───────────────────────────────────────── */
+/* Só a bandeja em volta segue o tema: dentro do quadro corre a folha de
+   papel do documento, que é branca nos dois temas (ver core/doc-editor.css). */
 .doc-preview-frame {
     width: 100%;
     height: 70vh;
     border: 0;
-    background: #e9edf1;
+    /* Mesma bandeja do editor (core/doc-editor.css): um passo afastada da
+       superfície nos dois temas; a primeira linha é a reserva. */
+    background: var(--portal-surface-2, #e9edf1);
+    background: color-mix(in srgb, var(--portal-text, #212529) 8%, var(--portal-surface, #fff));
 }
 .doc-editor-wrap.doc-editor-cover .ql-container,
 .doc-editor-wrap.doc-editor-cover .ql-editor {

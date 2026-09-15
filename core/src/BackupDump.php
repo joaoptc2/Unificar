@@ -141,6 +141,8 @@ final class BackupDump
         // pacote: o servidor derruba a conexão sem dó em "packet too large".
         $maxInsert = max(65536, min($maxInsert, (int) floor($packet * 0.4)));
         $pageRows  = max(1, (int) ($opts['page_rows'] ?? self::PAGE_ROWS));
+        $pageBytes = (int) ($opts['page_bytes'] ?? self::orcamentoDePagina());
+        $maiorComando = 0;
         $comDados  = (bool) ($opts['data'] ?? true);
 
         $snapshot = (bool) ($opts['snapshot'] ?? true);
@@ -169,11 +171,12 @@ final class BackupDump
                 $chave  = 'sem-dados';
 
                 if ($comDados) {
-                    $r = self::dados($pdo, $db, $tabela, $escreve, $maxInsert, $pageRows, $avisos, $packet);
+                    $r = self::dados($pdo, $db, $tabela, $escreve, $maxInsert, $pageRows, $pageBytes, $avisos, $packet);
                     $linhas = $r['linhas'];
                     $digest = $r['digest'];
                     $chave  = $r['chave'];
                     $bytes += $r['bytes'];
+                    $maiorComando = max($maiorComando, (int) ($r['maior_comando'] ?? 0));
                 }
 
                 $tabelas[$tabela] = [
@@ -213,6 +216,9 @@ final class BackupDump
             'tabelas'  => $tabelas,
             'avisos'   => $avisos,
             'bytes'    => $bytes,
+            // Vai para o manifesto: a conferência do pacote e a restauração
+            // comparam este número com o max_allowed_packet do servidor.
+            'maior_comando' => $maiorComando,
             'sessao'   => $sessao,
             'objetos'  => $objetos,
             'servidor' => ['versao' => $sessao['versao'], 'banco' => $db],
@@ -286,7 +292,10 @@ final class BackupDump
         $f .= "SET SESSION collation_connection  = @UNIFICAR_COLL_CONNECTION;\n\n";
         $f .= '-- Fim do dump: ' . count($tabelas) . ' tabela(s), ' . $linhas . ' linha(s), '
             . $bytes . " byte(s).\n";
-        $f .= "-- UNIFICAR-DUMP-FIM\n";
+        // Marcador EXECUTÁVEL, não comentário: é assim que a restauração sabe
+        // que leu o arquivo até o fim. Um comentário seria descartado pelo
+        // separador de comandos e um dump truncado passaria por completo.
+        $f .= "SET @UNIFICAR_DUMP_FIM = 'UNIFICAR-DUMP-FIM';\n";
 
         return $f;
     }
@@ -330,6 +339,7 @@ final class BackupDump
         callable $escreve,
         int $maxInsert,
         int $pageRows,
+        int $pageBytes,
         array &$avisos,
         int $packet
     ): array {
@@ -359,10 +369,15 @@ final class BackupDump
         $buffer    = '';
         $primeiro  = true;
 
-        $flush = static function () use (&$buffer, &$bytes, $escreve, &$primeiro): void {
+        $maiorComando = 0;
+        $flush = static function () use (&$buffer, &$bytes, &$maiorComando, $escreve, &$primeiro): void {
             if ($buffer === '') {
                 return;
             }
+            // O maior comando emitido é o que decide se este pacote é
+            // restaurável: acima do max_allowed_packet do destino, a conexão
+            // cai no meio da carga.
+            $maiorComando = max($maiorComando, strlen($buffer) + 2);
             $bytes += $escreve($buffer . ";\n");
             $buffer   = '';
             $primeiro = true;
@@ -370,7 +385,11 @@ final class BackupDump
 
         $bytes += $escreve("\n--\n-- Dados de " . $tabela . "\n--\n");
 
-        self::eachRow($pdo, $tabela, $colunas, $pk, $pageRows, function (array $row) use (
+        // Página dimensionada pelo TAMANHO médio da linha, não por um número
+        // fixo: 500 linhas de uma tabela de texto longo estouram a memória.
+        $linhasPagina = self::linhasPorPagina($pdo, $db, $tabela, $pageRows, $pageBytes);
+
+        self::eachRow($pdo, $tabela, $colunas, $pk, $linhasPagina, function (array $row) use (
             $pdo, $colunas, $cabecalho, $maxInsert, $packet, $tabela,
             &$buffer, &$primeiro, &$linhas, &$acc, &$avisos, $flush
         ): void {
@@ -409,10 +428,11 @@ final class BackupDump
         $flush();
 
         return [
-            'linhas' => $linhas,
-            'digest' => self::digestHex($acc),
-            'bytes'  => $bytes,
-            'chave'  => $modo,
+            'linhas'        => $linhas,
+            'digest'        => self::digestHex($acc),
+            'bytes'         => $bytes,
+            'chave'         => $modo,
+            'maior_comando' => $maiorComando,
         ];
     }
 
@@ -425,10 +445,74 @@ final class BackupDump
      * @param array<int, array{nome:string, tipo:string, inteiro:bool}> $colunas
      * @param string[] $pk
      */
+    /**
+     * Quanto de memória a leitura de uma página pode ocupar.
+     *
+     * Paginar por NÚMERO de linhas (500) derruba o dump em tabela de texto
+     * longo: o portal tem mais de quarenta colunas TEXT, e 500 linhas grandes
+     * viram centenas de MB — duas vezes, porque o buffer do driver e o array
+     * do PHP coexistem. Por isso o teto é em bytes, derivado do memory_limit.
+     */
+    private static function orcamentoDePagina(): int
+    {
+        $limite = self::bytesDeIni((string) ini_get('memory_limit'));
+        if ($limite <= 0) {
+            return 8 * 1024 * 1024;   // sem limite declarado: 8 MB por página
+        }
+        // 10% do limite, entre 512 KB e 16 MB.
+        return max(524288, min(16777216, (int) ($limite * 0.10)));
+    }
+
+    private static function bytesDeIni(string $v): int
+    {
+        $v = trim($v);
+        if ($v === '' || $v === '-1') {
+            return 0;
+        }
+        $n = (int) $v;
+        return match (strtolower(substr($v, -1))) {
+            'g'     => $n * 1073741824,
+            'm'     => $n * 1048576,
+            'k'     => $n * 1024,
+            default => $n,
+        };
+    }
+
+    /**
+     * Quantas linhas cabem no orçamento, pelo tamanho médio informado pelo
+     * servidor. avg_row_length é estimativa do InnoDB, e é o bastante: o que
+     * importa é não pedir 500 linhas de 1 MB de uma vez.
+     */
+    private static function linhasPorPagina(PDO $pdo, string $db, string $tabela, int $teto, int $orcamento): int
+    {
+        try {
+            $r = self::fetchAll(
+                $pdo,
+                'SELECT AVG_ROW_LENGTH FROM information_schema.TABLES
+                  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
+                [$db, $tabela]
+            );
+            $media = (int) ($r[0]['AVG_ROW_LENGTH'] ?? 0);
+        } catch (\Throwable) {
+            $media = 0;
+        }
+        if ($media < 1) {
+            return $teto;
+        }
+        return max(1, min($teto, (int) floor($orcamento / $media)));
+    }
+
     private static function eachRow(PDO $pdo, string $tabela, array $colunas, array $pk, int $pageRows, callable $fn): void
     {
         $nomes  = array_column($colunas, 'nome');
-        $select = implode(', ', array_map([self::class, 'id'], $nomes));
+        // Coluna FLOAT sai do servidor com 6 dígitos significativos ('3.40282e38'),
+        // e isso NÃO basta para recompor o mesmo float de 32 bits: medimos erro
+        // relativo de 1e-6 ao restaurar. Somar 0e0 promove a double na leitura e
+        // o valor volta idêntico. As demais colunas saem como estão.
+        $select = implode(', ', array_map(static function (array $c): string {
+            $id = self::id($c['nome']);
+            return ($c['tipo'] ?? '') === 'float' ? "{$id}+0e0 AS {$id}" : $id;
+        }, $colunas));
         $tbl    = self::id($tabela);
 
         if ($pk === []) {
@@ -699,9 +783,19 @@ final class BackupDump
         $parar      = (bool) ($opts['stop_on_error'] ?? true);
 
         self::statements($stream, function (string $sql) use ($pdo, &$executados, &$avisos, &$fim, $parar): void {
-            if (str_contains($sql, 'UNIFICAR-DUMP-FIM')) {
-                $fim = true;
-            }
+            // O marcador é reconhecido pelo COMANDO inteiro, não por conter o
+            // texto: settings é editável pela tela, e uma linha de dados com
+            // 'UNIFICAR-DUMP-FIM' dentro ligava o marcador no meio do arquivo
+            // — um dump truncado passava como completo. Exigir que ele seja o
+            // último a ser executado fecha o resto: qualquer comando depois
+            // dele derruba a marcação de novo.
+            // O comando pode vir precedido dos comentários do rodapé: compara
+            // depois de tirá-los. (E é o COMANDO que identifica o marcador, não
+            // o texto solto: settings é editável pela tela, e uma linha de dados
+            // com 'UNIFICAR-DUMP-FIM' dentro fazia um dump truncado passar por
+            // completo.)
+            $limpo = ltrim(preg_replace('/^(?:\s*--[^\n]*\n)+/', '', $sql) ?? $sql);
+            $fim   = preg_match('/^SET\s+@UNIFICAR_DUMP_FIM\s*=/i', $limpo) === 1;
             try {
                 $pdo->exec($sql);
                 $executados++;
@@ -764,7 +858,7 @@ final class BackupDump
             while (true) {
                 // DELIMITER só vale no começo de um comando.
                 if ($aspas === null && $i === 0
-                    && preg_match('/^[\s]*DELIMITER[ \t]+(\S+)[ \t]*(\r?\n)/i', $buf, $m) === 1) {
+                    && preg_match('/^[\s]*DELIMITER[ \t]+(\S+)[ \t]*(\r?\n' . ($eof ? '|$' : '') . ')/i', $buf, $m) === 1) {
                     $delim = $m[1];
                     $buf   = substr($buf, strlen($m[0]));
                     continue;
@@ -831,12 +925,22 @@ final class BackupDump
                 continue;
             }
 
+            // O MySQL só trata -- como comentário quando vem espaço depois:
+            // sem esta checagem, "5--3" viraria comentário e comeria o resto.
             if ($ch === '-' && $next === '-') {
-                $eol = strpos($buf, "\n", $i);
-                if ($eol === false) {
-                    return $eof ? ['fim' => $len, 'proximo' => $len] : null;
+                $depois = $i + 2 < $len ? $buf[$i + 2] : '';
+                if ($i + 2 >= $len && !$eof) {
+                    return null;
                 }
-                $i = $eol + 1;
+                if ($depois === ' ' || $depois === "\t" || $depois === "\n" || $depois === "\r" || $depois === '') {
+                    $eol = strpos($buf, "\n", $i);
+                    if ($eol === false) {
+                        return $eof ? ['fim' => $len, 'proximo' => $len] : null;
+                    }
+                    $i = $eol + 1;
+                    continue;
+                }
+                $i++;
                 continue;
             }
             if ($ch === '#') {
@@ -872,9 +976,18 @@ final class BackupDump
         return null;
     }
 
+    /**
+     * O trecho é só comentário (nada a executar)?
+     *
+     * Comentário executável do MySQL (/*! ... *\/) NÃO conta como comentário:
+     * ele carrega comando de verdade em dumps gerados pelo mysqldump.
+     */
     private static function soComentario(string $sql): bool
     {
-        $limpo = preg_replace('#(^|\n)\s*(--[^\n]*|\#[^\n]*)#', '', $sql) ?? $sql;
+        if (str_contains($sql, '/*!')) {
+            return false;
+        }
+        $limpo = preg_replace('#(^|\n)[ \t]*(--[ \t][^\n]*|--[ \t]*$|\#[^\n]*)#', '$1', $sql) ?? $sql;
         $limpo = preg_replace('#/\*.*?\*/#s', '', $limpo) ?? $limpo;
         return trim($limpo) === '';
     }
@@ -899,6 +1012,21 @@ final class BackupDump
                     DATABASE()                     AS db'
         )->fetch();
 
+        // Charset e collation DO BANCO (não da conexão). Sem isso a
+        // restauração criava o banco em utf8mb4_general_ci enquanto o
+        // original é utf8mb4_unicode_ci — e a ordenação de nomes com acento
+        // passava a ser outra em qualquer tabela criada depois.
+        $bd = ['charset' => '', 'collation' => ''];
+        try {
+            $r = $pdo->query(
+                'SELECT DEFAULT_CHARACTER_SET_NAME AS charset, DEFAULT_COLLATION_NAME AS collation
+                   FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = DATABASE()'
+            )->fetch();
+            $bd['charset']   = (string) ($r['charset'] ?? '');
+            $bd['collation'] = (string) ($r['collation'] ?? '');
+        } catch (\Throwable) {
+        }
+
         $tz = (string) ($row['time_zone'] ?? 'SYSTEM');
         // 'SYSTEM' não serve no destino (o servidor de lá tem outro sistema):
         // grava o deslocamento numérico efetivo no momento do dump.
@@ -913,6 +1041,8 @@ final class BackupDump
             'time_zone'          => $tz,
             'offset'             => $offset,
             'max_allowed_packet' => (string) ($row['max_allowed_packet'] ?? '4194304'),
+            'banco_charset'      => $bd['charset'],
+            'banco_collation'    => $bd['collation'],
             'versao'             => (string) ($row['versao'] ?? ''),
             'database'           => (string) ($row['db'] ?? ''),
         ];
@@ -1057,6 +1187,14 @@ final class BackupDump
         }
 
         if ($tipo === 'bit') {
+            // No protocolo de TEXTO (o que usamos) o MariaDB devolve BIT já
+            // como número decimal — '341' — e a coluna aceita o número de
+            // volta. Em protocolo binário viriam os bytes crus; aceitar os
+            // dois casos evita gerar b'00110011…' a partir dos dígitos ASCII,
+            // que é literal grande demais e a carga recusa.
+            if (preg_match('/^\d+$/', $v) === 1) {
+                return $v;
+            }
             return "b'" . self::bits($v) . "'";
         }
 

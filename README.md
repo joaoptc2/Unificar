@@ -148,9 +148,9 @@ administração central mesmo sem ser administrador global.
 
 Também na Administração: **Aparência** (identidade visual — cores,
 logotipo, favicon, nome; ver a seção abaixo), **E-mail** (configuração do
-SMTP, teste de entrega, fila e diagnóstico), **Padronização → Layouts
-de documentos** (papel timbrado compartilhado por Documentos e
-Intranet), **Atualizações de banco** (comunicados, pesquisas e alertas são
+SMTP, teste de entrega, fila e diagnóstico), **Backup** (cópias, agendamento
+e restauração), **Padronização → Layouts de documentos** (papel timbrado
+compartilhado por Documentos e Intranet), **Atualizações de banco** (comunicados, pesquisas e alertas são
 enfileirados e enviados pelo cron).
 
 ## E-mail (Administração → E-mail)
@@ -195,6 +195,66 @@ botão "Processar agora" — não mandam mais a mesma mensagem duas vezes), e um
 falha de **configuração** (envio desligado, sem servidor, senha recusada) não
 gasta tentativa: a mensagem fica *retida* e sai sozinha assim que a
 configuração for corrigida, em vez de virar "falha" permanente.
+
+## Backup e restauração (Administração → Backup)
+
+Não existia backup no sistema. Agora existe, em PHP puro — sem depender de
+`mysqldump` nem de acesso a linha de comando, porque em hospedagem
+compartilhada nenhum dos dois é garantido.
+
+**O que entra no pacote** (um `.tar.gz` com manifesto):
+
+- estrutura e dados de todas as tabelas, mais views, gatilhos, rotinas e
+  eventos, se houver;
+- os arquivos enviados (`uploads/` e `storage/uploads/`), quando marcado —
+  inclusive os `.htaccess` ocultos que protegem as pastas;
+- um **manifesto**: data, versão, quem gerou, PHP e MariaDB, migrações
+  aplicadas e pendentes, e — por tabela — número de linhas e uma **soma de
+  verificação do conteúdo**. É com ela que se prova, depois, que a
+  restauração devolveu o mesmo dado.
+
+`config/config.php` **não** entra por padrão: ele guarda a senha do banco e a
+chave do aplicativo. Guarde-o à parte.
+
+**Onde fica.** Fora da pasta pública sempre que possível (o diretório irmão da
+instalação); se não der, em `storage/backups/` com `.htaccess` negando acesso
+e nome de arquivo com 32 caracteres aleatórios. A tela diz qual dos dois está
+em uso.
+
+**Tela** (`Administração → Backup`): gerar agora, listar, conferir a
+integridade de um pacote, baixar (com registro de quem baixou na auditoria) e
+excluir. Mais o **agendamento** — hora, o que incluir e quanto guardar
+(dias recentes, semanas, meses e um teto em MB) — que roda dentro da rotina
+periódica (`cron.php`): o backup sai na primeira execução depois da hora
+marcada, desde que o último tenha mais de 20 horas, para um cron atrasado não
+deixar o dia sem cópia.
+
+**Restaurar** é pela linha de comando, de propósito: a operação apaga e recria
+as tabelas, não tem volta, e no dia em que ela é necessária — banco perdido —
+a tela do sistema nem abre.
+
+```bash
+php scripts/restore.php --list
+php scripts/restore.php --inspect=<id>              # confere; não toca no banco
+php scripts/restore.php --restore=<id> --target=portal_teste   # ensaio
+php scripts/restore.php --restore=<id> --target=producao       # de verdade
+php scripts/backup_verify.php --b=portal_teste      # compara tabela a tabela
+```
+
+Antes de restaurar em produção o sistema gera **um backup de segurança
+automático**, e depois cuida do que o dump traz de volta e faria estrago:
+cancela os e-mails que ficaram pendentes (senão o cron reenviaria ao corpo
+clínico uma leva já entregue), limpa tokens de redefinição de senha e
+tentativas de login, apaga os caches em disco e derruba as sessões abertas
+antes da restauração. O relatório final diz quantos de cada.
+
+No **modo de teste** (restaurar em outro banco) as credenciais da cópia são
+neutralizadas por padrão — senhas, segundo fator e envio de e-mail — para uma
+base de ensaio não virar um segundo cofre com os dados de todo o hospital.
+
+**Um backup que ninguém testou é uma promessa, não uma cópia.** O roteiro
+acima — restaurar num banco separado e rodar o `backup_verify.php` — é o que
+transforma uma coisa na outra, e leva menos de um minuto.
 
 ## Identidade visual (Administração → Aparência)
 

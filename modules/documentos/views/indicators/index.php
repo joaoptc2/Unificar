@@ -293,7 +293,7 @@ $sector_label = get_sector_id() > 0 ? get_sector_name() : 'Todos os setores';
                             <?php if (!empty($ind['spark_values'])): ?>
                                 <canvas class="dash-spark" height="25"
                                         data-values='<?php echo json_encode($ind['spark_values']); ?>'
-                                        data-color="<?php echo $gs === 'met' ? '#10b981' : ($gs === 'missed' ? '#ef4444' : '#0d6efd'); ?>"></canvas>
+                                        data-estado="<?php echo $gs === 'met' ? 'success' : ($gs === 'missed' ? 'danger' : 'primary'); ?>"></canvas>
                             <?php endif; ?>
                         </td>
                         <td class="text-center text-muted small"><?php echo (int) ($ind['entries_count'] ?? 0); ?></td>
@@ -328,45 +328,88 @@ $sector_label = get_sector_id() > 0 ? get_sector_name() : 'Todos os setores';
 <script>
 (function () {
     if (!window.Chart) return;
-    // Sparklines por indicador
-    document.querySelectorAll('.dash-spark').forEach(function (c) {
-        var vals = JSON.parse(c.dataset.values || '[]');
-        if (!vals.length) return;
-        new Chart(c, { type: 'line',
-            data: { labels: vals.map(function (_, i) { return i; }), datasets: [{
-                data: vals, borderColor: c.dataset.color || '#0d6efd',
-                backgroundColor: 'transparent', tension: .3, pointRadius: 0, borderWidth: 1.5 }] },
-            options: { responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false }, tooltip: { enabled: false } },
-                scales: { x: { display: false }, y: { display: false } } }
+
+    // Cores de antes do tema, por NOME de estado. Só entram em cena se o
+    // app.js do núcleo não estiver na página — aí a tela fica como hoje.
+    var CORES_FIXAS = {
+        primary: '#0d6efd', success: '#10b981',
+        warning: '#f59e0b', danger:  '#ef4444', muted: '#cbd5e1'
+    };
+
+    var graficos = [], desenhado = false;
+
+    function desenhar() {
+        desenhado = true;
+        var T = window.PortalTheme || null;
+        if (T) { T.applyChartDefaults(); }   // rótulos, grade e fonte do tema
+
+        // Aqui toda cor tem SIGNIFICADO (na meta / tolerância / fora da meta),
+        // então vem do estado escolhido na Aparência, nunca da posição na
+        // paleta: mudou o verde de "conforme", mudou o gráfico junto.
+        var cor = function (nome) {
+            return (T && T.color(nome)) || CORES_FIXAS[nome] || CORES_FIXAS.primary;
+        };
+
+        // Redesenhar (troca de tema) exige descartar o gráfico anterior:
+        // dois Chart no mesmo <canvas> quebram o Chart.js.
+        while (graficos.length) { graficos.pop().destroy(); }
+
+        // Sparklines por indicador
+        document.querySelectorAll('.dash-spark').forEach(function (c) {
+            var vals = JSON.parse(c.dataset.values || '[]');
+            if (!vals.length) return;
+            graficos.push(new Chart(c, { type: 'line',
+                data: { labels: vals.map(function (_, i) { return i; }), datasets: [{
+                    data: vals, borderColor: cor(c.dataset.estado || 'primary'),
+                    backgroundColor: 'transparent', tension: .3, pointRadius: 0, borderWidth: 1.5 }] },
+                options: { responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                    scales: { x: { display: false }, y: { display: false } } }
+            }));
         });
+        // Situação geral (rosca)
+        var cs = document.getElementById('chartStatus');
+        if (cs) {
+            var v = JSON.parse(cs.dataset.values || '[0,0,0,0]');
+            graficos.push(new Chart(cs, { type: 'doughnut',
+                data: { labels: ['Na meta', 'Dentro da tolerância', 'Fora da meta', 'Sem dados'],
+                    datasets: [{ data: v, backgroundColor: [cor('success'), cor('warning'), cor('danger'), cor('muted')] }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            }));
+        }
+        // Situação por categoria (barras empilhadas)
+        var cc = document.getElementById('chartByCat');
+        if (cc) {
+            var mk = function (k) { return JSON.parse(cc.dataset[k] || '[]'); };
+            graficos.push(new Chart(cc, { type: 'bar',
+                data: { labels: JSON.parse(cc.dataset.labels || '[]'), datasets: [
+                    { label: 'Na meta', data: mk('met'), backgroundColor: cor('success') },
+                    { label: 'Tolerância', data: mk('tolerance'), backgroundColor: cor('warning') },
+                    { label: 'Fora da meta', data: mk('missed'), backgroundColor: cor('danger') },
+                    { label: 'Sem dados', data: mk('nodata'), backgroundColor: cor('muted') }
+                ] },
+                options: { responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } } }
+            }));
+        }
+    }
+
+    // O app.js do núcleo entra DEPOIS do conteúdo da página; esperar o DOM
+    // pronto garante que window.PortalTheme já exista ao ler as cores.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', desenhar);
+    } else {
+        desenhar();
+    }
+    // Botão de tema claro/escuro: redesenhar é o que faz séries e rótulos
+    // acompanharem a troca sem recarregar a tela.
+    // setTimeout: o app.js do núcleo só limpa o cache de cores no próprio
+    // listener deste evento, e o desta página foi registrado antes dele —
+    // redesenhar na hora releria a cor ANTIGA.
+    window.addEventListener('portal:tema', function () {
+        if (desenhado) { setTimeout(desenhar, 0); }
     });
-    // Situação geral (rosca)
-    var cs = document.getElementById('chartStatus');
-    if (cs) {
-        var v = JSON.parse(cs.dataset.values || '[0,0,0,0]');
-        new Chart(cs, { type: 'doughnut',
-            data: { labels: ['Na meta', 'Dentro da tolerância', 'Fora da meta', 'Sem dados'],
-                datasets: [{ data: v, backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#cbd5e1'] }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
-        });
-    }
-    // Situação por categoria (barras empilhadas)
-    var cc = document.getElementById('chartByCat');
-    if (cc) {
-        var mk = function (k) { return JSON.parse(cc.dataset[k] || '[]'); };
-        new Chart(cc, { type: 'bar',
-            data: { labels: JSON.parse(cc.dataset.labels || '[]'), datasets: [
-                { label: 'Na meta', data: mk('met'), backgroundColor: '#10b981' },
-                { label: 'Tolerância', data: mk('tolerance'), backgroundColor: '#f59e0b' },
-                { label: 'Fora da meta', data: mk('missed'), backgroundColor: '#ef4444' },
-                { label: 'Sem dados', data: mk('nodata'), backgroundColor: '#cbd5e1' }
-            ] },
-            options: { responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom' } },
-                scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } } }
-        });
-    }
 })();
 </script>
 <?php endif; ?>

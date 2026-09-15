@@ -183,7 +183,14 @@ final class MailConfig
 
     public static function passwordIsSet(): bool
     {
-        return self::password() !== '';
+        return self::password() !== '' || self::passwordUnreadable();
+    }
+
+    /** A senha guardada não pode ser lida neste servidor (falta OpenSSL)? */
+    public static function passwordUnreadable(): bool
+    {
+        $stored = self::isLocked() ? null : self::stored('pass');
+        return $stored !== null && MailSecret::unreadable($stored);
     }
 
     public static function password(): string

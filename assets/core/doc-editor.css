@@ -1,16 +1,56 @@
-/* Editor de documentos compartilhado — folha emulando o papel timbrado */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Editor de documentos compartilhado — folha emulando o papel timbrado.
+
+   DUAS CAMADAS, com regras diferentes de cor:
+
+   1. A MOLDURA (a bandeja em volta, a barra de ferramentas, a borda) é tela:
+      acompanha o tema da plataforma e usa as variáveis --portal-*.
+
+   2. A FOLHA (.ql-container / .ql-editor) é a pré-visualização do que sai na
+      impressora. Ela continua BRANCA com texto PRETO também no tema escuro —
+      por isso o #fff e o #111 abaixo são literais de propósito, e não devem
+      virar --portal-surface/--portal-text. Escurecer a folha mostraria a
+      quem escreve um documento que não existe no papel, e o hospital
+      imprime praticamente tudo o que é escrito aqui.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Moldura: bandeja em volta da folha ─────────────────────────────────── */
+/* A bandeja é sempre um passo afastada da superfície onde está: mais escura
+   no tema claro, mais clara no escuro. Por isso ela é misturada com a cor do
+   texto em vez de usar --portal-surface-2, que no tema claro ficaria mais
+   clara que o cartão e a folha branca sumiria dentro dela. A primeira linha é
+   a reserva para navegador sem color-mix(). */
 .doc-editor-wrap {
     --sheet-w: 210mm; --sheet-ml: 15mm; --sheet-mr: 15mm;
-    background: #e9edf1; border: 1px solid var(--portal-border, #dee2e6); border-radius: .5rem;
+    background: var(--portal-surface-2, #e9edf1);
+    background: color-mix(in srgb, var(--portal-text, #212529) 8%, var(--portal-surface, #fff));
+    border: 1px solid var(--portal-border, #dee2e6); border-radius: .5rem;
     padding: 1rem; overflow-x: auto;
 }
+
+/* ── Moldura: barra de ferramentas ──────────────────────────────────────── */
 .doc-editor-wrap .doc-editor-toolbar,
 .doc-editor-wrap .ql-toolbar {
-    background: var(--portal-surface, #fff); border-radius: .4rem .4rem 0 0; position: sticky; top: 56px; z-index: 5;
+    background: var(--portal-surface, #fff); color: var(--portal-text, #212529);
+    border-color: var(--portal-border, #dee2e6);
+    border-radius: .4rem .4rem 0 0; position: sticky; top: var(--portal-topbar-h, 56px); z-index: 5;
     max-width: min(var(--sheet-w), 100%); margin: 0 auto;
 }
+/* Os ícones do Quill são traçados em cinza-escuro fixo: sobre a barra do tema
+   escuro eles sumiriam, então seguem a cor do texto. O estado "ativo" do
+   próprio Quill é mais específico e continua se destacando. */
+.doc-editor-wrap .ql-toolbar .ql-stroke { stroke: var(--portal-text, #444); }
+.doc-editor-wrap .ql-toolbar .ql-fill { fill: var(--portal-text, #444); }
+.doc-editor-wrap .ql-toolbar button,
+.doc-editor-wrap .ql-toolbar .ql-picker { color: var(--portal-text, #444); }
+.doc-editor-wrap .ql-toolbar .ql-picker-options {
+    background: var(--portal-surface, #fff); color: var(--portal-text, #212529);
+    border-color: var(--portal-border, #dee2e6);
+}
+
+/* ── A FOLHA: branca e com texto preto nos dois temas (é o que se imprime) ── */
 .doc-editor-wrap .ql-container {
-    background: var(--portal-surface, #fff); max-width: min(var(--sheet-w), 100%); margin: 0 auto; min-height: 60vh;
+    background: #fff; color: #111; max-width: min(var(--sheet-w), 100%); margin: 0 auto; min-height: 60vh;
     font-size: 12pt; box-shadow: 0 2px 10px rgba(0, 0, 0, .12); border-radius: 0 0 .4rem .4rem;
 }
 .doc-editor-wrap .ql-editor {
@@ -18,6 +58,9 @@
     padding: 12mm var(--sheet-mr) 12mm var(--sheet-ml);
 }
 .doc-editor-wrap .ql-editor img { max-width: 100%; }
+/* Ligações dentro da folha: azul de papel, não o azul do tema — no tema
+   escuro a cor da marca é clareada para fundo escuro e some sobre o branco. */
+.doc-editor-wrap .ql-editor a { color: #0b57d0; }
 .doc-editor-toolbar select.ql-font { width: 140px; }
 .doc-editor-toolbar select.ql-size { width: 70px; }
 .ql-snow .ql-picker.ql-font { width: 140px; }

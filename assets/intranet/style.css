@@ -1,8 +1,22 @@
 /* MÓDULO INTRANET — estilos das telas internas */
 
-/* Editor com cara de folha: largura acompanha o layout escolhido */
+/* Editor com cara de folha: largura acompanha o layout escolhido.
+   Segue a MESMA divisão de cores do editor compartilhado do núcleo
+   (assets/core/doc-editor.css), para as duas folhas nunca divergirem:
+
+   1. A MOLDURA (bandeja em volta, barra de ferramentas, borda) é tela e
+      acompanha o tema da plataforma pelas variáveis --portal-*;
+   2. A FOLHA (.ql-container / .ql-editor) é a pré-visualização do que sai na
+      impressora e continua branca com texto preto também no tema escuro.
+
+   Observação de manutenção: hoje as telas do módulo usam .doc-editor-wrap
+   (núcleo); estas regras ficam como reserva do marcador antigo. */
 .intra-editor-wrap {
-    background: #e9edf1;
+    /* Primeira linha: reserva para navegador sem color-mix(). A segunda deixa a
+       bandeja sempre um passo afastada da superfície — mais escura no tema
+       claro, mais clara no escuro — para a folha branca não sumir dentro dela. */
+    background: var(--portal-surface-2, #e9edf1);
+    background: color-mix(in srgb, var(--portal-text, #212529) 8%, var(--portal-surface, #fff));
     border: 1px solid var(--portal-border, #dee2e6);
     border-radius: .5rem;
     padding: 1rem;
@@ -11,20 +25,40 @@
 
 .intra-editor-wrap .ql-toolbar {
     background: var(--portal-surface, #fff);
+    color: var(--portal-text, #212529);
+    border-color: var(--portal-border, #dee2e6);
     border-radius: .4rem .4rem 0 0;
     position: sticky;
-    top: 56px; /* abaixo da topbar */
+    top: var(--portal-topbar-h, 56px); /* abaixo da topbar, cuja altura é configurável */
     z-index: 5;
     max-width: min(var(--sheet-w, 210mm), 100%);
     margin: 0 auto;
 }
 
-.intra-editor-wrap .ql-container {
+/* Os ícones do Quill são traçados em cinza-escuro fixo: sobre a barra do tema
+   escuro eles sumiriam, então seguem a cor do texto. */
+.intra-editor-wrap .ql-toolbar .ql-stroke { stroke: var(--portal-text, #444); }
+.intra-editor-wrap .ql-toolbar .ql-fill { fill: var(--portal-text, #444); }
+.intra-editor-wrap .ql-toolbar button,
+.intra-editor-wrap .ql-toolbar .ql-picker { color: var(--portal-text, #444); }
+.intra-editor-wrap .ql-toolbar .ql-picker-options {
     background: var(--portal-surface, #fff);
+    color: var(--portal-text, #212529);
+    border-color: var(--portal-border, #dee2e6);
+}
+
+/* A FOLHA: branca e com texto preto nos dois temas. O #fff e o #111 são
+   literais de propósito (ver o cabeçalho de assets/core/doc-editor.css):
+   escurecer a folha mostraria a quem escreve um documento que não existe no
+   papel, e o hospital imprime praticamente tudo o que sai daqui. */
+.intra-editor-wrap .ql-container {
+    background: #fff;
+    color: #111;
     max-width: min(var(--sheet-w, 210mm), 100%);
     margin: 0 auto;
     min-height: 60vh;
     font-size: 12pt;
+    /* Sombra da folha sobre a bandeja: parte do "papel", não do tema. */
     box-shadow: 0 2px 10px rgba(0, 0, 0, .12);
     border-radius: 0 0 .4rem .4rem;
 }

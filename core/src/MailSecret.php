@@ -51,6 +51,16 @@ final class MailSecret
         return 'v1:' . base64_encode($nonce . $tag . $cipher);
     }
 
+    /**
+     * A senha está guardada num formato que ESTE servidor não consegue ler?
+     * Acontece ao mudar de hospedagem: a tela usa isto para pedir que ela
+     * seja digitada de novo, em vez de falhar em silêncio na hora do envio.
+     */
+    public static function unreadable(string $stored): bool
+    {
+        return str_starts_with($stored, 'v1:') && !self::hasStrongCrypto();
+    }
+
     public static function reveal(string $stored): string
     {
         if ($stored === '') {
@@ -61,6 +71,12 @@ final class MailSecret
         }
         if (!str_starts_with($stored, 'v1:')) {
             return $stored; // gravado antes deste formato: devolve como está
+        }
+        // Sem OpenSSL neste servidor (mudança de hospedagem, por exemplo) a
+        // senha cifrada não tem como ser lida — mas isso não pode derrubar a
+        // tela: devolve vazio e quem chama avisa para digitá-la de novo.
+        if (!self::hasStrongCrypto()) {
+            return '';
         }
         $raw = base64_decode(substr($stored, 3), true);
         if ($raw === false || strlen($raw) < 29) {

@@ -48,6 +48,17 @@ if ($only === '' || $only === 'core') {
         error_log('cron mail_queue: ' . $e->getMessage());
     }
 
+    // Backup automático: sai na primeira execução depois da hora marcada,
+    // desde que o último tenha mais de 20 h — um cron atrasado não pode
+    // deixar o dia sem cópia.
+    try {
+        $bk = Core\Backup::runScheduled();
+        echo '[core] backup: ' . $bk['motivo'] . "\n";
+    } catch (Throwable $e) {
+        echo "[core] ERRO no backup automático: {$e->getMessage()}\n";
+        error_log('cron backup: ' . $e->getMessage());
+    }
+
     // Marcador de execução: é o que permite à Administração dizer "o cron não
     // está agendado" em vez de deixar tudo pendente em silêncio.
     try {

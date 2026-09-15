@@ -183,23 +183,58 @@ ob_start();
         }));
         return;
     }
-    new Chart(ctx, {
+    var labels = <?php echo $chartLabels; ?>;
+    var osVals = <?php echo $chartOsVals; ?>;
+    var qrVals = <?php echo $chartQrVals; ?>;
+
+    // Paleta de antes do tema: usada só quando o app.js do núcleo não está
+    // na página (as telas públicas do módulo não o carregam).
+    var PALETA_FIXA = ['#0d6efd', '#198754'];
+
+    /* Mesma cor da série, só que translúcida: a barra é preenchida com a cor
+       do tema em vez de um azul/verde fixo. */
+    function comAlfa(cor, a) {
+        var m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(cor).trim());
+        if (!m) { return cor; }            // já é rgba()/nome: usa como está
+        var h = m[1];
+        if (h.length === 3) { h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2]; }
+        return 'rgba(' + parseInt(h.slice(0,2),16) + ',' + parseInt(h.slice(2,4),16)
+             + ',' + parseInt(h.slice(4,6),16) + ',' + a + ')';
+    }
+
+    var grafico = null;
+
+    function desenhar() {
+        var T = window.PortalTheme || null;
+        if (T) { T.applyChartDefaults(); }   // rótulos, grade e fonte do tema
+
+        // As duas séries não têm significado de estado (são só contagens):
+        // seguem a ordem da paleta categórica, OS primeiro, QR depois.
+        var paleta = T ? T.palette() : PALETA_FIXA;
+        var corOs  = paleta[0] || PALETA_FIXA[0];
+        var corQr  = paleta[1] || PALETA_FIXA[1];
+
+        // Redesenhar (troca de tema) exige descartar o gráfico anterior:
+        // dois Chart no mesmo <canvas> quebram o Chart.js.
+        if (grafico) { grafico.destroy(); }
+
+        grafico = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: <?php echo $chartLabels; ?>,
+            labels: labels,
             datasets: [
                 {
                     label: 'Ordens de Serviço',
-                    data: <?php echo $chartOsVals; ?>,
-                    backgroundColor: 'rgba(13,110,253,0.7)',
-                    borderColor: 'rgba(13,110,253,1)',
+                    data: osVals,
+                    backgroundColor: comAlfa(corOs, 0.7),
+                    borderColor: corOs,
                     borderWidth: 1
                 },
                 {
                     label: 'Locais QR',
-                    data: <?php echo $chartQrVals; ?>,
-                    backgroundColor: 'rgba(25,135,84,0.7)',
-                    borderColor: 'rgba(25,135,84,1)',
+                    data: qrVals,
+                    backgroundColor: comAlfa(corQr, 0.7),
+                    borderColor: corQr,
                     borderWidth: 1
                 }
             ]
@@ -218,6 +253,23 @@ ob_start();
                 }
             }
         }
+        });
+    }
+
+    // O app.js do núcleo entra DEPOIS do conteúdo da página; esperar o DOM
+    // pronto garante que window.PortalTheme já exista ao ler as cores.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', desenhar);
+    } else {
+        desenhar();
+    }
+    // Botão de tema claro/escuro: redesenhar é o que faz séries e rótulos
+    // acompanharem a troca sem recarregar a tela.
+    // setTimeout: o app.js do núcleo só limpa o cache de cores no próprio
+    // listener deste evento, e o desta página foi registrado antes dele —
+    // redesenhar na hora releria a cor ANTIGA.
+    window.addEventListener('portal:tema', function () {
+        if (grafico) { setTimeout(desenhar, 0); }
     });
 })();
 </script>

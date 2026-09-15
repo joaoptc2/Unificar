@@ -38,9 +38,17 @@ switch ($action) {
     case 'brand_css':
         header('Content-Type: text/css; charset=utf-8');
         header('X-Content-Type-Options: nosniff');
-        header('Cache-Control: public, max-age=604800');
+        $brandCss = Core\Branding::customCss();
+        // O cache longo só vale quando o conteúdo servido é mesmo o que a
+        // versão pedida promete. Sem isso, uma piscada do banco (que devolve
+        // CSS vazio) ficaria guardada por sete dias sob a mesma URL, e o
+        // administrador não teria como consertar pela tela.
+        $versaoPedida = (string) ($_GET['v'] ?? '');
+        header($versaoPedida !== '' && $versaoPedida === Core\Branding::customCssVersion()
+            ? 'Cache-Control: public, max-age=604800'
+            : 'Cache-Control: no-store');
         echo "/* Administração > Aparência — CSS do administrador */\n";
-        echo Core\Branding::customCss();
+        echo $brandCss;
         exit;
 
     /** Manifesto do aplicativo (PWA): nome, ícone e cor da marca no celular. */

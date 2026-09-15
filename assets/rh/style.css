@@ -13,7 +13,7 @@
 
 .stat-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    box-shadow: var(--portal-shadow-hover, 0 4px 15px rgba(0,0,0,0.1));
 }
 
 .stat-card .stat-icon {
@@ -34,7 +34,7 @@
 
 .stat-card .stat-label {
     font-size: 0.78rem;
-    color: #64748b;
+    color: var(--portal-muted, #64748b);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -44,7 +44,7 @@
     font-size: 0.78rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #64748b;
+    color: var(--portal-muted, #64748b);
     font-weight: 600;
     border-bottom-width: 2px;
     white-space: nowrap;
@@ -55,13 +55,37 @@
     font-size: 0.85rem;
 }
 
-/* ---- Status badges ---- */
-.badge-ativo { background-color: #10b981; }
-.badge-afastado { background-color: #f59e0b; }
-.badge-desligado { background-color: #ef4444; }
-.badge-valido { background-color: #10b981; }
-.badge-proximo { background-color: #f59e0b; }
-.badge-vencido { background-color: #ef4444; }
+/* O <thead class="table-light"> das listas do RH carrega um cinza fixo do
+   Bootstrap (#f8f9fa): no tema escuro ele virava uma faixa branca atravessando
+   o cartão escuro, com o texto do cabeçalho quase ilegível. Aqui essas três
+   cores passam a vir da identidade visual. */
+.portal-body .table > thead.table-light > tr > * {
+    --bs-table-bg: var(--portal-surface-2, #f8f9fa);
+    --bs-table-color: var(--portal-muted, #64748b);
+    --bs-table-border-color: var(--portal-border, #dee2e6);
+}
+
+/* ---- Status badges ----
+   Situação do funcionário e validade de documentos são ESTADOS, então seguem
+   as cores de estado da identidade visual. A cor do texto vem do
+   --portal-on-<estado>: sobre um amarelo claro, o branco fixo era ilegível. */
+.badge-ativo,
+.badge-valido {
+    background-color: var(--portal-success, #198754);
+    color: var(--portal-on-success, #fff);
+}
+
+.badge-afastado,
+.badge-proximo {
+    background-color: var(--portal-warning, #ffc107);
+    color: var(--portal-on-warning, #1f2937);
+}
+
+.badge-desligado,
+.badge-vencido {
+    background-color: var(--portal-danger, #dc3545);
+    color: var(--portal-on-danger, #fff);
+}
 
 /* ---- Page Header ---- */
 .page-header {
@@ -112,9 +136,11 @@
     color: var(--portal-on-primary, #fff) !important;
 }
 
-/* ---- Filter Panel ---- */
+/* ---- Filter Panel ----
+   O painel de filtros é uma SUPERFÍCIE sobre a página, e não o fundo dela:
+   com --bs-body-bg ele sumia dentro do corpo da tela no tema escuro. */
 .filter-panel {
-    background: var(--bs-body-bg, #fff);
+    background: var(--portal-surface, #fff);
     border-radius: 0.5rem;
     padding: 1rem;
     margin-bottom: 1rem;
@@ -131,7 +157,7 @@
 
 .calendar-day.today {
     background-color: var(--portal-primary-soft, #eff6ff);
-    border-color: #93c5fd;
+    border-color: var(--portal-primary, #93c5fd);
 }
 
 .calendar-day .day-number {
@@ -156,11 +182,13 @@
     background-color: var(--portal-primary-light, #bfdbfe);
 }
 
-/* ---- Kanban ---- */
+/* ---- Kanban ----
+   A coluna é o "trilho" atrás dos cartões: superfície secundária, um degrau
+   entre o fundo da página e o cartão, nos dois temas. */
 .kanban-column {
     min-width: 280px;
     max-width: 320px;
-    background: var(--portal-body-bg, #f8fafc);
+    background: var(--portal-surface-2, #f8fafc);
     border-radius: 0.5rem;
     border: 1px solid var(--portal-border, #e2e8f0);
 }
@@ -185,7 +213,7 @@
 }
 
 .kanban-card:hover {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: var(--portal-shadow-hover, 0 2px 8px rgba(0,0,0,0.08));
 }
 
 /* ---- Responsive ---- */
@@ -226,5 +254,5 @@
 
 .required::after {
     content: ' *';
-    color: #ef4444;
+    color: var(--portal-danger, #dc3545);
 }

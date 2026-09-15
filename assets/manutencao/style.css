@@ -1,29 +1,44 @@
 /* ==========================================================================
    ManuHosp — Design System "RH Hospital"
    Bootstrap 5.3 + Bootstrap Icons.  Estilos customizados deste projeto.
+
+   As cores de superfície, texto, borda e estado vêm das variáveis --portal-*
+   da identidade visual do núcleo (Administração → Aparência), sempre com
+   valor de reserva: as páginas públicas deste módulo (rastrear OS, leitura de
+   QR e abertura anônima) são servidas sem o bloco de variáveis do núcleo e
+   precisam continuar com a aparência original.
    ========================================================================== */
 
 :root {
     --sidebar-width: 250px;
-    --navbar-height: 56px;
+    /* Acompanha a "Altura do topo" escolhida na Aparência. */
+    --navbar-height: var(--portal-topbar-h, 56px);
     --primary-color: var(--portal-primary, #0d6efd);
-    --sidebar-bg: #1e293b;
-    --sidebar-text: #94a3b8;
-    --sidebar-active: #ffffff;
-    --sidebar-hover-bg: #334155;
+    --sidebar-bg: var(--portal-sidebar-bg, #1e293b);
+    --sidebar-text: var(--portal-sidebar-text, #94a3b8);
+    --sidebar-active: var(--portal-sidebar-active, #ffffff);
+    --sidebar-hover-bg: var(--portal-sidebar-hover, #334155);
 }
 
+/* Fundo/texto/fonte base.
+   ATENÇÃO: este seletor também alcança o <body> do núcleo, então só pode
+   conter o que segue o tema. O `font-size` fixo saiu daqui: o tamanho da
+   fonte base é configurável na Aparência (--portal-font-size no <html>) e,
+   fixado aqui, fazia o módulo inteiro renderizar menor que o resto do
+   sistema. */
 body {
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    background-color: #f1f5f9;
-    font-size: 0.9rem;
-    color: #1e293b;
+    font-family: var(--portal-font, 'Segoe UI', system-ui, -apple-system, sans-serif);
+    background-color: var(--portal-body-bg, #f1f5f9);
+    color: var(--portal-text, #1e293b);
 }
 
 /* ============================================================
    NAVBAR
    ============================================================ */
-.navbar.fixed-top {
+/* Só a barra do próprio módulo (shell legado das páginas públicas).
+   Sem o `.man-shell`, esta regra alcançava a topbar DO NÚCLEO e anulava a
+   "Altura do topo" escolhida na Aparência enquanto o módulo estava aberto. */
+.man-shell .navbar.fixed-top {
     height: var(--navbar-height);
 }
 .navbar-brand {
@@ -65,7 +80,7 @@ body {
     transition: background .15s ease, color .15s ease, border-color .15s ease;
 }
 .sidebar-nav .nav-link:hover {
-    color: #fff;
+    color: var(--portal-sidebar-active, #fff);
     background: var(--sidebar-hover-bg);
 }
 .sidebar-nav .nav-link.active {
@@ -78,7 +93,7 @@ body {
     padding: 0.25rem 1rem;
 }
 .sidebar-nav .nav-header small {
-    color: #475569 !important;
+    color: var(--portal-sidebar-heading, #475569) !important;
     letter-spacing: 0.5px;
     font-size: 0.7rem;
 }
@@ -87,7 +102,7 @@ body {
     width: 4px;
 }
 .sidebar::-webkit-scrollbar-thumb {
-    background: #475569;
+    background: var(--portal-muted, #475569);
     border-radius: 2px;
 }
 .sidebar::-webkit-scrollbar-track {
@@ -127,7 +142,7 @@ body {
 .page-header h1 {
     font-size: 1.4rem;
     font-weight: 700;
-    color: #1e293b;
+    color: var(--portal-text, #1e293b);
     margin: 0;
 }
 
@@ -142,7 +157,7 @@ body {
    CARDS
    ============================================================ */
 .card {
-    border-radius: 0.5rem;
+    border-radius: var(--portal-radius, 0.5rem);
 }
 
 .stat-card {
@@ -152,7 +167,7 @@ body {
 }
 .stat-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--portal-shadow-hover, 0 4px 15px rgba(0, 0, 0, 0.1));
 }
 .stat-card .stat-icon {
     width: 48px;
@@ -170,7 +185,7 @@ body {
 }
 .stat-card .stat-label {
     font-size: 0.78rem;
-    color: #64748b;
+    color: var(--portal-muted, #64748b);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -186,11 +201,11 @@ body {
     font-size: 0.78rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #64748b;
+    color: var(--portal-muted, #64748b);
     font-weight: 600;
     border-bottom-width: 2px;
     white-space: nowrap;
-    background: var(--portal-body-bg, #f8fafc);
+    background: var(--portal-surface-2, #f8fafc);
 }
 .table td {
     vertical-align: middle;
@@ -206,40 +221,46 @@ body {
 }
 
 /* ============================================================
-   BADGES DE STATUS
+   SELOS DE SITUAÇÃO
+   Cores de ESTADO: seguem as variáveis escolhidas na Aparência, e o texto
+   usa o par --portal-on-<estado> (num âmbar claro, branco fica ilegível).
    ============================================================ */
 .badge-ativo,
 .badge-valido,
 .badge-conforme,
-.badge-ok          { background-color: #10b981 !important; color: #fff; }
+.badge-ok          { background-color: var(--portal-success, #10b981) !important; color: var(--portal-on-success, #fff); }
 .badge-afastado,
 .badge-proximo,
 .badge-pendente,
-.badge-aviso       { background-color: #f59e0b !important; color: #fff; }
+.badge-aviso       { background-color: var(--portal-warning, #f59e0b) !important; color: var(--portal-on-warning, #fff); }
 .badge-desligado,
 .badge-vencido,
-.badge-critico     { background-color: #ef4444 !important; color: #fff; }
+.badge-critico     { background-color: var(--portal-danger, #ef4444) !important; color: var(--portal-on-danger, #fff); }
 
 /* Status específicos de OS */
 .badge-open         { background-color: var(--portal-primary, #3b82f6) !important; color: var(--portal-on-primary, #fff); }
-.badge-in_progress  { background-color: #f59e0b !important; color: #fff; }
+.badge-in_progress  { background-color: var(--portal-warning, #f59e0b) !important; color: var(--portal-on-warning, #fff); }
+/* "Aguardando peça" tem laranja próprio de propósito: se virasse --portal-warning
+   ficaria idêntico a "em andamento" e os dois estados deixariam de se distinguir. */
 .badge-waiting_part { background-color: #f97316 !important; color: #fff; }
-.badge-completed    { background-color: #10b981 !important; color: #fff; }
+.badge-completed    { background-color: var(--portal-success, #10b981) !important; color: var(--portal-on-success, #fff); }
+/* Cinza neutro (sem situação): não há variável de estado para "neutro" e
+   --portal-muted clareia no tema escuro, o que apagaria o texto branco. */
 .badge-cancelled    { background-color: #64748b !important; color: #fff; }
 
 /* Prioridade / Criticidade */
-.badge-low      { background-color: #10b981 !important; color: #fff; }
+.badge-low      { background-color: var(--portal-success, #10b981) !important; color: var(--portal-on-success, #fff); }
 .badge-medium   { background-color: var(--portal-primary, #3b82f6) !important; color: var(--portal-on-primary, #fff); }
-.badge-high     { background-color: #f59e0b !important; color: #fff; }
-.badge-critical { background-color: #ef4444 !important; color: #fff; }
+.badge-high     { background-color: var(--portal-warning, #f59e0b) !important; color: var(--portal-on-warning, #fff); }
+.badge-critical { background-color: var(--portal-danger, #ef4444) !important; color: var(--portal-on-danger, #fff); }
 
 /* Status de equipamento / peça */
-.badge-active       { background-color: #10b981 !important; color: #fff; }
+.badge-active       { background-color: var(--portal-success, #10b981) !important; color: var(--portal-on-success, #fff); }
 .badge-inactive     { background-color: #64748b !important; color: #fff; }
-.badge-maintenance  { background-color: #f59e0b !important; color: #fff; }
-.badge-broken       { background-color: #ef4444 !important; color: #fff; }
-.badge-available    { background-color: #10b981 !important; color: #fff; }
-.badge-busy         { background-color: #f59e0b !important; color: #fff; }
+.badge-maintenance  { background-color: var(--portal-warning, #f59e0b) !important; color: var(--portal-on-warning, #fff); }
+.badge-broken       { background-color: var(--portal-danger, #ef4444) !important; color: var(--portal-on-danger, #fff); }
+.badge-available    { background-color: var(--portal-success, #10b981) !important; color: var(--portal-on-success, #fff); }
+.badge-busy         { background-color: var(--portal-warning, #f59e0b) !important; color: var(--portal-on-warning, #fff); }
 .badge-off          { background-color: #64748b !important; color: #fff; }
 
 /* ============================================================
@@ -271,7 +292,7 @@ body {
 .form-label.required::after,
 .required::after {
     content: ' *';
-    color: #ef4444;
+    color: var(--portal-danger, #ef4444);
 }
 .filter-panel {
     background: var(--portal-surface, #fff);
@@ -296,6 +317,8 @@ body {
 }
 .login-icon i { color: var(--portal-on-primary, #fff) !important; font-size: 2rem; }
 
+/* Degradê decorativo roxo, identidade própria desta faixa (a versão que
+   segue a marca é .hero-brand-gradient, logo abaixo). */
 .hero-gradient {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: #fff;
@@ -333,7 +356,7 @@ body {
     transition: box-shadow 0.2s;
 }
 .kanban-card:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--portal-shadow-hover, 0 2px 8px rgba(0, 0, 0, 0.08));
 }
 
 /* ============================================================
@@ -347,7 +370,7 @@ body {
 }
 .calendar-day.today {
     background: var(--portal-primary-soft, #eff6ff);
-    border-color: #93c5fd;
+    border-color: var(--portal-primary-light, #93c5fd);
 }
 .calendar-day .day-number {
     font-weight: 600;
@@ -372,9 +395,9 @@ body {
 /* ============================================================
    UTILIDADES EXTRAS
    ============================================================ */
-.text-slate-500 { color: #64748b !important; }
-.text-slate-700 { color: #334155 !important; }
-.text-slate-900 { color: #0f172a !important; }
+.text-slate-500 { color: var(--portal-muted, #64748b) !important; }
+.text-slate-700 { color: var(--portal-text, #334155) !important; }
+.text-slate-900 { color: var(--portal-text, #0f172a) !important; }
 
 a.text-decoration-none-hover:hover { text-decoration: none !important; }
 
@@ -388,7 +411,7 @@ a.text-decoration-none-hover:hover { text-decoration: none !important; }
 .man-timeline { position: relative; padding-left: 2.25rem; }
 .man-timeline::before {
     content: ""; position: absolute; left: 0.95rem; top: 0.5rem; bottom: 0.5rem;
-    width: 2px; background: #e2e8f0;
+    width: 2px; background: var(--portal-border, #e2e8f0);
 }
 .man-timeline-item { position: relative; padding: 0.35rem 0 0.75rem; }
 .man-timeline-item:last-child { padding-bottom: 0; }
@@ -396,7 +419,12 @@ a.text-decoration-none-hover:hover { text-decoration: none !important; }
     position: absolute; left: -2.25rem; top: 0.35rem;
     width: 2rem; height: 2rem; border-radius: 50%;
     display: inline-flex; align-items: center; justify-content: center;
-    color: #fff; font-size: 0.85rem; box-shadow: 0 0 0 3px #fff;
+    color: var(--portal-on-primary, #fff); font-size: 0.85rem;
+    box-shadow: 0 0 0 3px var(--portal-surface, #fff);
 }
-.man-timeline-dot.bg-warning { color: #1f2937; }
-.man-timeline-body { background: var(--portal-body-bg, #f8fafc); border: 1px solid var(--portal-border, #e2e8f0); border-radius: 0.5rem; padding: 0.5rem 0.75rem; }
+/* Ícone legível sobre cada cor de estado do ponto da linha do tempo. */
+.man-timeline-dot.bg-success { color: var(--portal-on-success, #fff); }
+.man-timeline-dot.bg-danger  { color: var(--portal-on-danger, #fff); }
+.man-timeline-dot.bg-info    { color: var(--portal-on-info, #1f2937); }
+.man-timeline-dot.bg-warning { color: var(--portal-on-warning, #1f2937); }
+.man-timeline-body { background: var(--portal-surface-2, #f8fafc); border: 1px solid var(--portal-border, #e2e8f0); border-radius: 0.5rem; padding: 0.5rem 0.75rem; }

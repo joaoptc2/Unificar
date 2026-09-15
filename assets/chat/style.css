@@ -8,16 +8,24 @@
 :root {
     --chat-primary: var(--portal-primary, #0d5c8f);
     --chat-primary-dark: var(--portal-primary-dark, #0a4a74);
-    --chat-primary-soft: #e8f1f8;
-    --chat-bg: #ffffff;
-    --chat-bg-alt: #f4f6f9;
-    --chat-border: #e3e7ec;
-    --chat-text: #1f2937;
-    --chat-text-secondary: #5b6573;
-    --chat-text-muted: #8a94a3;
-    --chat-success: #198754;
-    --chat-warning: #f59e0b;
-    --chat-danger: #dc3545;
+    --chat-primary-soft: var(--portal-primary-soft, #e8f1f8);
+    /* Superfície, fundo alternativo, borda e texto vêm do núcleo: é o que
+       faz o chat acompanhar o tema escuro em vez de virar uma ilha branca. */
+    --chat-bg: var(--portal-surface, #ffffff);
+    --chat-bg-alt: var(--portal-surface-2, #f4f6f9);
+    --chat-border: var(--portal-border, #e3e7ec);
+    --chat-text: var(--portal-text, #1f2937);
+    /* Texto secundário: um meio-termo entre o texto e o tom apagado. A
+       primeira linha é a reserva para navegadores sem color-mix. */
+    --chat-text-secondary: var(--portal-muted, #5b6573);
+    --chat-text-secondary: color-mix(in srgb, var(--portal-text, #1f2937) 70%, var(--portal-muted, #6c757d));
+    --chat-text-muted: var(--portal-muted, #8a94a3);
+    /* Item sob o mouse: um véu da cor da marca, que aparece tanto sobre a
+       superfície clara quanto sobre a escura (um cinza fixo sumiria numa delas). */
+    --chat-hover: rgba(var(--portal-primary-rgb, 13, 92, 143), .08);
+    --chat-success: var(--portal-success, #198754);
+    --chat-warning: var(--portal-warning, #f59e0b);
+    --chat-danger: var(--portal-danger, #dc3545);
     --chat-radius: 8px;
     --chat-sidebar-w: 270px;
     --chat-panel-w: 360px;
@@ -33,6 +41,15 @@ body.chat-app .portal-main > .alert {
     top: .75rem; left: 1rem; right: 1rem;
     margin: 0; box-shadow: 0 6px 20px rgba(0, 0, 0, .12);
 }
+
+/* Texto de exemplo dos campos. O Bootstrap 5.3 o calcula a partir de
+   --bs-body-color-rgb, que o núcleo não redefine junto com --bs-body-color:
+   no tema escuro ele fica quase preto sobre o campo escuro (1:1). Aqui vale
+   só nas telas do módulo, porque esta folha só é carregada nelas. */
+.form-control::placeholder, .form-select::placeholder { color: var(--chat-text-muted); opacity: 1; }
+/* Mesma origem: .form-text (a explicação abaixo dos campos) também sai de
+   --bs-secondary-color e some no escuro. */
+.form-text { color: var(--chat-text-muted); }
 
 .chat-wrapper {
     display: flex;
@@ -68,7 +85,7 @@ body.chat-app .portal-main > .alert {
 .user-avatar-sm::after {
     content: ''; position: absolute; bottom: -1px; right: -1px;
     width: 11px; height: 11px; border-radius: 50%;
-    border: 2px solid #fff; background: #9aa3b0;
+    border: 2px solid var(--portal-surface, #fff); background: var(--portal-muted, #9aa3b0);
 }
 .user-avatar-sm.online::after { background: var(--chat-success); }
 .user-avatar-sm.away::after   { background: var(--chat-warning); }
@@ -112,20 +129,20 @@ body.chat-app .portal-main > .alert {
     transition: background .12s;
 }
 .channel-item i { font-size: .85rem; width: 1rem; text-align: center; }
-.channel-item:hover { background: #e9edf2; color: var(--chat-text); }
+.channel-item:hover { background: var(--chat-hover); color: var(--chat-text); }
 .channel-item.active { background: var(--chat-primary-soft); color: var(--chat-primary-dark); font-weight: 600; }
 .channel-item.has-unread { color: var(--chat-text); font-weight: 600; }
 .channel-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .badge-unread {
-    background: var(--chat-primary); color: #fff;
+    background: var(--chat-primary); color: var(--portal-on-primary, #fff);
     font-size: .68rem; font-weight: 700; line-height: 1.2;
     border-radius: 10px; padding: 2px 7px; margin-left: auto;
 }
 
 .dm-status {
     width: 9px; height: 9px; border-radius: 50%;
-    display: inline-block; flex-shrink: 0; background: #b3bac4;
+    display: inline-block; flex-shrink: 0; background: var(--portal-muted, #b3bac4);
 }
 .dm-status.online { background: var(--chat-success); }
 .dm-status.away   { background: var(--chat-warning); }
@@ -138,10 +155,10 @@ body.chat-app .portal-main > .alert {
     line-height: 1; display: inline-flex; align-items: center; justify-content: center;
     position: relative; text-decoration: none;
 }
-.btn-icon:hover { background: #e9edf2; color: var(--chat-text); }
+.btn-icon:hover { background: var(--chat-hover); color: var(--chat-text); }
 .btn-icon.is-favorite { color: var(--chat-warning); }
 .badge-count {
-    font-size: .6rem; background: var(--chat-primary); color: #fff;
+    font-size: .6rem; background: var(--chat-primary); color: var(--portal-on-primary, #fff);
     border-radius: 10px; padding: 1px 5px; margin-left: 3px; line-height: 1.2;
 }
 
@@ -181,7 +198,7 @@ body.chat-app .portal-main > .alert {
     border-radius: 6px; border-left: 3px solid transparent;
     animation: chatFadeIn .2s ease;
 }
-.message:hover { background: #f6f8fa; }
+.message:hover { background: var(--chat-bg-alt); }
 .message-compact { padding-top: .1rem; padding-bottom: .1rem; }
 .message-compact .message-avatar { visibility: hidden; height: 0; margin-top: 0; }
 .message-compact .message-header { display: none; }
@@ -212,8 +229,10 @@ body.chat-app .portal-main > .alert {
     color: var(--chat-text-secondary); font-size: .84rem; font-style: italic; margin: .1rem 0;
 }
 .mention { color: var(--chat-primary-dark); background: var(--chat-primary-soft); border-radius: 4px; padding: 0 3px; font-weight: 600; }
-.mention-group { background: #fff4d6; color: #8a5a00; }
-.mention-me { background: #ffe9a8; color: #6b4600; }
+/* Menção a grupo / a mim: véu da cor de alerta. Translúcido de propósito —
+   o fundo real é a superfície do tema, então o texto segue --chat-text. */
+.mention-group { background: rgba(var(--portal-warning-rgb, 255, 193, 7), .20); color: var(--chat-text); }
+.mention-me { background: rgba(var(--portal-warning-rgb, 255, 193, 7), .38); color: var(--chat-text); }
 .custom-emoji-img { width: 22px; height: 22px; object-fit: contain; vertical-align: text-bottom; }
 .msg-link { color: var(--chat-primary); word-break: break-all; }
 .msg-image-link { display: inline-block; margin: .3rem .3rem 0 0; }
@@ -246,7 +265,7 @@ body.chat-app .portal-main > .alert {
     padding: .3rem 1rem; margin: .15rem 0;
 }
 .message.has-thread { border-left-color: var(--chat-primary); }
-.message-pinned { background: #fffbea; border-left-color: var(--chat-warning) !important; }
+.message-pinned { background: var(--portal-warning-soft, #fffbea); border-left-color: var(--chat-warning) !important; }
 .message-highlight { background: var(--chat-primary-soft); transition: background 1s; }
 .message-pending { opacity: .6; }
 .message-failed { border-left-color: var(--chat-danger); }
@@ -278,7 +297,11 @@ body.chat-app .portal-main > .alert {
     padding: .5rem .75rem; resize: none; width: 100%;
     font-size: .9rem; max-height: 160px; overflow-y: auto; font-family: inherit; line-height: 1.4;
     display: block;
+    /* Não é .form-control: sem estas duas linhas o navegador pinta a caixa
+       de branco com texto preto e ela fica ilhada no tema escuro. */
+    background: var(--portal-surface, #fff); color: var(--chat-text);
 }
+.message-input::placeholder { color: var(--chat-text-muted); opacity: 1; }
 .message-input:focus { border-color: var(--chat-primary); outline: none; box-shadow: 0 0 0 3px rgba(var(--portal-primary-rgb, 13, 92, 143), .12); }
 .btn-send { height: 36px; min-width: 40px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
 .composer-hint { font-size: .7rem; color: var(--chat-text-muted); margin-top: .3rem; }
@@ -292,10 +315,14 @@ body.chat-app .portal-main > .alert {
     border: 1px solid var(--chat-border); border-radius: 6px; padding: .25rem .6rem;
     background: var(--chat-bg-alt); font-size: .8rem; display: inline-flex; align-items: center; gap: .25rem;
 }
+/* Fundo de erro "suave" é translúcido no tema escuro: escrever em vermelho
+   sobre ele dava 2,8:1. O texto fica no tom normal e o vermelho vai no
+   cadeado, que é quem carrega o sentido. */
 .readonly-notice {
-    text-align: center; padding: .8rem 1rem; background: #fdf2f2; border-radius: 8px;
-    color: var(--chat-danger); font-size: .85rem; font-weight: 500;
+    text-align: center; padding: .8rem 1rem; background: var(--portal-danger-soft, #fdf2f2); border-radius: 8px;
+    color: var(--chat-text); font-size: .85rem; font-weight: 500;
 }
+.readonly-notice i { color: var(--chat-danger); }
 
 /* ---------- Seletor de emoji e menções ---------- */
 .emoji-picker {
@@ -328,7 +355,7 @@ body.chat-app .portal-main > .alert {
 .unread-bar {
     position: absolute; left: 50%; transform: translateX(-50%); bottom: 4.5rem; z-index: 20;
     display: flex; align-items: center; justify-content: center;
-    padding: .35rem 1rem; background: var(--chat-primary); color: #fff; border: none;
+    padding: .35rem 1rem; background: var(--chat-primary); color: var(--portal-on-primary, #fff); border: none;
     font-size: .82rem; font-weight: 600; cursor: pointer; border-radius: 20px;
     box-shadow: 0 2px 8px rgba(var(--portal-primary-rgb, 13, 92, 143), .4);
 }
@@ -351,7 +378,7 @@ body.chat-app .portal-main > .alert {
     background: var(--chat-bg-alt); border-left: 3px solid var(--chat-warning);
     color: inherit; text-decoration: none;
 }
-.pinned-message-card:hover { background: #eef2f6; color: inherit; }
+.pinned-message-card:hover { background: var(--chat-hover); color: inherit; }
 
 .user-results-list { max-height: 320px; overflow-y: auto; }
 .user-result-item {
@@ -368,10 +395,10 @@ body.chat-app .portal-main > .alert {
 /* ---------- Toast ---------- */
 .chat-toast {
     position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
-    background: #1f2937; color: #fff; padding: .5rem 1.25rem; border-radius: 8px;
+    background: var(--portal-text, #1f2937); color: var(--portal-surface, #fff); padding: .5rem 1.25rem; border-radius: 8px;
     font-size: .85rem; z-index: 2000; opacity: 0; transition: opacity .25s; pointer-events: none;
 }
-.chat-toast.error { background: var(--chat-danger); }
+.chat-toast.error { background: var(--chat-danger); color: var(--portal-on-danger, #fff); }
 .chat-toast.show { opacity: 1; }
 
 .drag-over { background: var(--chat-primary-soft) !important; outline: 2px dashed var(--chat-primary); outline-offset: -4px; }
@@ -383,7 +410,7 @@ body.chat-app .portal-main > .alert {
 .search-result-item { display: block; padding: .75rem 1rem; border-bottom: 1px solid var(--chat-border); text-decoration: none; color: inherit; transition: background .12s; }
 .search-result-item:last-child { border-bottom: none; }
 .search-result-item:hover { background: var(--chat-bg-alt); color: inherit; }
-.search-result-item mark { background: #fff2b3; padding: 0 2px; }
+.search-result-item mark { background: rgba(var(--portal-warning-rgb, 255, 193, 7), .35); color: var(--chat-text); padding: 0 2px; }
 .emoji-card-img { width: 48px; height: 48px; object-fit: contain; }
 
 /* ---------- Animações ---------- */

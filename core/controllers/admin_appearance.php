@@ -136,8 +136,17 @@ function core_admin_appearance_save(): void
         ? ['alterados' => array_keys($mudou), 'valores' => $mudou]
         : 'Identidade visual salva sem alterações');
 
-    if (($_POST['custom_css'] ?? '') !== '' && CssSanitizer::wouldChange((string) $_POST['custom_css'])) {
-        $errors[] = 'parte do CSS foi removida pelo filtro de segurança (@import, endereço externo ou script).';
+    $cssEnviado = (string) ($_POST['custom_css'] ?? '');
+    if ($cssEnviado !== '') {
+        if (mb_strlen($cssEnviado) > 16384) {
+            $errors[] = sprintf('o CSS tem %s KB e o limite é 16 KB — só os primeiros 16 KB foram gravados.',
+                number_format(mb_strlen($cssEnviado) / 1024, 1, ',', '.'));
+        } elseif (Branding::get('custom_css') === '' ) {
+            $errors[] = 'o CSS foi recusado inteiro pelo filtro de segurança '
+                      . '(texto construído para escapar do filtro, como @import aninhado).';
+        } elseif (CssSanitizer::wouldChange($cssEnviado)) {
+            $errors[] = 'parte do CSS foi removida pelo filtro de segurança (@import, endereço externo ou script).';
+        }
     }
 
     if ($errors) {
@@ -569,7 +578,12 @@ function core_admin_appearance(): string
             var dados = new FormData(form);
             var p = new URLSearchParams();
             dados.forEach(function (v, k) {
-                if (k !== '_csrf_token' && k !== 'op' && typeof v === 'string') { p.append(k, v); }
+                // custom_css fica de fora: são até 16 KB que a amostra não usa
+                // e que estourariam o limite de tamanho de URL do servidor.
+                if (k !== '_csrf_token' && k !== 'op' && k !== 'custom_css'
+                    && k !== 'theme_file' && typeof v === 'string') {
+                    p.append(k, v);
+                }
             });
             p.append('esquema', esquema);
             return base + '&' + p.toString();

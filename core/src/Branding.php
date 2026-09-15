@@ -510,6 +510,10 @@ final class Branding
             '--bs-body-font-size'         => $fsize . 'px',
             '--bs-body-bg'                => $bodyBg,
             '--bs-body-color'             => $text,
+            // Sem o -rgb, o Bootstrap continua derivando --bs-secondary-color
+            // do preto de fábrica: no tema escuro os textos de apoio e os
+            // placeholders ficavam escuros sobre fundo escuro.
+            '--bs-body-color-rgb'         => self::rgbTriplet($text),
             '--bs-emphasis-color'         => $text,
             '--bs-secondary-bg'           => $dark ? self::shade($bodyBg, 0.14) : '#e9ecef',
             '--bs-tertiary-bg'            => $dark ? self::shade($bodyBg, 0.10) : '#f8f9fa',
@@ -701,6 +705,17 @@ final class Branding
         self::forget();
     }
 
+    /** Corta o CSS no limite, recuando até a última chave de fechamento. */
+    private static function cortaCss(string $css, int $limite): string
+    {
+        if (mb_strlen($css) <= $limite) {
+            return $css;
+        }
+        $corte = mb_substr($css, 0, $limite);
+        $ultima = mb_strrpos($corte, '}');
+        return $ultima !== false ? mb_substr($corte, 0, $ultima + 1) : $corte;
+    }
+
     /**
      * Valida UM campo. É a única fronteira de validação da identidade visual:
      * save() e a pré-visualização passam por aqui, para nada cru chegar a um
@@ -734,7 +749,11 @@ final class Branding
             'name', 'short_name' => mb_substr($raw, 0, 120),
             'login_message'    => mb_substr($raw, 0, 300),
             'login_footer'     => mb_substr($raw, 0, 400),
-            'custom_css'       => CssSanitizer::clean(mb_substr($raw, 0, 16384)),
+            // O corte é avisado pela tela (core_admin_appearance_save compara o
+            // tamanho recebido) e cai na última chave de fechamento, para não
+            // deixar um seletor pela metade — que faz o navegador descartar
+            // também a regra seguinte.
+            'custom_css'       => CssSanitizer::clean(self::cortaCss($raw, 16384)),
             // Caminhos de imagem nunca vêm do formulário: só de uploadImage().
             'logo', 'logo_light', 'favicon', 'login_bg' => $atual,
             default            => mb_substr($raw, 0, 500),
