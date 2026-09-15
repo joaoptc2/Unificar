@@ -128,8 +128,12 @@ final class Mailer
         if (!function_exists('mail')) {
             return self::finish($res, $t0, self::ERR_MAIL_FN, 'A função mail() do PHP está desabilitada nesta hospedagem.');
         }
-        $headers = self::headers($cfg, $opts);
-        $ok = @mail($to, self::encodeHeader($subject), self::body($html), implode("\r\n", $headers));
+        $texto     = self::htmlParaTexto($html);
+        $fronteira = $texto !== '' ? self::boundary() : null;
+        $headers   = self::headers($cfg, $opts, $fronteira);
+        $ok = @mail($to, self::encodeHeader($subject),
+                    self::body($html, $texto !== '' ? $texto : null, $fronteira),
+                    implode("\r\n", $headers));
         $res['ok'] = (bool) $ok;
         return $ok
             ? self::finish($res, $t0, '', '')
@@ -317,10 +321,14 @@ final class Mailer
             self::try($cmd, 'DATA', [354], 'DATA', self::ERR_DATA, $steps, $log);
             $t = $mark('envelope', $t);
 
-            $headers   = self::headers($cfg, $opts);
+            // Texto puro + HTML na mesma mensagem (multipart/alternative).
+            $texto     = self::htmlParaTexto($html);
+            $fronteira = $texto !== '' ? self::boundary() : null;
+            $headers   = self::headers($cfg, $opts, $fronteira);
             $headers[] = 'To: <' . $to . '>';
             $headers[] = 'Subject: ' . self::encodeHeader($subject);
-            $message   = implode("\r\n", $headers) . "\r\n\r\n" . self::body($html);
+            $message   = implode("\r\n", $headers) . "\r\n\r\n"
+                       . self::body($html, $texto !== '' ? $texto : null, $fronteira);
             $message   = preg_replace('/^\./m', '..', $message);
             $say('C: <mensagem de ' . strlen((string) $message) . ' bytes>');
             if (@fwrite($fp, $message . "\r\n.\r\n") === false) {
@@ -421,7 +429,7 @@ final class Mailer
     }
 
     /** @return array<int,string> */
-    private static function headers(array $cfg, array $opts = []): array
+    private static function headers(array $cfg, array $opts = [], ?string $fronteira = null): array
     {
         $from     = MailConfig::clean((string) ($cfg['from'] ?? ''));
         $fromName = MailConfig::clean((string) ($cfg['from_name'] ?? ''));
@@ -433,20 +441,104 @@ final class Mailer
             'Date: ' . date('r'),
             'Message-ID: <' . bin2hex(random_bytes(12)) . '@' . $domain . '>',
             'MIME-Version: 1.0',
-            'Content-Type: text/html; charset=UTF-8',
-            'Content-Transfer-Encoding: 8bit',
-            'Auto-Submitted: auto-generated',
         ];
+
+        // multipart/alternative quando há versão em texto: o cliente escolhe.
+        // Enviar só HTML pesa nos filtros de spam (mensagem legítima costuma
+        // trazer as duas partes) e deixa de fora quem lê em texto puro — por
+        // preferência, por leitor de tela ou por um cliente antigo.
+        $headers[] = $fronteira !== null
+            ? 'Content-Type: multipart/alternative; boundary="' . $fronteira . '"'
+            : 'Content-Type: text/html; charset=UTF-8';
+        if ($fronteira === null) {
+            $headers[] = 'Content-Transfer-Encoding: 8bit';
+        }
+        $headers[] = 'Auto-Submitted: auto-generated';
+
         if ($replyTo !== '' && MailConfig::isEmail($replyTo)) {
             $headers[] = 'Reply-To: <' . $replyTo . '>';
         }
         return $headers;
     }
 
-    /** Normaliza as quebras de linha do corpo (o SMTP exige CRLF). */
-    private static function body(string $html): string
+    /** Fronteira única entre as partes da mensagem. */
+    private static function boundary(): string
     {
-        return preg_replace("/\r\n|\r|\n/", "\r\n", $html) ?? $html;
+        return '=_Portal_' . bin2hex(random_bytes(12));
+    }
+
+    /**
+     * Corpo do e-mail. Com $texto, monta multipart/alternative — a parte em
+     * texto vem PRIMEIRO, porque o padrão manda ordenar da versão mais
+     * simples para a mais rica, e o cliente exibe a última que entende.
+     */
+    private static function body(string $html, ?string $texto = null, ?string $fronteira = null): string
+    {
+        $crlf = static fn (string $t): string => preg_replace("/\r\n|\r|\n/", "\r\n", $t) ?? $t;
+
+        if ($texto === null || $fronteira === null) {
+            return $crlf($html);
+        }
+
+        return $crlf(
+            "--{$fronteira}\r\n"
+            . "Content-Type: text/plain; charset=UTF-8\r\n"
+            . "Content-Transfer-Encoding: 8bit\r\n\r\n"
+            . $texto . "\r\n\r\n"
+            . "--{$fronteira}\r\n"
+            . "Content-Type: text/html; charset=UTF-8\r\n"
+            . "Content-Transfer-Encoding: 8bit\r\n\r\n"
+            . $html . "\r\n\r\n"
+            . "--{$fronteira}--\r\n"
+        );
+    }
+
+    /**
+     * Versão em texto puro a partir do HTML.
+     *
+     * Não é um conversor de uso geral: é o suficiente para o que o portal
+     * manda. Preserva o que importa numa mensagem de trabalho — quebras de
+     * parágrafo, itens de lista e, principalmente, o ENDEREÇO dos links, que
+     * some se a gente só tirar as etiquetas e deixar o texto do link.
+     */
+    public static function htmlParaTexto(string $html): string
+    {
+        $t = $html;
+
+        // Fora o que não é conteúdo.
+        $t = preg_replace('#<(script|style|head)\b[^>]*>.*?</\1>#is', '', $t) ?? $t;
+        // Texto escondido de prévia não deve aparecer duas vezes.
+        $t = preg_replace('#<div[^>]*display:\s*none[^>]*>.*?</div>#is', '', $t) ?? $t;
+
+        // Link vira "texto (endereço)" — sem isso o leitor fica sem o link.
+        $t = preg_replace_callback(
+            '#<a\b[^>]*href=([\'"])(.*?)\1[^>]*>(.*?)</a>#is',
+            static function (array $m): string {
+                $url   = trim(html_entity_decode($m[2], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                $rotulo = trim(strip_tags($m[3]));
+                if ($url === '' || str_starts_with($url, 'mailto:')) {
+                    return $rotulo;
+                }
+                // Link cujo texto já é o próprio endereço não vira "x (x)".
+                return $rotulo === '' || $rotulo === $url ? $url : $rotulo . ' (' . $url . ')';
+            },
+            $t
+        ) ?? $t;
+
+        $t = preg_replace('#<li\b[^>]*>#i', "\n- ", $t) ?? $t;
+        $t = preg_replace('#<br\s*/?>#i', "\n", $t) ?? $t;
+        $t = preg_replace('#</(p|div|tr|h[1-6]|ul|ol|table)>#i', "\n\n", $t) ?? $t;
+        $t = preg_replace('#<(td|th)\b[^>]*>#i', "\t", $t) ?? $t;
+
+        $t = strip_tags($t);
+        $t = html_entity_decode($t, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        // Espaços de sobra: o HTML do layout vem cheio de indentação.
+        $t = preg_replace('/[ \t]+/u', ' ', $t) ?? $t;
+        $t = preg_replace('/ *\n */u', "\n", $t) ?? $t;
+        $t = preg_replace('/\n{3,}/u', "\n\n", $t) ?? $t;
+
+        return trim($t);
     }
 
     private static function encodeHeader(string $text): string
