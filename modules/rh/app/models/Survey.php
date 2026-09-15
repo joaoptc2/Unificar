@@ -264,11 +264,14 @@ class Survey extends Model
     {
         $org  = Core\Branding::name();
         $link = core_url('index.php?m=rh&page=my&action=survey&id=' . (int)$s['id']);
-        $until = !empty($s['ends_at']) ? '<p style="color:#555;font-size:13px">Disponível até ' . Sanitize::formatDate($s['ends_at']) . '.</p>' : '';
-        $anon  = (int)$s['anonymous'] ? '<p style="color:#555;font-size:13px">🔒 Esta pesquisa é <strong>anônima</strong>: suas respostas não são vinculadas ao seu nome.</p>' : '';
+        // Cor da pesquisa: a de destaque da identidade (era um roxo fixo).
+        $cor   = Core\Tokens::color(Core\Branding::get('accent'), '#6610f2');
+        $fraca = Core\Tokens::mix(Core\Tokens::resolve('mail', 'text'), '#ffffff', 0.45);
+        $until = !empty($s['ends_at']) ? '<p style="color:' . $fraca . ';font-size:13px">Disponível até ' . Sanitize::formatDate($s['ends_at']) . '.</p>' : '';
+        $anon  = (int)$s['anonymous'] ? '<p style="color:' . $fraca . ';font-size:13px">🔒 Esta pesquisa é <strong>anônima</strong>: suas respostas não são vinculadas ao seu nome.</p>' : '';
         // Só o CORPO — a casca do portal (Core\MailTemplate) põe cabeçalho,
         // cores e rodapé no envio.
-        $corpo = '<p style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#6610f2;margin:0 0 8px">Pesquisa</p>'
+        $corpo = '<p style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:' . $cor . ';margin:0 0 8px">Pesquisa</p>'
                . (!empty($s['description']) ? '<p>' . nl2br(Sanitize::e((string)$s['description'])) . '</p>' : '')
                . $until . $anon;
 
@@ -276,7 +279,7 @@ class Survey extends Model
             (string)$s['title'],
             $corpo,
             [
-                'accent'    => '#6610f2',
+                'accent'    => $cor,
                 'preheader' => mb_substr(trim(strip_tags((string)($s['description'] ?? ''))), 0, 140),
                 'cta'       => ['label' => 'Responder agora', 'url' => $link],
             ]

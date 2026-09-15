@@ -308,11 +308,17 @@ final class DocLayout
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= core_e((string) $opts['title']) ?></title>
+<?php
+// Paleta de impressão: a mesma de onde saem o cartaz do RH e a etiqueta de
+// equipamento. Antes o texto, o fundo e a barra de ações eram cores fixas,
+// então o papel timbrado não acompanhava a identidade do hospital.
+$pal = Tokens::printPalette();
+?>
 <style>
     @page { size: <?= $w ?>mm <?= $h ?>mm; margin: 0; }
     * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     html, body { margin: 0; padding: 0; }
-    body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; background: #e9edf1; }
+    body { font-family: <?= $pal['font'] ?>; font-size: 11pt; color: <?= $pal['text'] ?>; background: #e9edf1; }
     <?= $fontCss ?>
     .doc-content { font-family: <?= $fontFamily ?>; font-size: <?= $fontSize ?>; line-height: 1.5; }
     .doc-content img { max-width: 100%; }
@@ -351,7 +357,7 @@ final class DocLayout
 
     /* --------- barra de ações (some na impressão) --------- */
     .intra-toolbar {
-        position: sticky; top: 0; z-index: 100; background: #0d5c8f; color: #fff;
+        position: sticky; top: 0; z-index: 100; background: <?= $pal['primary'] ?>; color: <?= $pal['on_primary'] ?>;
         padding: 8px 14px; display: flex; gap: 8px; align-items: center; font-size: 14px; flex-wrap: wrap;
     }
     .intra-toolbar a, .intra-toolbar button {

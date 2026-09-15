@@ -164,7 +164,13 @@ class Announcement extends Model
     {
         $org   = Core\Branding::name();
         $link  = core_url('index.php?m=rh&page=my&action=announcement&id=' . (int)$a['id']);
-        $color = match ($a['type']) { 'urgente' => '#dc3545', 'celebracao' => '#198754', default => Core\Branding::get('primary') };
+        // Cores de estado da identidade, não valores fixos: trocar a cor de
+        // "urgente" na Aparência passa a valer no comunicado por e-mail.
+        $color = match ($a['type']) {
+            'urgente'    => Core\Tokens::color(Core\Branding::get('danger'),  '#dc3545'),
+            'celebracao' => Core\Tokens::color(Core\Branding::get('success'), '#198754'),
+            default      => Core\Tokens::resolve('mail', 'primary'),
+        };
         $label = self::TYPES[$a['type']] ?? ucfirst((string)$a['type']);
         $body  = !empty($a['body_html']) ? $a['body_html'] : nl2br(Sanitize::e((string)$a['body']));
         $img   = !empty($a['image_path'])
