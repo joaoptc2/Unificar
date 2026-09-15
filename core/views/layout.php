@@ -235,6 +235,11 @@ $temaLivre  = Core\Branding::get('theme_toggle') === '1' || Core\Branding::get('
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="<?= core_asset('core/app.js') ?>"></script>
+<!-- Pré-visualização ao vivo das telas de personalização (~4 KB, com cache).
+     Vai em todas as páginas de propósito: condicionar ao módulo dependeria de
+     uma variável que nem sempre existe, e "por que a amostra não atualiza?"
+     é um bug caro de achar. -->
+<script src="<?= core_asset('core/preview.js') ?>"></script>
 <?= $scripts ?>
 </body>
 </html>

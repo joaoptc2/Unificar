@@ -263,13 +263,13 @@ $accentAtual = $settings['accent'] !== '' ? $settings['accent'] : (string) Core\
                 <div class="card-header bg-white d-flex flex-wrap gap-2 align-items-center">
                     <span class="fw-semibold"><i class="bi bi-eye me-1"></i> Pré-visualização</span>
                     <div class="ms-auto d-flex gap-1">
-                        <select name="preview_month" class="form-select form-select-sm" style="width:auto" form="bdPreviewForm">
+                        <select name="preview_month" class="form-select form-select-sm" style="width:auto">
                             <?php for ($m = 1; $m <= 12; $m++): ?>
                                 <option value="<?= $m ?>" <?= $m === $curMonth ? 'selected' : '' ?>><?= $months[$m] ?></option>
                             <?php endfor; ?>
                         </select>
                         <input type="number" name="preview_year" class="form-control form-control-sm" style="width:6rem"
-                               value="<?= $curYear ?>" min="2000" max="2100" form="bdPreviewForm">
+                               value="<?= $curYear ?>" min="2000" max="2100">
                         <button type="button" class="btn btn-sm btn-outline-primary" id="bdPreviewBtn" title="Atualizar">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
@@ -291,68 +291,47 @@ $accentAtual = $settings['accent'] !== '' ? $settings['accent'] : (string) Core\
     </div>
 </form>
 
-<form method="POST" action="<?= $previewUrl ?>" target="bdPreviewFrame" id="bdPreviewForm"><?= Csrf::field() ?></form>
 
 <script>
-(function () {
-    var main  = document.getElementById('bdConfigForm');
-    var prev  = document.getElementById('bdPreviewForm');
-    var frame = document.getElementById('bdPreviewFrame');
-    if (!main || !prev) return;
+document.addEventListener('DOMContentLoaded', function () {
+    var main = document.getElementById('bdConfigForm');
+    if (!main) return;
 
-    // Campos copiados para o formulário de pré-visualização. Os checkboxes
-    // desmarcados não são copiados de propósito: ausência = desmarcado, que é
-    // como o controller lê o POST de verdade.
-    var TEXTO = ['mode','title','layout_id','intro_html','item_html','css','order',
-                 'model','columns','accent','card_bg','text_color','title_size','font_size',
-                 'photo_shape','photo_size'];
-    var CHECK = ['show_photo','border','show_day','show_date','show_position',
-                 'show_department','show_age','show_emoji'];
-
-    function montarPreview() {
-        prev.querySelectorAll('[data-copy]').forEach(function (el) { el.remove(); });
-        var add = function (nome, valor) {
-            var h = document.createElement('input');
-            h.type = 'hidden'; h.name = nome; h.value = valor; h.setAttribute('data-copy', '1');
-            prev.appendChild(h);
-        };
-        TEXTO.forEach(function (n) {
-            var src = main.querySelector('[name="' + n + '"]:checked') || main.querySelector('[name="' + n + '"]');
-            if (src) add(n, src.value);
-        });
-        CHECK.forEach(function (n) {
-            var c = main.querySelector('[name="' + n + '"]');
-            if (c && c.checked) add(n, '1');
-        });
-    }
-
-    function atualizar() { montarPreview(); prev.target = 'bdPreviewFrame'; prev.submit(); }
-
-    document.getElementById('bdPreviewBtn').addEventListener('click', atualizar);
-    document.getElementById('bdPreviewNova').addEventListener('click', function () {
-        montarPreview(); prev.target = '_blank'; prev.submit(); prev.target = 'bdPreviewFrame';
+    // Uma implementação só de pré-visualização (assets/core/preview.js).
+    // Ela já sabe as regras que antes cada tela repetia: caixa desmarcada
+    // não vai, de um grupo de rádios vai só o marcado.
+    var amostra = PortalPreview.ligar({
+        form:   main,
+        quadro: 'bdPreviewFrame',
+        acao:   <?= json_encode(core_admin_url('rh', 'birthdays', ['action' => 'preview'])) ?>,
+        espera: 500,
+        // Mês e ano vivem no cabeçalho da amostra, fora do formulário.
+        extra: function () {
+            var m = document.querySelector('[name="preview_month"]');
+            var a = document.querySelector('[name="preview_year"]');
+            return { preview_month: m ? m.value : '', preview_year: a ? a.value : '' };
+        }
     });
-    prev.querySelectorAll('[name="preview_month"],[name="preview_year"]')
-        .forEach(function (el) { el.addEventListener('change', atualizar); });
+    if (!amostra) return;
 
-    // Mexeu numa opção, a pré-visualização acompanha. O atraso junta várias
-    // mudanças seguidas (arrastar um controle deslizante) num pedido só.
-    var timer = null;
+    document.getElementById('bdPreviewBtn').addEventListener('click', amostra.atualizar);
+    document.getElementById('bdPreviewNova').addEventListener('click', amostra.emNovaAba);
+    document.querySelectorAll('[name="preview_month"],[name="preview_year"]')
+        .forEach(function (el) { el.addEventListener('change', amostra.atualizar); });
+
+    // Números ao lado dos controles deslizantes.
+    var rotulos = { bdTitleSize: 'bdTitleSizeVal', bdFontSize: 'bdFontSizeVal', bdPhotoSize: 'bdPhotoSizeVal' };
     main.addEventListener('input', function (e) {
-        if (e.target && e.target.id === 'bdTitleSize') document.getElementById('bdTitleSizeVal').textContent = e.target.value;
-        if (e.target && e.target.id === 'bdFontSize')  document.getElementById('bdFontSizeVal').textContent  = e.target.value;
-        if (e.target && e.target.id === 'bdPhotoSize') document.getElementById('bdPhotoSizeVal').textContent = e.target.value;
-        clearTimeout(timer);
-        timer = setTimeout(atualizar, 500);
+        var alvo = e.target && rotulos[e.target.id];
+        if (alvo) { document.getElementById(alvo).textContent = e.target.value; }
     });
-    main.addEventListener('change', function () { clearTimeout(timer); timer = setTimeout(atualizar, 200); });
 
     // Trocar de aba troca o modo gravado: o que está à vista é o que vale.
     document.querySelectorAll('[data-bs-target="#bdPaneVisual"],[data-bs-target="#bdPaneAvancado"]').forEach(function (b) {
         b.addEventListener('shown.bs.tab', function () {
             document.getElementById('bdMode').value =
                 b.getAttribute('data-bs-target') === '#bdPaneAvancado' ? 'avancado' : 'visual';
-            atualizar();
+            amostra.atualizar();
         });
     });
 
@@ -360,9 +339,7 @@ $accentAtual = $settings['accent'] !== '' ? $settings['accent'] : (string) Core\
         if (!confirm('Substituir o template e o CSS pelos de exemplo do sistema?')) return;
         document.getElementById('bdItemHtml').value = <?= json_encode(BirthdayPoster::defaultItemHtml()) ?>;
         document.getElementById('bdCss').value      = <?= json_encode(BirthdayPoster::defaultCss()) ?>;
-        atualizar();
+        amostra.atualizar();
     });
-
-    atualizar();   // primeira carga
-})();
+});
 </script>

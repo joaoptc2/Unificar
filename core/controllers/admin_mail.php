@@ -973,37 +973,19 @@ function core_admin_mail_tab_layout(): string
         </div>
     </form>
 
-    <form method="post" action="<?= core_module_url('admin', ['a' => 'mail_layout_preview']) ?>"
-          target="mailLayoutFrame" id="mailLayoutPreview"><?= Csrf::field() ?></form>
 
     <script>
-    (function () {
-        var form = document.getElementById('mailLayoutForm');
-        var prev = document.getElementById('mailLayoutPreview');
-        if (!form || !prev) return;
-
-        var TEXTO = ['header_bg','header_text','body_bg','card_bg','text_color','link_color',
-                     'font','width','radius','signature','footer_note','footer_extra'];
-        var CHECK = ['enabled','show_logo','show_name'];
-
-        function atualizar() {
-            prev.querySelectorAll('[data-copy]').forEach(function (e) { e.remove(); });
-            var add = function (n, v) {
-                var h = document.createElement('input');
-                h.type = 'hidden'; h.name = n; h.value = v; h.setAttribute('data-copy', '1');
-                prev.appendChild(h);
-            };
-            TEXTO.forEach(function (n) { var el = form.querySelector('[name="' + n + '"]'); if (el) add(n, el.value); });
-            CHECK.forEach(function (n) { var el = form.querySelector('[name="' + n + '"]'); if (el && el.checked) add(n, '1'); });
-            prev.submit();
+    document.addEventListener('DOMContentLoaded', function () {
+        // Uma implementação só de pré-visualização, em assets/core/preview.js.
+        var amostra = PortalPreview.ligar({
+            form:   'mailLayoutForm',
+            quadro: 'mailLayoutFrame',
+            acao:   <?= json_encode(core_module_url('admin', ['a' => 'mail_layout_preview'])) ?>
+        });
+        if (amostra) {
+            document.getElementById('mlRefresh').addEventListener('click', amostra.atualizar);
         }
-
-        var t = null;
-        form.addEventListener('input',  function () { clearTimeout(t); t = setTimeout(atualizar, 400); });
-        form.addEventListener('change', function () { clearTimeout(t); t = setTimeout(atualizar, 150); });
-        document.getElementById('mlRefresh').addEventListener('click', atualizar);
-        atualizar();
-    })();
+    });
     </script>
     <?php
     return (string) ob_get_clean();

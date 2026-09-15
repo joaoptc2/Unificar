@@ -33,6 +33,16 @@ $b = $valores;
         .portal-main { margin-left: 0 !important; }
         .portal-content { padding: 1rem; }
     </style>
+    <?php
+    // CSS livre do administrador. Entra DEPOIS dos ajustes da amostra, como
+    // acontece na página real, e passa pelo mesmo filtro do arquivo servido
+    // em produção (Core\CssSanitizer) — a amostra não pode aceitar o que o
+    // sistema recusaria depois.
+    $cssLivre = Core\CssSanitizer::clean((string) ($b['custom_css'] ?? ''));
+    if ($cssLivre !== ''):
+    ?>
+    <style><?= $cssLivre ?></style>
+    <?php endif; ?>
 </head>
 <body class="portal-body">
 

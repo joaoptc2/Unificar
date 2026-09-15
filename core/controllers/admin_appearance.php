@@ -530,7 +530,7 @@ function core_admin_appearance(): string
                             <iframe id="brandPreview" title="Pré-visualização da aparência"
                                     style="width:1280px;height:1000px;border:0;background:#fff;
                                            transform:scale(.56);transform-origin:0 0"
-                                    src="<?= core_module_url('admin', ['a' => 'appearance_preview']) ?>"></iframe>
+                                    name="brandPreviewFrame"></iframe>
                         </div>
                         <p class="small text-muted mt-2 mb-0">Esta é a página real, montada com as mesmas regras do
                         sistema e com os valores do formulário — inclusive tabelas, formulários, alertas, selos de
@@ -542,18 +542,20 @@ function core_admin_appearance(): string
     </form>
 
     <script>
-    (function () {
+    // Espera o carregamento dos scripts do rodapé: este bloco é embutido no
+    // conteúdo e, sem isto, roda ANTES de assets/core/preview.js existir.
+    document.addEventListener('DOMContentLoaded', function () {
         var form = document.getElementById('brandForm');
         if (!form) { return; }
 
-        // Campo de cor e campo de texto andam juntos.
+        // Campo de cor e campo de texto andam juntos. O PortalPreview já
+        // observa 'input' no formulário, então aqui só se espelha o valor.
         form.querySelectorAll('[data-color-for]').forEach(function (picker) {
             var alvo = document.getElementById('f_' + picker.getAttribute('data-color-for'));
             if (!alvo) { return; }
-            picker.addEventListener('input', function () { alvo.value = picker.value; agenda(); });
+            picker.addEventListener('input', function () { alvo.value = picker.value; });
             alvo.addEventListener('input', function () {
                 if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(alvo.value)) { picker.value = alvo.value; }
-                agenda();
             });
         });
 
@@ -569,33 +571,21 @@ function core_admin_appearance(): string
            valores do formulário. Antes era um desenho em HTML com a matemática
            de cor reescrita em JavaScript — duas implementações da mesma regra,
            que podiam divergir, e que não mostravam tabela, alerta nem gráfico. */
-        var quadro = document.getElementById('brandPreview');
-        var base = quadro ? quadro.getAttribute('src') : '';
+        // Uma implementação só de pré-visualização (assets/core/preview.js).
+        // Em POST, para o CSS livre caber — por URL ele era descartado.
         var esquema = 'claro';
-        var timer = null;
-
-        function url() {
-            var dados = new FormData(form);
-            var p = new URLSearchParams();
-            dados.forEach(function (v, k) {
-                // custom_css fica de fora: são até 16 KB que a amostra não usa
-                // e que estourariam o limite de tamanho de URL do servidor.
-                if (k !== '_csrf_token' && k !== 'op' && k !== 'custom_css'
-                    && k !== 'theme_file' && typeof v === 'string') {
-                    p.append(k, v);
-                }
-            });
-            p.append('esquema', esquema);
-            return base + '&' + p.toString();
-        }
-        function atualiza() { if (quadro) { quadro.src = url(); } }
-        function agenda() { clearTimeout(timer); timer = setTimeout(atualiza, 350); }
-
-        form.addEventListener('input', agenda);
-        form.addEventListener('change', agenda);
+        var amostra = PortalPreview.ligar({
+            form:   form,
+            quadro: 'brandPreview',
+            acao:   <?= json_encode(core_module_url('admin', ['a' => 'appearance_preview'])) ?>,
+            espera: 350,
+            ignorar: ['op', 'theme_file'],
+            extra:  function () { return { esquema: esquema }; }
+        });
+        if (!amostra) { return; }
 
         var botao = document.getElementById('bpAtualizar');
-        if (botao) { botao.addEventListener('click', atualiza); }
+        if (botao) { botao.addEventListener('click', amostra.atualizar); }
 
         var grupo = document.getElementById('bpEsquema');
         if (grupo) {
@@ -605,11 +595,10 @@ function core_admin_appearance(): string
                 esquema = b.getAttribute('data-esquema');
                 grupo.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
                 b.classList.add('active');
-                atualiza();
+                amostra.atualizar();
             });
         }
-        atualiza();
-    })();
+    });
     </script>
     <?php
     return (string) ob_get_clean();
@@ -693,8 +682,16 @@ function core_admin_appearance_preview(): void
 {
     Auth::requireGlobalAdmin();
 
-    $valores = Branding::normalizeAll($_GET);
-    if (($_GET['esquema'] ?? 'claro') === 'escuro') {
+    // Aceita POST (o padrão agora) e GET (favoritos antigos). O POST é o que
+    // permite mandar o CSS livre junto: por URL ele ficava de fora por causa
+    // do limite de tamanho, e a amostra mentia para quem tinha CSS próprio.
+    $entrada = $_SERVER['REQUEST_METHOD'] === 'POST' ? $_POST : $_GET;
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        Csrf::check();
+    }
+
+    $valores = Branding::normalizeAll($entrada);
+    if (($entrada['esquema'] ?? 'claro') === 'escuro') {
         $valores['theme_mode'] = 'escuro';
     } elseif ($valores['theme_mode'] === 'auto') {
         $valores['theme_mode'] = 'claro';

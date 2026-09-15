@@ -140,22 +140,19 @@ class BirthdayPoster
         return $cfg;
     }
 
-    /** #rrggbb válido, ou o padrão. Impede que um valor solto vire CSS. */
+    /** Validação de cor: uma implementação só, em Core\Tokens. */
     private static function color(string $v, string $default): string
     {
-        $v = trim($v);
-        if ($v === '') return $default;
-        if (preg_match('/^#[0-9a-fA-F]{3}$/', $v)) {
-            return '#' . $v[1] . $v[1] . $v[2] . $v[2] . $v[3] . $v[3];
-        }
-        return preg_match('/^#[0-9a-fA-F]{6}$/', $v) ? strtolower($v) : $default;
+        return Core\Tokens::color($v, $default);
     }
 
-    /** Cor de destaque efetiva (vazio = cor da marca do portal). */
+    /**
+     * Cor de destaque efetiva. Vazio HERDA pela cadeia de tokens:
+     * cartaz → impressão → marca do portal (Core\Tokens).
+     */
     public static function accentColor(array $cfg): string
     {
-        $a = (string)($cfg['accent'] ?? '');
-        return $a !== '' ? $a : (string) Core\Branding::get('primary');
+        return Core\Tokens::resolve('birthday', 'primary', (string)($cfg['accent'] ?? ''));
     }
 
     // ── Modo visual: geração do HTML e do CSS ──────────────────────────────
@@ -195,7 +192,7 @@ class BirthdayPoster
     public static function buildCss(array $cfg): string
     {
         $accent  = self::accentColor($cfg);
-        $onAcc   = Core\Branding::contrastColor($accent);
+        $onAcc   = Core\Tokens::contrastColor($accent);
         $bg      = (string)($cfg['card_bg'] ?? '#fbfcfe');
         $txt     = (string)($cfg['text_color'] ?? '#212529');
         $tit     = (int)($cfg['title_size'] ?? 22);
@@ -320,7 +317,7 @@ class BirthdayPoster
     public static function defaultCss(): string
     {
         $brand = Core\Branding::get('primary');
-        $onBrand = Core\Branding::contrastColor($brand);
+        $onBrand = Core\Tokens::contrastColor($brand);
 
         return ".bd-title { text-align:center; color:{$brand}; font-size:22pt; margin:0 0 4mm; }\n"
              . ".bd-intro { text-align:center; color:#444; margin:0 0 6mm; }\n"

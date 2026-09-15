@@ -266,6 +266,17 @@ final class Branding
      * Sem internet o navegador simplesmente usa a pilha de reserva do
      * --portal-font, então a página nunca quebra por causa disso.
      */
+    /**
+     * Pilha de fontes em uso (a mesma que vai para --portal-font). Pública
+     * porque a impressão e os e-mails também precisam dela — antes cada um
+     * repetia a sua.
+     */
+    public static function fontStack(?string $chave = null): string
+    {
+        $k = $chave ?? self::get('font', 'system');
+        return self::FONTS[$k]['stack'] ?? self::FONTS['system']['stack'];
+    }
+
     public static function fontTag(): string
     {
         $family = self::WEB_FONTS[self::get('font')] ?? '';
@@ -934,90 +945,57 @@ final class Branding
     // Utilidades de cor
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // Matemática de cor — UMA implementação, em Core\Tokens.
+    //
+    // Estes métodos continuam aqui porque meio sistema os chama pelo nome
+    // Branding::, mas o cálculo é um só: três cópias ligeiramente
+    // diferentes da mesma conta era um bug esperando a hora de aparecer
+    // em apenas uma das telas.
+    // ------------------------------------------------------------------
+
     public static function isColor(string $value): bool
     {
-        return (bool) preg_match('/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $value);
+        return Tokens::isColor($value);
     }
 
     private static function color(string $value, string $fallback): string
     {
-        return self::isColor($value) ? strtolower($value) : $fallback;
-    }
-
-    /** @return array{0:int,1:int,2:int} */
-    private static function rgb(string $hex): array
-    {
-        $hex = ltrim($hex, '#');
-        if (strlen($hex) === 3) {
-            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
-        }
-        if (strlen($hex) !== 6) {
-            $hex = '0d5c8f';
-        }
-        return [
-            (int) hexdec(substr($hex, 0, 2)),
-            (int) hexdec(substr($hex, 2, 2)),
-            (int) hexdec(substr($hex, 4, 2)),
-        ];
+        return Tokens::color($value, $fallback);
     }
 
     public static function rgbTriplet(string $hex): string
     {
-        return implode(', ', self::rgb($hex));
+        return Tokens::rgbTriplet($hex);
     }
 
     /** Clareia (fator > 0) ou escurece (fator < 0) uma cor. */
     public static function shade(string $hex, float $factor): string
     {
-        [$r, $g, $b] = self::rgb($hex);
-        $mix = static function (int $c) use ($factor): int {
-            $target = $factor > 0 ? 255 : 0;
-            return (int) round($c + ($target - $c) * abs($factor));
-        };
-        return sprintf('#%02x%02x%02x', $mix($r), $mix($g), $mix($b));
+        return Tokens::shade($hex, $factor);
     }
 
     /** Luminância relativa (0 escuro … 1 claro). */
     public static function luminance(string $hex): float
     {
-        [$r, $g, $b] = self::rgb($hex);
-        $f = static function (int $c): float {
-            $c /= 255;
-            return $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
-        };
-        return 0.2126 * $f($r) + 0.7152 * $f($g) + 0.0722 * $f($b);
+        return Tokens::luminance($hex);
     }
 
-    /** Texto legível sobre a cor informada (branco ou quase preto). */
     /** Razão de contraste da WCAG entre duas cores (1:1 a 21:1). */
     public static function contrastRatio(string $a, string $b): float
     {
-        $la = self::luminance($a);
-        $lb = self::luminance($b);
-        return (max($la, $lb) + 0.05) / (min($la, $lb) + 0.05);
+        return Tokens::contrastRatio($a, $b);
     }
 
-    /**
-     * O fundo é escuro? (ou seja: sobre ele o texto legível é claro)
-     * Mesma régua de contraste usada em contrastColor(), para a superfície,
-     * o texto e as bordas acompanharem a cor escolhida sem surpresas.
-     */
+    /** O fundo é escuro? (ou seja: sobre ele o texto legível é claro) */
     public static function isDark(string $hex): bool
     {
-        return self::contrastColor($hex) === '#ffffff';
+        return Tokens::isDark($hex);
     }
 
-    /**
-     * Cor de texto legível sobre $hex: escolhe entre claro e escuro pela
-     * razão de contraste da WCAG (e não pelo brilho médio, que erra em
-     * tons como o âmbar, onde o branco fica ilegível).
-     */
+    /** Cor de texto legível sobre $hex (pela razão de contraste da WCAG). */
     public static function contrastColor(string $hex): string
     {
-        $bg    = self::luminance($hex);
-        $light = (max($bg, 1.0) + 0.05) / (min($bg, 1.0) + 0.05);
-        $darkL = self::luminance('#1f2937');
-        $dark  = (max($bg, $darkL) + 0.05) / (min($bg, $darkL) + 0.05);
-        return $dark > $light ? '#1f2937' : '#ffffff';
+        return Tokens::contrastColor($hex);
     }
 }

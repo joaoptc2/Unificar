@@ -95,8 +95,8 @@ final class MailTemplate
             'body_bg'    => self::cor($v, self::DEFAULTS['body_bg']),
             'card_bg'    => self::cor($v, self::DEFAULTS['card_bg']),
             'text_color' => self::cor($v, self::DEFAULTS['text_color']),
-            'width'      => (string) max(320, min(900, (int) $v ?: 640)),
-            'radius'     => (string) max(0, min(24, (int) $v)),
+            'width'      => (string) Tokens::int($v, 320, 900, 640),
+            'radius'     => (string) Tokens::int($v, 0, 24, (int) self::DEFAULTS['radius']),
             'font'       => self::fonte($v),
             'signature'  => mb_substr(strip_tags($v), 0, 120),
             'footer_note', 'footer_extra' => mb_substr(HtmlSanitizer::clean($v), 0, 500),
@@ -104,15 +104,10 @@ final class MailTemplate
         };
     }
 
+    /** Validação de cor: uma implementação só, em Core\Tokens. */
     private static function cor(string $v, string $default): string
     {
-        if ($v === '') {
-            return $default;
-        }
-        if (preg_match('/^#[0-9a-fA-F]{3}$/', $v)) {
-            return '#' . $v[1] . $v[1] . $v[2] . $v[2] . $v[3] . $v[3];
-        }
-        return preg_match('/^#[0-9a-fA-F]{6}$/', $v) ? strtolower($v) : $default;
+        return Tokens::color($v, $default);
     }
 
     /** Só pilhas de fontes conhecidas: o valor vai direto para font-family. */
@@ -142,20 +137,19 @@ final class MailTemplate
     /** Cor do cabeçalho: a configurada ou a da marca. */
     public static function headerBg(?array $cfg = null): string
     {
-        $c = self::get('header_bg', $cfg);
-        return $c !== '' ? $c : (string) Branding::get('primary');
+        // Vazio herda: escopo 'mail' → marca do portal (Core\Tokens).
+        return Tokens::resolve('mail', 'primary', self::get('header_bg', $cfg));
     }
 
     public static function headerText(?array $cfg = null): string
     {
         $c = self::get('header_text', $cfg);
-        return $c !== '' ? $c : Branding::contrastColor(self::headerBg($cfg));
+        return $c !== '' ? $c : Tokens::contrastColor(self::headerBg($cfg));
     }
 
     public static function linkColor(?array $cfg = null): string
     {
-        $c = self::get('link_color', $cfg);
-        return $c !== '' ? $c : (string) Branding::get('primary');
+        return Tokens::resolve('mail', 'primary', self::get('link_color', $cfg));
     }
 
     /**
@@ -186,7 +180,7 @@ final class MailTemplate
             ? self::cor((string) $opts['accent'], self::headerBg($cfg))
             : self::headerBg($cfg);
         $hdrTxt  = isset($opts['accent']) && $opts['accent'] !== ''
-            ? Branding::contrastColor($hdrBg)
+            ? Tokens::contrastColor($hdrBg)
             : self::headerText($cfg);
         $link    = self::linkColor($cfg);
         $org     = Branding::name();
