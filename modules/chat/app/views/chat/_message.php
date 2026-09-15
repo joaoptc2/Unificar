@@ -8,7 +8,7 @@
  *   $currentUserId int
  *   $canModerate   bool   chat.moderate (fixar / excluir de terceiros)
  *   $canEdit       bool   chat.edit   (editar as próprias)
- *   $canDelete     bool   chat.delete (excluir as próprias, até 1 min)
+ *   $canDelete     bool   chat.delete (excluir as próprias, dentro da janela)
  *   $compact       bool   mesma pessoa em sequência (sem avatar/cabeçalho)
  */
 $msgId    = (int) $msg['id'];
@@ -18,7 +18,15 @@ $replies  = (int) ($msg['reply_count'] ?? 0);
 $time     = date('H:i', strtotime((string) $msg['created_at']));
 $date     = date('Y-m-d', strtotime((string) $msg['created_at']));
 $mayEdit  = $isMine && $canEdit && ($msg['type'] ?? 'text') !== 'system';
-$mayDel   = $canModerate || ($isMine && $canDelete);
+
+// A janela de exclusão vale para todos (inclusive moderador, salvo exceção
+// explícita na configuração). Desenhar o botão depois que ela fecha só
+// produziria um 403 — então ele sai da tela, e um contador no JS o retira
+// no instante em que o tempo acaba.
+$podeApagar   = $canModerate || ($isMine && $canDelete);
+$ignoraJanela = $canModerate && Message::moderatorBypassesWindow();
+$segRestantes = $ignoraJanela ? PHP_INT_MAX : Message::deleteSecondsLeft($msg);
+$mayDel       = $podeApagar && ($ignoraJanela || $segRestantes > 0);
 $classes  = ['message'];
 if ($compact)  { $classes[] = 'message-compact'; }
 if ($isMine)   { $classes[] = 'message-mine'; }
@@ -88,7 +96,10 @@ if ($replies)  { $classes[] = 'has-thread'; }
         <button type="button" class="btn-action-sm" data-action="edit-msg" data-message-id="<?= $msgId ?>" title="Editar"><i class="bi bi-pencil"></i></button>
         <?php endif; ?>
         <?php if ($mayDel): ?>
-        <button type="button" class="btn-action-sm text-danger" data-action="delete-msg" data-message-id="<?= $msgId ?>" title="Excluir"><i class="bi bi-trash"></i></button>
+        <button type="button" class="btn-action-sm text-danger" data-action="delete-msg"
+                data-message-id="<?= $msgId ?>"
+                <?= $ignoraJanela ? '' : 'data-delete-expires-in="' . (int) $segRestantes . '"' ?>
+                title="Excluir"><i class="bi bi-trash"></i></button>
         <?php endif; ?>
     </div>
 </div>

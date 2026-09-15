@@ -340,6 +340,80 @@ class Message extends Model
         return $v === null || $v === false ? null : (int) $v;
     }
 
+    // ==================================================================
+    //  Janela de exclusão
+    //
+    //  Uma mensagem só pode ser excluída durante um tempo curto depois do
+    //  envio (1 minuto por padrão). Passado esse tempo ela é histórico da
+    //  conversa: apagar depois reescreve o que os outros já leram.
+    // ==================================================================
+
+    /** Segundos em que o autor ainda pode excluir (configurável; 0 = nunca). */
+    public static function deleteWindowSeconds(): int
+    {
+        $v = (string) Core\Settings::get('chat.delete_window_seconds', '60');
+        if ($v === '' || !ctype_digit($v)) {
+            return 60;
+        }
+        // Teto de 24h: uma janela "infinita" configurada por engano seria o
+        // mesmo que não ter regra nenhuma.
+        return max(0, min(86400, (int) $v));
+    }
+
+    /**
+     * Moderador pode excluir fora da janela? Desligado por padrão: quem
+     * relatou o problema estava justamente conseguindo apagar mensagens
+     * antigas por ser administrador. Ligue quando for preciso remover
+     * conteúdo impróprio a qualquer momento.
+     */
+    public static function moderatorBypassesWindow(): bool
+    {
+        return (string) Core\Settings::get('chat.moderator_bypass_delete_window', '0') === '1';
+    }
+
+    /**
+     * Idade da mensagem em segundos, medida PELO BANCO — o mesmo relógio que
+     * gravou created_at. Comparar com o time() do PHP dá diferença de horas
+     * quando o fuso do PHP e o do MySQL não coincidem, e a janela de 1 minuto
+     * passa a valer 1 minuto mais (ou menos) três horas.
+     * Devolve null quando a mensagem não existe.
+     */
+    public static function ageSeconds(int $id): ?int
+    {
+        $st = Database::getInstance()->prepare(
+            'SELECT TIMESTAMPDIFF(SECOND, created_at, NOW()) AS idade FROM chat_messages WHERE id = ?'
+        );
+        $st->execute([$id]);
+        $v = $st->fetchColumn();
+        return $v === false || $v === null ? null : (int) $v;
+    }
+
+    /** Ainda dá tempo de excluir esta mensagem? */
+    public static function withinDeleteWindow(int $id): bool
+    {
+        $janela = self::deleteWindowSeconds();
+        if ($janela <= 0) {
+            return false;
+        }
+        $idade = self::ageSeconds($id);
+        return $idade !== null && $idade <= $janela;
+    }
+
+    /**
+     * Segundos que faltam para a janela fechar, a partir de uma linha já
+     * carregada (as telas usam isto para não desenhar um botão que vai dar
+     * 403). Nunca negativo; 0 significa "já passou".
+     */
+    public static function deleteSecondsLeft(array $msg): int
+    {
+        $janela = self::deleteWindowSeconds();
+        if ($janela <= 0 || empty($msg['created_at'])) {
+            return 0;
+        }
+        $idade = time() - strtotime((string) $msg['created_at']);
+        return (int) max(0, $janela - $idade);
+    }
+
     public static function softDelete(int $id): void
     {
         $db  = Database::getInstance();

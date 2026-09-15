@@ -36,6 +36,13 @@ return [
                 'moderate' => 'Moderar: fixar/excluir de terceiros',
             ],
         ],
+        'settings' => [
+            'label'   => 'Mensagens (configuração)',
+            'actions' => [
+                'view' => 'Visualizar',
+                'edit' => 'Alterar',
+            ],
+        ],
         'channels' => [
             'label'   => 'Canais',
             'actions' => [
@@ -133,6 +140,7 @@ return [
         'tabs'  => [
             'categories' => ['label' => 'Categorias de canais', 'icon' => 'bi-collection',  'perm' => 'categories.view'],
             'emojis'     => ['label' => 'Emojis personalizados', 'icon' => 'bi-emoji-smile', 'perm' => 'emojis.view'],
+            'settings'   => ['label' => 'Mensagens',             'icon' => 'bi-chat-dots',   'perm' => 'settings.view'],
         ],
     ],
 ];

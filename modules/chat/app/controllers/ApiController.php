@@ -256,6 +256,20 @@ class ApiController
         $this->json(['success' => true, 'message_id' => $messageId, 'content' => $content]);
     }
 
+    /** "1 minuto", "5 minutos", "2 horas" — para a mensagem de erro. */
+    private static function janelaEmTexto(int $segundos): string
+    {
+        if ($segundos % 3600 === 0 && $segundos >= 3600) {
+            $h = intdiv($segundos, 3600);
+            return $h . ($h === 1 ? ' hora' : ' horas');
+        }
+        if ($segundos % 60 === 0 && $segundos >= 60) {
+            $m = intdiv($segundos, 60);
+            return $m . ($m === 1 ? ' minuto' : ' minutos');
+        }
+        return $segundos . ($segundos === 1 ? ' segundo' : ' segundos');
+    }
+
     /** POST deleteMessage — message_id */
     public function deleteMessage(): void
     {
@@ -275,15 +289,28 @@ class ApiController
         $channelId = (int) $message['channel_id'];
         $isMember  = Channel::isMember($channelId, $userId);
 
-        if (core_can('chat.moderate') && $this->canModerateChannel($channelId, $isMember)) {
-            // Moderador exclui qualquer mensagem do canal, sem janela de tempo.
-        } elseif ($isOwner && $isMember && core_can('chat.delete')) {
-            if ((time() - strtotime($message['created_at'])) > 60) {
-                $this->json(['success' => false, 'error' => 'Só é possível excluir mensagens até 1 minuto após o envio.'], 403);
-                return;
-            }
-        } else {
+        $isModerador = core_can('chat.moderate') && $this->canModerateChannel($channelId, $isMember);
+
+        if (!$isModerador && !($isOwner && $isMember && core_can('chat.delete'))) {
             $this->json(['success' => false, 'error' => 'Sem permissão para excluir.'], 403);
+            return;
+        }
+
+        // A janela de tempo vale para todo mundo, inclusive o moderador —
+        // era exatamente por ser administrador que se conseguia apagar
+        // mensagem antiga. Quem precisa remover conteúdo impróprio a
+        // qualquer momento liga a exceção na configuração do módulo.
+        $ignoraJanela = $isModerador && Message::moderatorBypassesWindow();
+
+        if (!$ignoraJanela && !Message::withinDeleteWindow($messageId)) {
+            $janela = Message::deleteWindowSeconds();
+            $this->json([
+                'success' => false,
+                'error'   => $janela > 0
+                    ? 'Só é possível excluir mensagens até ' . self::janelaEmTexto($janela) . ' após o envio.'
+                    : 'A exclusão de mensagens está desabilitada neste portal.',
+                'code'    => 'DELETE_WINDOW',
+            ], 403);
             return;
         }
 

@@ -81,7 +81,11 @@ class View
         }
         $cfg  = require CHAT_PATH . '/config/app.php';
         $meta = '<meta name="chat-poll-interval" content="' . (int) ($cfg['poll_interval'] ?? 2000) . '">'
-              . '<meta name="chat-poll-idle" content="' . (int) ($cfg['poll_interval_idle'] ?? 8000) . '">';
+              . '<meta name="chat-poll-idle" content="' . (int) ($cfg['poll_interval_idle'] ?? 8000) . '">'
+              // Janela de exclusão: o JS usa só para não desenhar um botão
+              // que o servidor recusaria — quem decide é o ApiController.
+              . '<meta name="chat-delete-window" content="' . Message::deleteWindowSeconds() . '">'
+              . '<meta name="chat-delete-mod-bypass" content="' . (Message::moderatorBypassesWindow() ? '1' : '0') . '">';
         return $meta . '<script src="' . core_asset('chat/chat.js') . '"></script>';
     }
 

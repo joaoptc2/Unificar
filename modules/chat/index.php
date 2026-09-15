@@ -67,10 +67,12 @@ if (!isset($routes[$page])) {
 // GET em page=admin abre o painel central. Pelo módulo só passam os POSTs
 // que alteram dados (as telas são renderizadas por admin_panel.php).
 if ($page === 'admin') {
-    $adminPosts = ['saveCategory', 'deleteCategory', 'addEmoji', 'storeEmoji', 'deleteEmoji'];
+    $adminPosts = ['saveCategory', 'deleteCategory', 'addEmoji', 'storeEmoji', 'deleteEmoji', 'saveSettings'];
     if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !in_array($action, $adminPosts, true)) {
-        $tab = in_array($action, ['categories', 'emojis'], true) ? $action : '';
-        if (in_array($action, ['index', 'settings', 'audit', 'export', 'updateSettings', 'doExport', 'generateExport'], true)) {
+        $tab = in_array($action, ['categories', 'emojis', 'settings'], true) ? $action : '';
+        // 'settings' voltou a existir (regras das mensagens) e por isso saiu
+        // da lista de funções descontinuadas.
+        if (in_array($action, ['index', 'audit', 'export', 'updateSettings', 'doExport', 'generateExport'], true)) {
             \Core\Flash::set('warning', 'Função descontinuada: o módulo Comunicação agora é somente chat.');
         }
         core_redirect(core_admin_url('chat', $tab));
