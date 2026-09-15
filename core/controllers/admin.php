@@ -1031,6 +1031,10 @@ switch ($action) {
             Csrf::check();
             Settings::set('org_name', trim((string) ($_POST['org_name'] ?? '')));
             Settings::set('default_hospital_id', (string) max(1, (int) ($_POST['default_hospital_id'] ?? 1)));
+            // Notificações: os limites evitam tanto o "tempo real" que
+            // multiplica a carga quanto o atraso de minutos.
+            Settings::set('notifications.poll_active', (string) max(2, min(120, (int) ($_POST['notif_poll_active'] ?? 5))));
+            Settings::set('notifications.poll_idle',   (string) max(10, min(600, (int) ($_POST['notif_poll_idle'] ?? 20))));
             Flash::set('success', 'Configurações salvas.');
             core_redirect('index.php?m=admin&a=settings');
         }
@@ -1052,6 +1056,27 @@ switch ($action) {
                                 <input type="number" class="form-control" name="default_hospital_id" value="<?= core_e(Settings::get('default_hospital_id', '1')) ?>">
                                 <div class="form-text">Usado pelos módulos Documentos e Manutenção, que herdaram estrutura multi-unidade.</div>
                             </div>
+                            <hr>
+                            <h2 class="h6"><i class="bi bi-bell me-1"></i>Notificações</h2>
+                            <p class="small text-muted">
+                                De quanto em quanto tempo o sino procura novidades. Valores menores deixam a
+                                notificação mais imediata e aumentam o número de consultas; a aba em segundo
+                                plano usa o intervalo maior.
+                            </p>
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <label class="form-label" for="notifAtivo">Aba à frente (segundos)</label>
+                                    <input type="number" class="form-control" id="notifAtivo" name="notif_poll_active"
+                                           min="2" max="120" value="<?= core_e(Settings::get('notifications.poll_active', '5')) ?>">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label" for="notifOculto">Aba em segundo plano (segundos)</label>
+                                    <input type="number" class="form-control" id="notifOculto" name="notif_poll_idle"
+                                           min="10" max="600" value="<?= core_e(Settings::get('notifications.poll_idle', '20')) ?>">
+                                </div>
+                            </div>
+                            <div class="form-text mb-3">Padrão: 5 s e 20 s (a mesma ordem de grandeza do chat).</div>
+
                             <button class="btn btn-primary">Salvar</button>
                         </form>
                     </div>

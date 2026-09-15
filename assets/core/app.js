@@ -59,21 +59,193 @@ window.PortalTheme = (function () {
 
     var baseUrl = (document.querySelector('meta[name="base-url"]') || {}).content || '';
 
-    // Sino de notificações: atualiza o contador periodicamente
-    var badge = document.getElementById('portalBellBadge');
-    if (badge && baseUrl) {
-        setInterval(function () {
-            fetch(baseUrl + '/index.php?m=auth&a=notifications_count', { credentials: 'same-origin' })
-                .then(function (r) { return r.ok ? r.json() : null; })
-                .then(function (data) {
-                    if (!data) return;
-                    var n = data.count || 0;
-                    badge.textContent = n > 99 ? '99+' : n;
-                    badge.classList.toggle('d-none', n === 0);
+    // ── Sino de notificações ────────────────────────────────────────────
+    //
+    // Antes: uma consulta de 60 em 60 segundos que só trazia o número — uma
+    // notificação criada logo após a consulta demorava um minuto para
+    // aparecer. Agora a cadência é a do chat (poucos segundos com a aba à
+    // frente), a lista do sino se atualiza junto e a chegada é anunciada na
+    // hora. Com a aba escondida o intervalo se alarga sozinho: ninguém
+    // precisa de notificação instantânea numa aba que não está sendo vista.
+    //
+    // É UM poller só para o portal inteiro: os módulos penduram seus
+    // contadores aqui (window.PortalNotificacoes.aoAtualizar) em vez de
+    // abrirem cada um o seu.
+    window.PortalNotificacoes = (function () {
+        var badge   = document.getElementById('portalBellBadge');
+        var lista   = document.getElementById('portalNotifList');
+        var ativo   = 5000;      // aba à frente (o servidor manda o valor)
+        var oculto  = 20000;     // aba em segundo plano
+        var timer   = null;
+        var ultimoId = 0;
+        var falhas  = 0;
+        var buscando = false;
+        var ouvintes = [];
+        var primeira = true;
+
+        function intervalo() {
+            var base = document.hidden ? oculto : ativo;
+            // Erro seguido afasta as tentativas (até 2 min): servidor fora do
+            // ar não deve virar uma enxurrada de pedidos.
+            return falhas > 0 ? Math.min(base * Math.pow(2, falhas), 120000) : base;
+        }
+
+        function agendar() {
+            clearTimeout(timer);
+            timer = setTimeout(buscar, intervalo());
+        }
+
+        function pintarBadge(n) {
+            if (!badge) return;
+            badge.textContent = n > 99 ? '99+' : n;
+            badge.classList.toggle('d-none', n === 0);
+        }
+
+        function esc(t) {
+            var d = document.createElement('div');
+            d.textContent = t == null ? '' : String(t);
+            return d.innerHTML;
+        }
+
+        function quando(iso) {
+            var t = Date.parse(String(iso).replace(' ', 'T'));
+            if (isNaN(t)) return '';
+            var seg = Math.max(0, Math.floor((Date.now() - t) / 1000));
+            if (seg < 60)    return 'agora';
+            if (seg < 3600)  return 'há ' + Math.floor(seg / 60) + ' min';
+            if (seg < 86400) return 'há ' + Math.floor(seg / 3600) + ' h';
+            var d = new Date(t);
+            return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + d.getFullYear();
+        }
+
+        function pintarLista(itens) {
+            if (!lista) return;
+            if (!itens.length) {
+                lista.innerHTML = '<div class="px-3 py-3 text-muted small">Nenhuma notificação.</div>';
+                return;
+            }
+            lista.innerHTML = itens.map(function (n) {
+                var url = n.link ? baseUrl + '/index.php?m=auth&a=notification_open&id=' + n.id : '#';
+                return '<a class="dropdown-item text-wrap py-2 ' + (n.read ? 'text-muted' : 'fw-semibold') + '" href="' + esc(url) + '">'
+                     + '<span class="badge text-bg-light border me-1">' + esc(n.module || 'portal') + '</span>'
+                     + esc(n.title)
+                     + '<div class="small text-muted fw-normal">' + esc(quando(n.created_at)) + '</div>'
+                     + '</a>';
+            }).join('');
+        }
+
+        // Quais itens são novos desde a última resposta. O cálculo é aqui, e
+        // não no servidor, porque o servidor só sabe comparar com o 'since'
+        // que recebeu — e na primeira carga de uma caixa vazia esse since é
+        // 0, o que fazia a primeira notificação da sessão nunca ser anunciada.
+        function novidades(itens) {
+            if (primeira) return [];
+            return itens.filter(function (n) { return n.id > ultimoId; });
+        }
+
+        function anunciar(novas) {
+            // A primeira resposta não anuncia: o que já estava lá quando a
+            // página abriu não é novidade para quem acabou de chegar.
+            if (primeira || !novas.length) return;
+            novas.slice(0, 3).forEach(function (n) {
+                if (window.PortalAvisos && window.PortalAvisos.mostrar) {
+                    window.PortalAvisos.mostrar(n);
+                }
+            });
+        }
+
+        function buscar() {
+            if (buscando || !baseUrl) { agendar(); return; }
+            buscando = true;
+            fetch(baseUrl + '/index.php?m=auth&a=notifications_feed&since=' + ultimoId,
+                  { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+                .then(function (d) {
+                    falhas = 0;
+                    if (d.poll) {
+                        ativo  = Math.max(2000, (d.poll.ativo  || 5) * 1000);
+                        oculto = Math.max(5000, (d.poll.oculto || 20) * 1000);
+                    }
+                    var itens = d.items || [];
+                    var novas = novidades(itens);
+                    pintarBadge(d.count || 0);
+                    pintarLista(itens);
+                    anunciar(novas);
+                    ultimoId = Math.max(ultimoId, d.last_id || 0);
+                    d.novas = novas;   // os módulos recebem a mesma lista
+                    ouvintes.forEach(function (fn) { try { fn(d); } catch (e) { /* um módulo não derruba os outros */ } });
+                    primeira = false;
                 })
-                .catch(function () { /* silencioso */ });
-        }, 60000);
-    }
+                .catch(function () { falhas = Math.min(falhas + 1, 5); })
+                .then(function () { buscando = false; agendar(); });
+        }
+
+        function acordar() {
+            // Voltar para a aba busca na hora: é o momento em que a pessoa
+            // olha para o sino.
+            if (!document.hidden) { clearTimeout(timer); buscar(); }
+            else { agendar(); }
+        }
+
+        if (badge || lista) {
+            document.addEventListener('visibilitychange', acordar);
+            window.addEventListener('focus', acordar);
+            // Abrir o sino também atualiza antes de mostrar.
+            var sino = document.getElementById('portalBell');
+            if (sino) sino.addEventListener('click', function () { clearTimeout(timer); buscar(); });
+            buscar();
+        }
+
+        return {
+            /** Força uma atualização agora (após uma ação que gera notificação). */
+            atualizar: function () { clearTimeout(timer); buscar(); },
+            /** Módulos penduram aqui seu contador em vez de abrir outro poller. */
+            aoAtualizar: function (fn) { if (typeof fn === 'function') ouvintes.push(fn); },
+        };
+    })();
+
+    // Avisos de canto: mostram a notificação que acabou de chegar.
+    window.PortalAvisos = (function () {
+        var caixa = null;
+
+        function container() {
+            if (caixa) return caixa;
+            caixa = document.createElement('div');
+            caixa.className = 'portal-avisos';
+            caixa.setAttribute('aria-live', 'polite');
+            document.body.appendChild(caixa);
+            return caixa;
+        }
+
+        return {
+            mostrar: function (n) {
+                var el = document.createElement('div');
+                el.className = 'portal-aviso';
+                var titulo = document.createElement('div');
+                titulo.className = 'portal-aviso-titulo';
+                titulo.textContent = n.title || 'Notificação';
+                var corpo = document.createElement('div');
+                corpo.className = 'portal-aviso-corpo';
+                corpo.textContent = n.message || '';
+                el.appendChild(titulo);
+                if (n.message) el.appendChild(corpo);
+                if (n.link) {
+                    el.classList.add('portal-aviso-link');
+                    el.setAttribute('role', 'link');
+                    el.setAttribute('tabindex', '0');
+                    var ir = function () { window.location.href = baseUrl + '/index.php?m=auth&a=notification_open&id=' + n.id; };
+                    el.addEventListener('click', ir);
+                    el.addEventListener('keydown', function (e) { if (e.key === 'Enter') ir(); });
+                }
+                container().appendChild(el);
+                requestAnimationFrame(function () { el.classList.add('visivel'); });
+                setTimeout(function () {
+                    el.classList.remove('visivel');
+                    setTimeout(function () { el.remove(); }, 300);
+                }, 8000);
+            }
+        };
+    })();
 
     // Auto-dismiss de alerts (8s)
     document.querySelectorAll('.portal-main > .alert').forEach(function (el) {

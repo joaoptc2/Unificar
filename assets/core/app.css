@@ -682,3 +682,42 @@ a:hover { color: var(--bs-link-hover-color, var(--portal-primary-dark)); }
         padding-top: 0;
     }
 }
+
+/* ── Avisos de notificação (canto da tela) ──────────────────────────────
+   Aparecem quando uma notificação chega com a aba à frente. Curtos e
+   discretos: o registro fica no sino, isto é só o aviso de chegada. */
+.portal-avisos {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 1090;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    max-width: min(22rem, calc(100vw - 2rem));
+    pointer-events: none;
+}
+.portal-aviso {
+    background: var(--portal-surface, var(--bs-body-bg));
+    color: var(--bs-body-color);
+    border: 1px solid var(--portal-border, var(--bs-border-color));
+    border-left: 3px solid var(--portal-primary, var(--bs-primary));
+    border-radius: var(--portal-radius, .5rem);
+    box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15);
+    padding: .625rem .875rem;
+    opacity: 0;
+    transform: translateY(.5rem);
+    transition: opacity .25s ease, transform .25s ease;
+    pointer-events: auto;
+}
+.portal-aviso.visivel { opacity: 1; transform: translateY(0); }
+.portal-aviso-titulo { font-weight: 600; font-size: .9rem; }
+.portal-aviso-corpo  { font-size: .825rem; color: var(--bs-secondary-color); margin-top: .125rem; }
+.portal-aviso-link   { cursor: pointer; }
+.portal-aviso-link:hover { border-left-color: var(--portal-primary-hover, var(--portal-primary, var(--bs-primary))); }
+.portal-aviso-link:focus-visible { outline: 2px solid var(--portal-primary, var(--bs-primary)); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .portal-aviso { transition: none; opacity: 1; transform: none; }
+}
+@media print { .portal-avisos { display: none; } }
