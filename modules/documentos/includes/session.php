@@ -11,9 +11,12 @@
  * core_can('<recurso>.<ação>') / core_require('<recurso>.<ação>').
  *
  * Contexto de SETOR: o módulo tem um seletor global (topo de todas as
- * páginas) com a opção "Todos os setores" (id 0) e todos os setores ativos
- * da unidade. O setor escolhido fica em $_SESSION['doc_sector_id'] e filtra
- * listagens, dashboard, indicadores e planos de ação (0 = sem filtro).
+ * páginas) com os setores EM QUE O USUÁRIO ESTÁ INCLUÍDO (doc_user_sectors)
+ * mais a opção "Todos os setores" (id 0) — que significa "todos os MEUS
+ * setores", não todos os do hospital. O setor escolhido fica em
+ * $_SESSION['doc_sector_id'] e estreita ainda mais as listagens.
+ * Quem administra o hospital inteiro (sectors.view_all ou administrador da
+ * plataforma) vê todos os setores. Ver models/sector.php.
  */
 
 /**
@@ -80,7 +83,12 @@ function doc_sectors_ensure_loaded() {
     } catch (Exception $ex) {
         $s = null;
     }
-    if (!$s || empty($s['is_active']) || (int) $s['hospital_id'] !== get_hospital_id()) {
+    // O setor precisa existir, estar ativo, ser desta unidade E estar no
+    // escopo do usuário. A última condição é o que impede que um setor
+    // gravado na sessão continue valendo depois de o vínculo ser removido.
+    if (!$s || empty($s['is_active'])
+        || (int) $s['hospital_id'] !== get_hospital_id()
+        || !doc_sector_allowed($sid)) {
         switch_sector_context(0, '');
     } else {
         $_SESSION['doc_sector_name'] = $s['name'];

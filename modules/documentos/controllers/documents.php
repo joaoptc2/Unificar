@@ -117,7 +117,7 @@ function _documents_layouts_data() {
 
 function _documents_form_data($document, $editing, $is_controlled) {
     $sectors = [];
-    try { $sectors = sector_list(get_hospital_id()); } catch (Exception $ex) {}
+    try { $sectors = sector_list_for_user(get_hospital_id()); } catch (Exception $ex) {}
     return array_merge([
         'page_title' => $editing ? 'Editar documento' : ($is_controlled ? 'Novo documento controlado' : 'Novo documento não controlado'),
         'document'   => $document,
@@ -301,15 +301,21 @@ function documents_view($param = null) {
 
     $document = null;
     $versions = [];
-    $ack_status = ['acknowledged' => []];
+    $ack_status = ['acknowledged' => [], 'cycle' => 1];
+    $ack_history = [];
+    $history    = [];
     $user_acked = false;
 
     try {
         $document = document_find($id, $hospital_id);
         if ($document) {
             $versions   = document_versions($id);
-            $ack_status = document_acknowledgment_status($id);
-            $user_acked = document_user_acknowledged($id, get_user_id());
+            // Passa o documento inteiro (e não o id) para que o ciclo de
+            // ciência corrente saia da linha já carregada, sem nova consulta.
+            $ack_status  = document_acknowledgment_status($document);
+            $ack_history = document_acknowledgment_history($document);
+            $history     = document_history($id);
+            $user_acked  = document_user_acknowledged($document, get_user_id());
         }
     } catch (Exception $ex) {
         log_error('documents_view', $ex);
@@ -324,8 +330,10 @@ function documents_view($param = null) {
         'page_title' => $document['title'],
         'document'   => $document,
         'versions'   => $versions,
-        'ack_status' => $ack_status,
-        'user_acked' => $user_acked,
+        'ack_status'  => $ack_status,
+        'ack_history' => $ack_history,
+        'history'     => $history,
+        'user_acked'  => $user_acked,
         'menu_key'   => (int) $document['is_controlled'] === 1 ? 'documents' : 'documents-uncontrolled',
     ]);
 }
@@ -633,8 +641,10 @@ function _documents_collect_form($existing = null) {
     $is_controlled = sanitize_int(input('is_controlled', 1)) === 1 ? 1 : 0;
     $source = (string) input('source', 'upload') === 'editor' ? 'editor' : 'upload';
 
+    // O setor precisa existir, estar ativo E estar no escopo do usuário:
+    // ninguém arquiva documento em setor que não enxerga.
     $sector_id = sanitize_int(input('sector_id')) ?: null;
-    if ($sector_id && !sector_find_active($sector_id, get_hospital_id())) {
+    if ($sector_id && (!sector_find_active($sector_id, get_hospital_id()) || !doc_sector_allowed($sector_id))) {
         $sector_id = null;
     }
 

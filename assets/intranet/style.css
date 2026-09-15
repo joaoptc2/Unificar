@@ -1,35 +1,18 @@
 /* MÓDULO INTRANET — estilos das telas internas */
 
-/* Editor com cara de folha: largura acompanha o layout escolhido */
-.intra-editor-wrap {
-    background: #e9edf1;
-    border: 1px solid var(--portal-border, #dee2e6);
-    border-radius: .5rem;
-    padding: 1rem;
-    overflow-x: auto;
-}
+/* Editor com cara de folha: largura acompanha o layout escolhido.
+   Segue a MESMA divisão de cores do editor compartilhado do núcleo
+   (assets/core/doc-editor.css), para as duas folhas nunca divergirem:
 
-.intra-editor-wrap .ql-toolbar {
-    background: var(--portal-surface, #fff);
-    border-radius: .4rem .4rem 0 0;
-    position: sticky;
-    top: 56px; /* abaixo da topbar */
-    z-index: 5;
-    max-width: min(var(--sheet-w, 210mm), 100%);
-    margin: 0 auto;
-}
+   1. A MOLDURA (bandeja em volta, barra de ferramentas, borda) é tela e
+      acompanha o tema da plataforma pelas variáveis --portal-*;
+   2. A FOLHA (.ql-container / .ql-editor) é a pré-visualização do que sai na
+      impressora e continua branca com texto preto também no tema escuro.
 
-.intra-editor-wrap .ql-container {
-    background: var(--portal-surface, #fff);
-    max-width: min(var(--sheet-w, 210mm), 100%);
-    margin: 0 auto;
-    min-height: 60vh;
-    font-size: 12pt;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, .12);
-    border-radius: 0 0 .4rem .4rem;
-}
+   Observação de manutenção: hoje as telas do módulo usam .doc-editor-wrap
+   (núcleo); estas regras ficam como reserva do marcador antigo. */
+/* O editor da intranet usa assets/core/doc-editor.css (compartilhado com o
+   módulo Documentos); nenhum markup usa .intra-editor-wrap. As regras que
+   estavam aqui foram removidas para não darem a impressão de que a barra
+   grudada do editor sai deste arquivo — ela sai de lá. */
 
-.intra-editor-wrap .ql-editor {
-    min-height: 60vh;
-    line-height: 1.5;
-}

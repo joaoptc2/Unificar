@@ -8,7 +8,7 @@
  * ?m=chat&page=admin&action=... e, ao terminar, voltam ao painel central.
  * GET em page=admin é redirecionado pelo index.php do módulo.
  *
- * Gates: categories.* e emojis.* (únicas permissões de configuração).
+ * Gates: categories.*, emojis.* e settings.* (permissões de configuração).
  */
 class AdminController
 {
@@ -23,6 +23,45 @@ class AdminController
     public function index(): void
     {
         core_redirect(core_admin_url('chat'));
+    }
+
+    /* ------------------------------------------------------------------
+     *  Mensagens — regras gerais do chat
+     * ----------------------------------------------------------------*/
+
+    /** Tela: janela de exclusão de mensagens. */
+    public function settings(): void
+    {
+        core_require('settings.view');
+
+        View::render('admin/settings', [
+            'pageTitle'     => 'Mensagens',
+            'deleteWindow'  => Message::deleteWindowSeconds(),
+            'modBypass'     => Message::moderatorBypassesWindow(),
+        ]);
+    }
+
+    /** POST: grava as regras de mensagens. */
+    public function saveSettings(): void
+    {
+        core_require('settings.edit');
+        Csrf::check();
+
+        // Teto de 24h e piso de 0 ("ninguém exclui"): uma janela enorme
+        // equivale a não ter regra, e é o caso que se quis corrigir.
+        $janela = (int) ($_POST['delete_window_seconds'] ?? 60);
+        $janela = max(0, min(86400, $janela));
+        $bypass = !empty($_POST['moderator_bypass']) ? '1' : '0';
+
+        Core\Settings::set('chat.delete_window_seconds', (string) $janela);
+        Core\Settings::set('chat.moderator_bypass_delete_window', $bypass);
+
+        AuditLog::log('chat_settings_saved', 'settings', null, null, [
+            'delete_window_seconds' => $janela,
+            'moderator_bypass'      => $bypass,
+        ]);
+
+        core_redirect(core_admin_url('chat', 'settings'));
     }
 
     /* ------------------------------------------------------------------

@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS `doc_hospitals` (
 
 -- ════════════════════════════════════════════════════════════════════════════
 --  2. SETORES (departamentos/unidades) + vínculo usuário↔setor
---     (doc_user_sectors: a aba "Usuários & Setores" foi descontinuada — o
+--     (doc_user_sectors: define QUEM enxerga cada setor — os setores são
 --      seletor de setor mostra todos os setores ativos; a tabela é mantida
 --      apenas para importação de dados legados)
 -- ════════════════════════════════════════════════════════════════════════════
@@ -134,6 +134,8 @@ CREATE TABLE IF NOT EXISTS `doc_documents` (
     `font_family`         VARCHAR(80)     DEFAULT NULL,
     `font_size`           VARCHAR(10)     DEFAULT NULL,
     `current_version`     INT UNSIGNED    NOT NULL DEFAULT 1,
+    `ack_cycle`    INT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'Ciclo de ciência: mudar de status zera as confirmações',
+    `ack_reset_at` DATETIME DEFAULT NULL COMMENT 'Última redefinição das confirmações',
     `created_by`          INT UNSIGNED    DEFAULT NULL,
     `approved_by`         INT UNSIGNED    DEFAULT NULL,
     `approved_at`         DATETIME        DEFAULT NULL,
@@ -199,14 +201,42 @@ CREATE TABLE IF NOT EXISTS `doc_document_versions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Ciência digital: quem leu o documento (migration 007)
+-- Linha do tempo do documento (tela "Histórico"): criação, edições,
+-- mudanças de status, novas versões e redefinições de ciência.
+CREATE TABLE IF NOT EXISTS `doc_document_history` (
+    `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `document_id` INT UNSIGNED    NOT NULL,
+    `event`       VARCHAR(40)     NOT NULL COMMENT 'created|updated|status|version|ack_reset|acknowledged|reviewed|deleted',
+    `from_status` VARCHAR(30)     DEFAULT NULL,
+    `to_status`   VARCHAR(30)     DEFAULT NULL,
+    `version`     INT UNSIGNED    DEFAULT NULL,
+    `cycle`       INT UNSIGNED    DEFAULT NULL,
+    `summary`     VARCHAR(255)    DEFAULT NULL,
+    `details`     TEXT            DEFAULT NULL COMMENT 'JSON com os campos alterados',
+    `user_id`     INT UNSIGNED    DEFAULT NULL,
+    `created_at`  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    INDEX `idx_doc_hist_doc` (`document_id`, `id`),
+    CONSTRAINT `fk_doc_hist_doc` FOREIGN KEY (`document_id`)
+        REFERENCES `doc_documents` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_doc_hist_user` FOREIGN KEY (`user_id`)
+        REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `doc_document_acknowledgments` (
     `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `document_id`  INT UNSIGNED NOT NULL,
     `user_id`      INT UNSIGNED NOT NULL,
+    -- A ciência vale para UM ciclo: mudar o status do documento incrementa
+    -- doc_documents.ack_cycle e todo mundo precisa confirmar de novo. As
+    -- linhas antigas ficam — são o histórico exigido pela acreditação.
+    `cycle`            INT UNSIGNED NOT NULL DEFAULT 1,
+    `document_version` INT UNSIGNED DEFAULT NULL,
+    `document_status`  VARCHAR(30)  DEFAULT NULL,
     `ip_address`   VARCHAR(45)  DEFAULT NULL,
     `acknowledged_at` DATETIME  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_doc_ack` (`document_id`, `user_id`),
+    UNIQUE KEY `uk_doc_ack_cycle` (`document_id`, `user_id`, `cycle`),
     INDEX `idx_doc_ack_doc` (`document_id`),
     INDEX `idx_doc_ack_user` (`user_id`),
     CONSTRAINT `fk_doc_ack_doc` FOREIGN KEY (`document_id`)

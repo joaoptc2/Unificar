@@ -38,10 +38,58 @@ if ($only === '' || $only === 'core') {
     echo "[core] fila de e-mails...\n";
     try {
         $mq = Core\MailQueue::process(300);
-        echo "[core] e-mails: {$mq['sent']} enviado(s), {$mq['failed']} falha(s), {$mq['retried']} reagendado(s)\n";
+        printf("[core] e-mails: %d enviado(s), %d falha(s), %d reagendado(s), %d retida(s)\n",
+            $mq['sent'], $mq['failed'], $mq['retried'], $mq['held'] ?? 0);
+        if (($mq['held'] ?? 0) > 0) {
+            echo "[core] as retidas esperam conserto da configuração (Administração > E-mail)\n";
+        }
     } catch (Throwable $e) {
         echo "[core] ERRO na fila de e-mails: {$e->getMessage()}\n";
         error_log('cron mail_queue: ' . $e->getMessage());
+    }
+
+    // Backup automático: sai na primeira execução depois da hora marcada,
+    // desde que o último tenha mais de 20 h — um cron atrasado não pode
+    // deixar o dia sem cópia.
+    try {
+        $bk = Core\Backup::runScheduled();
+        echo '[core] backup: ' . $bk['motivo'] . "\n";
+    } catch (Throwable $e) {
+        echo "[core] ERRO no backup automático: {$e->getMessage()}\n";
+        error_log('cron backup: ' . $e->getMessage());
+    }
+
+    // Limpeza periódica: apaga o que passou do prazo configurado em
+    // Administração > Configurações. Roda DEPOIS do backup de propósito —
+    // o backup do dia é feito antes de qualquer coisa ser apagada.
+    try {
+        if (Core\Cleanup::habilitado()) {
+            $cl = Core\Cleanup::run();
+            printf("[core] limpeza: %d registro(s) removido(s) em %.0f ms\n", $cl['total'], $cl['ms']);
+            foreach ($cl['itens'] as $chave => $i) {
+                if (!empty($i['erro'])) {
+                    echo "[core] limpeza ERRO em {$chave}: {$i['erro']}\n";
+                }
+            }
+            // Retenção dos pacotes de backup (regra de diários/semanais/mensais).
+            $bkc = Core\Cleanup::backups();
+            if ($bkc['qtd'] > 0) {
+                printf("[core] backups antigos removidos: %d (%s)\n",
+                    $bkc['qtd'], Core\HealthCheck::bytes($bkc['bytes']));
+            }
+        } else {
+            echo "[core] limpeza: desativada nas configurações\n";
+        }
+    } catch (Throwable $e) {
+        echo "[core] ERRO na limpeza: {$e->getMessage()}\n";
+        error_log('cron cleanup: ' . $e->getMessage());
+    }
+
+    // Marcador de execução: é o que permite à Administração dizer "o cron não
+    // está agendado" em vez de deixar tudo pendente em silêncio.
+    try {
+        Core\Settings::set('cron.last_run_at', date('Y-m-d H:i:s'));
+    } catch (Throwable) {
     }
 }
 

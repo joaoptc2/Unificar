@@ -239,37 +239,86 @@
         return;
     }
     const data = <?= json_encode($chartsData, JSON_UNESCAPED_UNICODE) ?>;
-    const palette = ['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1','#20c997','#fd7e14','#0dcaf0','#6c757d','#d63384'];
-    const textColor = '#495057';
-    const gridColor = 'rgba(0,0,0,0.06)';
 
-    if (document.getElementById('chartDepartments') && data.departments.labels.length) {
-        new Chart(document.getElementById('chartDepartments'), {
-            type: 'doughnut',
-            data: { labels: data.departments.labels, datasets: [{ data: data.departments.data, backgroundColor: palette, borderWidth: 0 }] },
-            options: { plugins: { legend: { position: 'right', labels: { color: textColor, boxWidth: 12 } } }, cutout: '60%' },
-        });
+    // Valores de antes do tema. Só entram em cena se o app.js do núcleo não
+    // estiver na página (tela servida fora do layout unificado): assim a
+    // aparência de hoje continua igual em vez de o gráfico sair sem cor.
+    const PALETA_FIXA = ['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1','#20c997','#fd7e14','#0dcaf0','#6c757d','#d63384'];
+
+    /* Mesma cor, só que translúcida: o preenchimento da área precisa
+       acompanhar a linha em vez de ficar num vermelho fixo. */
+    function comAlfa(cor, a) {
+        const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(cor).trim());
+        if (!m) { return cor; }            // já é rgba()/nome: usa como está
+        let h = m[1];
+        if (h.length === 3) { h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2]; }
+        return 'rgba(' + parseInt(h.slice(0,2),16) + ',' + parseInt(h.slice(2,4),16)
+             + ',' + parseInt(h.slice(4,6),16) + ',' + a + ')';
     }
-    if (document.getElementById('chartContracts') && data.contracts.labels.length) {
-        new Chart(document.getElementById('chartContracts'), {
-            type: 'bar',
-            data: { labels: data.contracts.labels, datasets: [{ label: 'Funcionários', data: data.contracts.data, backgroundColor: palette[0] }] },
-            options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { color: textColor }, grid: { color: gridColor } }, y: { ticks: { color: textColor }, grid: { display: false } } } },
-        });
+
+    const graficos = [];
+    let desenhado = false;
+
+    function desenhar() {
+        desenhado = true;
+        const T = window.PortalTheme || null;
+        if (T) { T.applyChartDefaults(); }   // rótulos, grade e fonte do tema
+
+        const palette   = T ? T.palette()       : PALETA_FIXA;
+        const textColor = T ? T.color('muted')  : '#495057';
+        const gridColor = T ? T.color('border') : 'rgba(0,0,0,0.06)';
+        // Vencimento é prazo estourando: o vermelho aqui é significado, não
+        // posição na paleta — segue "Erro / vencido" escolhido na Aparência.
+        const corVenc   = T ? T.color('danger') : '#dc3545';
+
+        // Redesenhar (troca de tema) exige descartar o gráfico anterior:
+        // dois Chart no mesmo <canvas> quebram o Chart.js.
+        while (graficos.length) { graficos.pop().destroy(); }
+
+        if (document.getElementById('chartDepartments') && data.departments.labels.length) {
+            graficos.push(new Chart(document.getElementById('chartDepartments'), {
+                type: 'doughnut',
+                data: { labels: data.departments.labels, datasets: [{ data: data.departments.data, backgroundColor: palette, borderWidth: 0 }] },
+                options: { plugins: { legend: { position: 'right', labels: { color: textColor, boxWidth: 12 } } }, cutout: '60%' },
+            }));
+        }
+        if (document.getElementById('chartContracts') && data.contracts.labels.length) {
+            graficos.push(new Chart(document.getElementById('chartContracts'), {
+                type: 'bar',
+                data: { labels: data.contracts.labels, datasets: [{ label: 'Funcionários', data: data.contracts.data, backgroundColor: palette[0] }] },
+                options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { color: textColor }, grid: { color: gridColor } }, y: { ticks: { color: textColor }, grid: { display: false } } } },
+            }));
+        }
+        if (document.getElementById('chartExpiry') && data.expiry.labels.length) {
+            graficos.push(new Chart(document.getElementById('chartExpiry'), {
+                type: 'line',
+                data: { labels: data.expiry.labels, datasets: [{ label: 'Vencimentos', data: data.expiry.data, tension: 0.35, borderColor: corVenc, backgroundColor: comAlfa(corVenc, 0.1), fill: true, pointBackgroundColor: corVenc }] },
+                options: { plugins: { legend: { display: false } }, scales: { x: { ticks: { color: textColor }, grid: { display: false } }, y: { beginAtZero: true, ticks: { color: textColor, precision: 0 }, grid: { color: gridColor } } } },
+            }));
+        }
+        if (document.getElementById('chartCandidates') && data.candidates.labels.length) {
+            graficos.push(new Chart(document.getElementById('chartCandidates'), {
+                type: 'pie',
+                data: { labels: data.candidates.labels, datasets: [{ data: data.candidates.data, backgroundColor: palette, borderWidth: 0 }] },
+                options: { plugins: { legend: { position: 'bottom', labels: { color: textColor, boxWidth: 10, font: { size: 11 } } } } },
+            }));
+        }
     }
-    if (document.getElementById('chartExpiry') && data.expiry.labels.length) {
-        new Chart(document.getElementById('chartExpiry'), {
-            type: 'line',
-            data: { labels: data.expiry.labels, datasets: [{ label: 'Vencimentos', data: data.expiry.data, tension: 0.35, borderColor: palette[3], backgroundColor: 'rgba(220,53,69,0.1)', fill: true, pointBackgroundColor: palette[3] }] },
-            options: { plugins: { legend: { display: false } }, scales: { x: { ticks: { color: textColor }, grid: { display: false } }, y: { beginAtZero: true, ticks: { color: textColor, precision: 0 }, grid: { color: gridColor } } } },
-        });
+
+    // O app.js do núcleo é carregado DEPOIS do conteúdo da página; esperar o
+    // DOM pronto garante que window.PortalTheme já exista ao ler as cores.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', desenhar);
+    } else {
+        desenhar();
     }
-    if (document.getElementById('chartCandidates') && data.candidates.labels.length) {
-        new Chart(document.getElementById('chartCandidates'), {
-            type: 'pie',
-            data: { labels: data.candidates.labels, datasets: [{ data: data.candidates.data, backgroundColor: palette, borderWidth: 0 }] },
-            options: { plugins: { legend: { position: 'bottom', labels: { color: textColor, boxWidth: 10, font: { size: 11 } } } } },
-        });
-    }
+    // O botão de tema claro/escuro avisa por este evento: redesenhar é o que
+    // faz as séries e os rótulos acompanharem a troca sem recarregar a tela.
+    // setTimeout: o app.js do núcleo só limpa o cache de cores no próprio
+    // listener deste evento, e o desta página foi registrado antes dele —
+    // redesenhar na hora releria a cor ANTIGA.
+    window.addEventListener('portal:tema', function () {
+        if (desenhado) { setTimeout(desenhar, 0); }
+    });
 })();
 </script>

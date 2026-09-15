@@ -23,6 +23,11 @@ class ChatApp {
             edit:     wrapper.dataset.canEdit === '1',
             delete:   wrapper.dataset.canDelete === '1',
         };
+        // Janela de exclusão: depois dela a mensagem é histórico da conversa.
+        // O servidor é quem manda (ApiController.deleteMessage); aqui só se
+        // evita desenhar um botão que responderia 403.
+        this.DELETE_WINDOW  = parseInt(meta('chat-delete-window') || '60', 10);
+        this.MOD_BYPASS     = meta('chat-delete-mod-bypass') === '1';
         this.POLL_ACTIVE = parseInt(meta('chat-poll-interval') || '2000', 10);
         this.POLL_IDLE   = parseInt(meta('chat-poll-idle') || '8000', 10);
         this.pollSpeed   = this.POLL_ACTIVE;
@@ -61,6 +66,13 @@ class ChatApp {
 
         this.startHeartbeat();
         this.initPresence();
+
+        // Faz os botões de excluir sumirem quando a janela fecha, sem
+        // recarregar a página (roda também com a aba em segundo plano — ao
+        // voltar, os botões vencidos já não estão lá).
+        if (this.DELETE_WINDOW > 0) {
+            setInterval(() => this.sweepDeleteButtons(), 1000);
+        }
     }
 
     loadCustomEmojis() {
@@ -413,6 +425,47 @@ class ChatApp {
         return this.esc(emoji);
     }
 
+    /**
+     * Segundos que ainda restam para excluir a mensagem. A mensagem recém
+     * enviada (ainda sem created_at do servidor) conta como zero de idade —
+     * senão o botão sumiria justamente de quem acabou de digitar.
+     */
+    deleteSecondsLeft(msg) {
+        if (this.DELETE_WINDOW <= 0) return 0;
+        if (msg._pending || !msg.created_at) return this.DELETE_WINDOW;
+        const t = this.parseDate(msg.created_at);
+        if (!t) return this.DELETE_WINDOW;
+        return Math.max(0, this.DELETE_WINDOW - Math.floor((Date.now() - t) / 1000));
+    }
+
+    /** created_at do servidor ("YYYY-MM-DD HH:MM:SS") → ms, ou null. */
+    parseDate(valor) {
+        const t = Date.parse(String(valor).replace(' ', 'T'));
+        return isNaN(t) ? null : t;
+    }
+
+    /**
+     * Retira os botões de excluir cujo tempo acabou. Roda de segundo em
+     * segundo: é o que faz o botão sumir sozinho no minuto seguinte ao
+     * envio, sem recarregar a página.
+     *
+     * O HTML traz segundos RESTANTES (o servidor não conhece o relógio do
+     * navegador); na primeira varredura isso vira um instante absoluto, que
+     * é imune ao navegador segurar os timers com a aba em segundo plano.
+     */
+    sweepDeleteButtons() {
+        const agora = Date.now();
+        this.wrapper.querySelectorAll('[data-delete-expires-in]').forEach((btn) => {
+            if (!btn.dataset.deleteExpiresAt) {
+                const resta = parseInt(btn.dataset.deleteExpiresIn, 10);
+                btn.dataset.deleteExpiresAt = String(agora + (isNaN(resta) ? 0 : resta) * 1000);
+            }
+            if (agora >= parseInt(btn.dataset.deleteExpiresAt, 10)) {
+                btn.remove();
+            }
+        });
+    }
+
     renderMessage(msg, compact) {
         const id      = msg.id;
         const isMine  = parseInt(msg.user_id, 10) === this.userId;
@@ -420,7 +473,10 @@ class ChatApp {
         const replies = parseInt(msg.reply_count, 10) || 0;
         const edited  = parseInt(msg.is_edited, 10) === 1;
         const mayEdit = isMine && this.can.edit && msg.type !== 'system';
-        const mayDel  = this.can.moderate || (isMine && this.can.delete);
+        const podeApagar   = this.can.moderate || (isMine && this.can.delete);
+        const ignoraJanela = this.can.moderate && this.MOD_BYPASS;
+        const segRestantes = ignoraJanela ? Infinity : this.deleteSecondsLeft(msg);
+        const mayDel       = podeApagar && segRestantes > 0;
         const classes = ['message'];
         if (compact) classes.push('message-compact');
         if (isMine) classes.push('message-mine');
@@ -441,7 +497,10 @@ class ChatApp {
             <button type="button" class="btn-action-sm" data-action="thread" data-message-id="${id}" title="Responder em thread"><i class="bi bi-chat-right-text"></i></button>`;
         if (this.can.moderate) actions += `<button type="button" class="btn-action-sm" data-action="pin" data-message-id="${id}" title="${pinned ? 'Desafixar' : 'Fixar'}"><i class="bi bi-pin-angle"></i></button>`;
         if (mayEdit) actions += `<button type="button" class="btn-action-sm" data-action="edit-msg" data-message-id="${id}" title="Editar"><i class="bi bi-pencil"></i></button>`;
-        if (mayDel)  actions += `<button type="button" class="btn-action-sm text-danger" data-action="delete-msg" data-message-id="${id}" title="Excluir"><i class="bi bi-trash"></i></button>`;
+        if (mayDel) {
+            const expira = ignoraJanela ? '' : ` data-delete-expires-in="${segRestantes}"`;
+            actions += `<button type="button" class="btn-action-sm text-danger" data-action="delete-msg" data-message-id="${id}"${expira} title="Excluir"><i class="bi bi-trash"></i></button>`;
+        }
 
         return `
         <div class="${classes.join(' ')}" id="msg-${id}" data-message-id="${id}" data-user-id="${parseInt(msg.user_id, 10) || 0}" data-date="${this.dateKey(msg.created_at)}" data-mine="${isMine ? 1 : 0}">

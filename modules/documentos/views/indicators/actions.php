@@ -7,7 +7,7 @@ $st_colors    = ['pending'=>'bg-secondary','in_progress'=>'bg-primary','done'=>'
 <div class="page-header">
     <h1><i class="bi bi-list-check me-2"></i>Planos de Ação</h1>
     <div class="d-flex gap-2">
-        <?php if (core_can('actions.create')): ?>
+        <?php if (core_can('actions.create') && ($indicator || !empty($indicators_all))): ?>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAction">
             <i class="bi bi-plus-lg me-1"></i>Nova Ação
         </button>
@@ -69,6 +69,7 @@ $overdue = count(array_filter($actions, fn($a) => $a['due_date'] && $a['status']
                     <thead>
                         <tr>
                             <th>Ação</th>
+                            <?php if (!$indicator): ?><th>Indicador</th><?php endif; ?>
                             <th>Tipo</th>
                             <th>Responsável</th>
                             <th>Prazo</th>
@@ -89,6 +90,18 @@ $overdue = count(array_filter($actions, fn($a) => $a['due_date'] && $a['status']
                                     <small class="text-muted"><?php echo e(substr($a['description'], 0, 80)); ?></small>
                                 <?php endif; ?>
                             </td>
+                            <?php if (!$indicator): ?>
+                            <td class="small">
+                                <?php if (!empty($a['indicator_name'])): ?>
+                                    <a href="<?php echo url('indicators/view?id=' . (int) $a['indicator_id']); ?>"
+                                       class="text-decoration-none">
+                                        <i class="bi bi-graph-up me-1"></i><?php echo e($a['indicator_name']); ?>
+                                    </a>
+                                <?php else: ?>
+                                    <span class="text-muted">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <?php endif; ?>
                             <td><span class="badge bg-<?php echo $ac; ?>"><?php echo $at; ?></span></td>
                             <td class="small"><?php echo e($a['responsible'] ?: '—'); ?></td>
                             <td class="small">
@@ -97,6 +110,13 @@ $overdue = count(array_filter($actions, fn($a) => $a['due_date'] && $a['status']
                             </td>
                             <td><span class="badge <?php echo $st_colors[$a['status']] ?? 'bg-secondary'; ?>"><?php echo $st_labels[$a['status']] ?? $a['status']; ?></span></td>
                             <td class="text-end">
+                                <?php if (core_can('actions.edit') && !empty($indicators_all)): ?>
+                                <button class="btn btn-outline-secondary btn-action" type="button"
+                                        data-bs-toggle="tooltip" title="Vincular a outro indicador"
+                                        onclick="relinkAction(<?php echo (int) $a['id']; ?>, <?php echo (int) $a['indicator_id']; ?>, <?php echo e(json_encode($a['title'])); ?>)">
+                                    <i class="bi bi-link-45deg"></i>
+                                </button>
+                                <?php endif; ?>
                                 <?php if (!core_can('actions.edit')): ?>
                                 <?php elseif ($a['status'] === 'pending'): ?>
                                 <form method="POST" action="<?php echo url('indicators/action_update_status'); ?>" class="d-inline">
@@ -135,14 +155,50 @@ $overdue = count(array_filter($actions, fn($a) => $a['due_date'] && $a['status']
         <div class="modal-content">
             <form method="POST" action="<?php echo url('indicators/action_store'); ?>">
                 <?php echo csrf_field(); ?>
-                <input type="hidden" name="indicator_id" value="<?php echo (int) ($indicator['id'] ?? 0); ?>">
                 <div class="modal-header py-2">
                     <h5 class="modal-title fw-semibold">Nova Ação</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <?php if (!$indicator): ?>
-                    <div class="alert alert-warning py-2 small">Selecione um indicador antes de criar ações.</div>
+                    <?php if ($indicator): ?>
+                        <input type="hidden" name="indicator_id" value="<?php echo (int) $indicator['id']; ?>">
+                        <div class="mb-3">
+                            <label class="form-label">Indicador vinculado</label>
+                            <input type="text" class="form-control" value="<?php echo e($indicator['name']); ?>" disabled>
+                            <div class="form-text">
+                                Para vincular a ação a outro indicador, abra
+                                <a href="<?php echo url('indicators/actions'); ?>">todos os planos de ação</a>.
+                            </div>
+                        </div>
+                    <?php elseif (empty($indicators_all)): ?>
+                        <div class="alert alert-warning py-2 small">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            Nenhum indicador disponível nos seus setores. Cadastre um indicador antes de criar o plano de ação.
+                        </div>
+                    <?php else: ?>
+                        <div class="mb-3">
+                            <label class="form-label required" for="acIndicador">Indicador</label>
+                            <select name="indicator_id" id="acIndicador" class="form-select" required>
+                                <option value="">— Selecione o indicador —</option>
+                                <?php
+                                // Agrupa por setor: numa lista longa é o que
+                                // permite achar o indicador certo de relance.
+                                $porSetor = [];
+                                foreach ($indicators_all as $ind) {
+                                    $porSetor[$ind['sector_name'] ?: 'Sem setor'][] = $ind;
+                                }
+                                ksort($porSetor);
+                                ?>
+                                <?php foreach ($porSetor as $setor => $lista): ?>
+                                <optgroup label="<?php echo e($setor); ?>">
+                                    <?php foreach ($lista as $ind): ?>
+                                        <option value="<?php echo (int) $ind['id']; ?>"><?php echo e($ind['name']); ?></option>
+                                    <?php endforeach; ?>
+                                </optgroup>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">O plano de ação sempre pertence a um indicador — é dele que sai a meta que a ação persegue.</div>
+                        </div>
                     <?php endif; ?>
                     <div class="mb-3">
                         <label class="form-label required">Título da ação</label>
@@ -177,7 +233,7 @@ $overdue = count(array_filter($actions, fn($a) => $a['due_date'] && $a['status']
                 </div>
                 <div class="modal-footer py-2">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" <?php echo !$indicator ? 'disabled' : ''; ?>>
+                    <button type="submit" class="btn btn-primary" <?php echo (!$indicator && empty($indicators_all)) ? 'disabled' : ''; ?>>
                         <i class="bi bi-check-lg me-1"></i>Registrar
                     </button>
                 </div>
@@ -185,3 +241,53 @@ $overdue = count(array_filter($actions, fn($a) => $a['due_date'] && $a['status']
         </div>
     </div>
 </div>
+
+<?php if (core_can('actions.edit') && !empty($indicators_all)): ?>
+<!-- Modal: vincular o plano de ação a outro indicador -->
+<div class="modal fade" id="modalRelink" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="<?php echo url('indicators/action-relink'); ?>">
+                <?php echo csrf_field(); ?>
+                <input type="hidden" name="action_id" id="rl_action_id">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title fw-semibold">Vincular indicador</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted">Ação: <strong id="rl_titulo"></strong></p>
+                    <label class="form-label required" for="rl_indicator">Indicador</label>
+                    <select name="indicator_id" id="rl_indicator" class="form-select" required>
+                        <?php
+                        $porSetorRl = [];
+                        foreach ($indicators_all as $ind) {
+                            $porSetorRl[$ind['sector_name'] ?: 'Sem setor'][] = $ind;
+                        }
+                        ksort($porSetorRl);
+                        ?>
+                        <?php foreach ($porSetorRl as $setor => $lista): ?>
+                        <optgroup label="<?php echo e($setor); ?>">
+                            <?php foreach ($lista as $ind): ?>
+                                <option value="<?php echo (int) $ind['id']; ?>"><?php echo e($ind['name']); ?></option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-link-45deg me-1"></i>Vincular</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+function relinkAction(actionId, indicatorId, titulo) {
+    document.getElementById('rl_action_id').value = actionId;
+    document.getElementById('rl_titulo').textContent = titulo;
+    document.getElementById('rl_indicator').value = indicatorId;
+    new bootstrap.Modal(document.getElementById('modalRelink')).show();
+}
+</script>
+<?php endif; ?>

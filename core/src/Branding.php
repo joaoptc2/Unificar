@@ -43,6 +43,27 @@ final class Branding
         'density'         => 'normal',      // compact | normal | comfortable
         'sidebar_width'   => '248',         // px
         'topbar_height'   => '56',          // px
+        'font_size'       => '16',          // px da base (todo o CSS usa rem)
+        'shadow'          => 'suave',       // nenhuma | suave | destacada
+        'sidebar_mode'    => 'fixo',        // fixo | recolhivel | icones
+        // Cores de estado: os valores de fábrica são os do Bootstrap, para
+        // atualizar não mudar nada em quem nunca abriu esta tela.
+        'success'         => '#198754',
+        'warning'         => '#ffc107',
+        'danger'          => '#dc3545',
+        'info'            => '#0dcaf0',
+        // Modo escuro
+        'theme_mode'      => 'claro',       // claro | escuro | auto
+        'theme_toggle'    => '0',           // cada usuário pode alternar
+        'dark_body_bg'    => '#0f172a',
+        'dark_sidebar_bg' => '#111827',
+        'dark_primary'    => '',            // vazio → clareia a primária o quanto faltar
+        // Tela de login
+        'login_layout'    => 'centralizado', // centralizado | lado_a_lado
+        'login_card_width' => '420',        // px
+        'login_footer'    => '',
+        // Válvula de escape: CSS do administrador (servido em rota própria)
+        'custom_css'      => '',
     ];
 
     /** Fontes disponíveis (sem depender de CDN: pilhas do sistema). */
@@ -60,6 +81,40 @@ final class Branding
         'compact'     => ['label' => 'Compacta',    'scale' => '0.85'],
         'normal'      => ['label' => 'Normal',      'scale' => '1'],
         'comfortable' => ['label' => 'Confortável', 'scale' => '1.15'],
+    ];
+
+    public const SHADOWS = [
+        'nenhuma'    => ['label' => 'Sem sombra',  'card' => 'none',
+                         'topbar' => 'none', 'hover' => '0 0 0 1px var(--portal-border)'],
+        'suave'      => ['label' => 'Suave',       'card' => '0 1px 2px rgba(16,24,40,.04)',
+                         'topbar' => '0 1px 6px rgba(0,0,0,.18)', 'hover' => '0 8px 22px rgba(16,24,40,.10)'],
+        'destacada'  => ['label' => 'Destacada',   'card' => '0 2px 10px rgba(16,24,40,.10)',
+                         'topbar' => '0 2px 12px rgba(0,0,0,.26)', 'hover' => '0 14px 34px rgba(16,24,40,.18)'],
+    ];
+
+    public const SIDEBAR_MODES = [
+        'fixo'       => 'Sempre aberto (padrão)',
+        'recolhivel' => 'Aberto, com botão para recolher em ícones',
+        'icones'     => 'Só ícones, abre ao passar o mouse',
+    ];
+
+    public const THEME_MODES = [
+        'claro'  => 'Sempre claro',
+        'escuro' => 'Sempre escuro',
+        'auto'   => 'Seguir o aparelho de cada pessoa',
+    ];
+
+    public const LOGIN_LAYOUTS = [
+        'centralizado' => 'Cartão centralizado',
+        'lado_a_lado'  => 'Imagem de um lado, formulário do outro',
+    ];
+
+    /** Cores de estado que a tela deixa escolher. */
+    public const STATES = [
+        'success' => 'Sucesso / conforme',
+        'warning' => 'Alerta / atenção',
+        'danger'  => 'Erro / vencido',
+        'info'    => 'Informação',
     ];
 
     public const TOPBAR_STYLES = [
@@ -85,11 +140,78 @@ final class Branding
 
     /** @var array<string, string>|null cache por request */
     private static ?array $cache = null;
+    /** Unidade a que o cache acima pertence (a identidade varia por unidade). */
+    private static ?int $cacheUnit = null;
 
     /** @return array<string, string> configuração efetiva (padrões + salvos) */
+    /**
+     * Chaves que uma UNIDADE pode ter diferentes do portal. É um conjunto
+     * curto de propósito: um grupo com dois hospitais quer o próprio nome e
+     * o próprio logotipo no topo, não um sistema com duas caras inteiras —
+     * isso confundiria quem circula entre as unidades.
+     */
+    public const POR_UNIDADE = ['name', 'short_name', 'logo', 'logo_light', 'favicon', 'primary', 'accent'];
+
+    /**
+     * Unidade em foco nesta requisição (0 = nenhuma/portal).
+     * Vem da sessão, que o núcleo preenche no login.
+     */
+    public static function unitId(): int
+    {
+        return (int) ($_SESSION['hospital_id'] ?? 0);
+    }
+
+    /** Há mais de uma unidade ativa? (a tela só aparece nesse caso) */
+    public static function multiUnidade(): bool
+    {
+        try {
+            $r = DB::queryOne(
+                "SELECT COUNT(*) AS n FROM doc_hospitals WHERE deleted_at IS NULL AND is_active = 1"
+            );
+            return (int) ($r['n'] ?? 0) > 1;
+        } catch (\Throwable $e) {
+            return false;   // instalação sem o módulo Documentos: mono-unidade
+        }
+    }
+
+    /** Sobreposições gravadas para uma unidade. */
+    public static function unitOverrides(int $unidade): array
+    {
+        if ($unidade <= 0) {
+            return [];
+        }
+        $out = [];
+        foreach (self::POR_UNIDADE as $k) {
+            $v = Settings::get('brand.unit.' . $unidade . '.' . $k);
+            if ($v !== null && $v !== '') {
+                $out[$k] = (string) $v;
+            }
+        }
+        return $out;
+    }
+
+    /** Grava (ou apaga, quando vazio) as sobreposições de uma unidade. */
+    public static function saveUnit(int $unidade, array $values): void
+    {
+        if ($unidade <= 0) {
+            return;
+        }
+        $atual = self::unitOverrides($unidade);
+        foreach (self::POR_UNIDADE as $k) {
+            if (!array_key_exists($k, $values)) {
+                continue;
+            }
+            $v = self::normalizeField($k, (string) $values[$k], $atual[$k] ?? '');
+            // Vazio = "herda do portal", e não "grava string vazia".
+            Settings::set('brand.unit.' . $unidade . '.' . $k, $v === '' ? null : $v);
+        }
+        self::forget();
+    }
+
     public static function all(): array
     {
-        if (self::$cache !== null) {
+        $unidade = self::unitId();
+        if (self::$cache !== null && self::$cacheUnit === $unidade) {
             return self::$cache;
         }
         $out = self::DEFAULTS;
@@ -99,6 +221,15 @@ final class Branding
                 $out[$key] = (string) $value;
             }
         }
+        // A unidade sobrepõe o portal no punhado de chaves permitidas. Sem
+        // nenhuma gravada — o caso de toda instalação de uma unidade só —
+        // isto não muda nada e não custa consulta nenhuma extra.
+        if ($unidade > 0 && self::multiUnidade()) {
+            foreach (self::unitOverrides($unidade) as $k => $v) {
+                $out[$k] = $v;
+            }
+        }
+        self::$cacheUnit = $unidade;
         return self::$cache = $out;
     }
 
@@ -110,6 +241,7 @@ final class Branding
     public static function forget(): void
     {
         self::$cache = null;
+        self::$cacheUnit = null;
     }
 
     // ------------------------------------------------------------------
@@ -211,6 +343,17 @@ final class Branding
      * Sem internet o navegador simplesmente usa a pilha de reserva do
      * --portal-font, então a página nunca quebra por causa disso.
      */
+    /**
+     * Pilha de fontes em uso (a mesma que vai para --portal-font). Pública
+     * porque a impressão e os e-mails também precisam dela — antes cada um
+     * repetia a sua.
+     */
+    public static function fontStack(?string $chave = null): string
+    {
+        $k = $chave ?? self::get('font', 'system');
+        return self::FONTS[$k]['stack'] ?? self::FONTS['system']['stack'];
+    }
+
     public static function fontTag(): string
     {
         $family = self::WEB_FONTS[self::get('font')] ?? '';
@@ -227,7 +370,8 @@ final class Branding
     // Cores
     // ------------------------------------------------------------------
 
-    private static function topbarIsDark(): bool
+    /** O topo é escuro? (o menu suspenso do topo segue esta decisão) */
+    public static function topbarIsDark(): bool
     {
         $style = self::get('topbar_style');
         if ($style === 'light') {
@@ -241,10 +385,23 @@ final class Branding
     }
 
     /** Cor de fundo da topbar (CSS pronto: cor ou degradê). */
-    private static function topbarBackground(): string
+    /**
+     * Fundo do topo. No tema escuro, o estilo "claro" seria uma faixa branca
+     * cortando a tela — então ele vira a variante escura automaticamente.
+     *
+     * @param array<string,string>|null $b valores em uso (null = os salvos)
+     */
+    private static function topbarBackground(?array $b = null, bool $dark = false): string
     {
-        $style = self::get('topbar_style');
-        $base  = self::get('topbar_bg') ?: self::get('primary');
+        $b     = $b ?? self::all();
+        $style = $b['topbar_style'] ?? 'gradient';
+        if ($dark && $style === 'light') {
+            $style = 'dark';
+        }
+        $base = self::color($b['topbar_bg'] ?? '', '') ?: self::color($b['primary'] ?? '', self::DEFAULTS['primary']);
+        if ($dark) {
+            $base = self::shade($base, -0.10);
+        }
         return match ($style) {
             'solid'  => $base,
             'dark'   => 'linear-gradient(90deg, #111827, #1f2937)',
@@ -253,47 +410,126 @@ final class Branding
         };
     }
 
-    private static function topbarText(): string
+    /** @param array<string,string>|null $b valores em uso (null = os salvos) */
+    private static function topbarText(?array $b = null, bool $dark = false): string
     {
-        return match (self::get('topbar_style')) {
+        $b     = $b ?? self::all();
+        $style = $b['topbar_style'] ?? 'gradient';
+        if ($dark && $style === 'light') {
+            $style = 'dark';
+        }
+        return match ($style) {
             'light' => '#1f2937',
             'dark'  => '#f8fafc',
-            default => self::contrastColor(self::get('topbar_bg') ?: self::get('primary')),
+            default => self::contrastColor(
+                self::color($b['topbar_bg'] ?? '', '') ?: self::color($b['primary'] ?? '', self::DEFAULTS['primary'])
+            ),
         };
     }
 
     /**
      * Bloco <style> com todas as variáveis da identidade visual.
-     * Vai no <head>, depois do app.css, para que os módulos herdem.
+     *
+     * Emite ATÉ TRÊS conjuntos, porque o modo escuro tem três origens
+     * possíveis e elas precisam vencer umas às outras na ordem certa:
+     *   1. :root                              → o tema base (claro, ou escuro
+     *                                            quando o modo é "sempre escuro");
+     *   2. @media (prefers-color-scheme: dark) → o aparelho da pessoa, quando o
+     *      + :root:not([data-portal-theme=claro])  modo é "seguir o aparelho";
+     *   3. :root[data-portal-theme=escuro|claro] → a escolha de quem usa o
+     *                                              alternador, que ganha de todas.
+     *
+     * @param array<string,string>|null $override valores ainda não salvos
+     *        (pré-visualização), já passados por normalizeAll()
      */
-    public static function cssVariables(): string
+    public static function cssVariables(?array $override = null): string
     {
-        $b        = self::all();
-        $primary  = self::color($b['primary'], self::DEFAULTS['primary']);
-        $accent   = self::color($b['accent'], self::DEFAULTS['accent']);
-        $sideBg   = self::color($b['sidebar_bg'], self::DEFAULTS['sidebar_bg']);
-        $sideText = self::color($b['sidebar_text'], self::DEFAULTS['sidebar_text']);
-        $bodyBg   = self::color($b['body_bg'], self::DEFAULTS['body_bg']);
-        $sideDark = self::isDark($sideBg);
+        $b    = $override ?? self::all();
+        $mode = $b['theme_mode'] ?? 'claro';
 
-        $font    = self::FONTS[$b['font']]['stack'] ?? self::FONTS['system']['stack'];
-        $scale   = self::DENSITIES[$b['density']]['scale'] ?? '1';
-        $radius  = max(0, min(24, (int) $b['radius']));
-        $sideW   = max(180, min(360, (int) $b['sidebar_width']));
-        $topH    = max(44, min(88, (int) $b['topbar_height']));
+        $claro  = self::paletteCss(self::palette($b, false));
+        $escuro = self::paletteCss(self::palette($b, true));
+
+        $css = ":root{\n" . ($mode === 'escuro' ? $escuro : $claro) . "}\n";
+
+        if ($mode === 'auto') {
+            $css .= "@media (prefers-color-scheme: dark){\n"
+                  . "  :root:not([data-portal-theme=\"claro\"]){\n" . $escuro . "  }\n}\n";
+        }
+        // O alternador grava o atributo no <html>; as duas regras existem
+        // sempre que ele está ligado, para funcionar nos dois sentidos.
+        if (($b['theme_toggle'] ?? '0') === '1' || $mode === 'auto') {
+            $css .= ":root[data-portal-theme=\"escuro\"]{\n" . $escuro . "}\n";
+            $css .= ":root[data-portal-theme=\"claro\"]{\n" . $claro . "}\n";
+        }
+
+        if (($bg = self::loginBgUrl()) !== '') {
+            $css .= "body.portal-bare{background-image:linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.45)),"
+                  . "url('" . core_e($bg) . "');background-size:cover;background-position:center;}\n";
+        }
+
+        return "<style id=\"portal-branding\">\n" . $css . "</style>";
+    }
+
+    /**
+     * Uma paleta completa a partir das escolhas do administrador.
+     *
+     * No escuro, a cor da marca é clareada o quanto for preciso para continuar
+     * legível sobre o fundo escuro: um azul-marinho institucional usado como
+     * está sobre grafite vira um borrão.
+     *
+     * @param array<string,string> $b
+     * @return array<string,string>
+     */
+    private static function palette(array $b, bool $dark): array
+    {
+        $bodyBg = $dark
+            ? self::color($b['dark_body_bg'] ?? '', self::DEFAULTS['dark_body_bg'])
+            : self::color($b['body_bg'] ?? '', self::DEFAULTS['body_bg']);
+        $sideBg = $dark
+            ? self::color($b['dark_sidebar_bg'] ?? '', self::DEFAULTS['dark_sidebar_bg'])
+            : self::color($b['sidebar_bg'] ?? '', self::DEFAULTS['sidebar_bg']);
+
+        $primary = self::color($b['primary'] ?? '', self::DEFAULTS['primary']);
+        if ($dark) {
+            $escolhida = self::color($b['dark_primary'] ?? '', '');
+            $primary   = $escolhida !== '' ? $escolhida : self::lightenFor($primary, $bodyBg);
+        }
+        $accent = self::color($b['accent'] ?? '', self::DEFAULTS['accent']);
+        if ($dark) {
+            $accent = self::lightenFor($accent, $bodyBg);
+        }
+
+        $sideText = $dark ? '#cbd5e1' : self::color($b['sidebar_text'] ?? '', self::DEFAULTS['sidebar_text']);
+        $sideDark = self::isDark($sideBg);
+        $surface  = $dark ? self::shade($bodyBg, 0.10) : '#ffffff';
+        $text     = self::isDark($bodyBg) ? '#e5e7eb' : '#212529';
+        $muted    = $dark ? '#9aa4b2' : '#6c757d';
+        $border   = $dark ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.09)';
+
+        $font   = self::FONTS[$b['font'] ?? 'system']['stack'] ?? self::FONTS['system']['stack'];
+        $scale  = self::DENSITIES[$b['density'] ?? 'normal']['scale'] ?? '1';
+        $shadow = self::SHADOWS[$b['shadow'] ?? 'suave'] ?? self::SHADOWS['suave'];
+        $radius = max(0, min(24, (int) ($b['radius'] ?? 8)));
+        $sideW  = max(180, min(360, (int) ($b['sidebar_width'] ?? 248)));
+        $topH   = max(44, min(88, (int) ($b['topbar_height'] ?? 56)));
+        $fsize  = max(13, min(20, (int) ($b['font_size'] ?? 16)));
+        $cardW  = max(340, min(620, (int) ($b['login_card_width'] ?? 420)));
 
         $vars = [
             '--portal-primary'            => $primary,
-            '--portal-primary-dark'       => self::shade($primary, -0.18),
-            '--portal-primary-light'      => self::shade($primary, 0.35),
-            '--portal-primary-soft'       => self::shade($primary, 0.88),
+            '--portal-primary-dark'       => self::shade($primary, $dark ? 0.18 : -0.18),
+            '--portal-primary-light'      => self::shade($primary, $dark ? -0.25 : 0.35),
+            '--portal-primary-soft'       => $dark
+                ? 'rgba(' . self::rgbTriplet($primary) . ',.16)'
+                : self::shade($primary, 0.88),
             '--portal-primary-rgb'        => self::rgbTriplet($primary),
             '--portal-on-primary'         => self::contrastColor($primary),
             '--portal-accent'             => $accent,
             '--portal-accent-rgb'         => self::rgbTriplet($accent),
             '--portal-on-accent'          => self::contrastColor($accent),
-            '--portal-topbar-bg'          => self::topbarBackground(),
-            '--portal-topbar-text'        => self::topbarText(),
+            '--portal-topbar-bg'          => self::topbarBackground($b, $dark),
+            '--portal-topbar-text'        => self::topbarText($b, $dark),
             '--portal-topbar-h'           => $topH . 'px',
             '--portal-sidebar-bg'         => $sideBg,
             '--portal-sidebar-text'       => $sideText,
@@ -303,40 +539,249 @@ final class Branding
             '--portal-sidebar-heading'    => $sideDark ? 'rgba(255,255,255,.55)' : '#94a3b8',
             '--portal-sidebar-border'     => $sideDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)',
             '--portal-sidebar-w'          => $sideW . 'px',
+            '--portal-sidebar-w-min'      => '64px',
             '--portal-body-bg'            => $bodyBg,
-            '--portal-surface'            => self::isDark($bodyBg) ? '#1f2937' : '#ffffff',
-            '--portal-text'               => self::isDark($bodyBg) ? '#e5e7eb' : '#212529',
-            '--portal-muted'              => self::isDark($bodyBg) ? '#9ca3af' : '#6c757d',
-            '--portal-border'             => self::isDark($bodyBg) ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.09)',
+            '--portal-surface'            => $surface,
+            '--portal-surface-2'          => $dark ? self::shade($bodyBg, 0.18) : '#f8fafc',
+            '--portal-text'               => $text,
+            '--portal-muted'              => $muted,
+            '--portal-border'             => $border,
             '--portal-radius'             => $radius . 'px',
             '--portal-radius-sm'          => max(0, (int) round($radius * 0.6)) . 'px',
             '--portal-font'               => $font,
+            '--portal-font-size'          => $fsize . 'px',
             '--portal-density'            => $scale,
-            // Bootstrap: componentes seguem a marca sem recompilar o framework
+            '--portal-shadow-card'        => $shadow['card'],
+            '--portal-shadow-topbar'      => $shadow['topbar'],
+            '--portal-shadow-hover'       => $shadow['hover'],
+            '--portal-login-card-w'       => $cardW . 'px',
+        ];
+
+        // Cores de estado. No escuro seguem o mesmo critério da marca: o
+        // vermelho de "vencido" precisa continuar visível sobre o grafite.
+        foreach (array_keys(self::STATES) as $estado) {
+            $cor = self::color($b[$estado] ?? '', self::DEFAULTS[$estado]);
+            if ($dark) {
+                $cor = self::lightenFor($cor, $bodyBg, 4.0);
+            }
+            $vars['--portal-' . $estado]           = $cor;
+            $vars['--portal-' . $estado . '-rgb']  = self::rgbTriplet($cor);
+            $vars['--portal-on-' . $estado]        = self::contrastColor($cor);
+            $vars['--portal-' . $estado . '-soft'] = $dark
+                ? 'rgba(' . self::rgbTriplet($cor) . ',.18)'
+                : self::shade($cor, 0.86);
+            // Versão para TEXTO: a cor do estado escrita sobre o fundo suave
+            // dela mesma é ilegível quando ela é clara — âmbar sobre âmbar
+            // pálido dá 1,5:1. Escurece (ou clareia, no tema escuro) até
+            // alcançar contraste de leitura.
+            $vars['--portal-' . $estado . '-text'] = self::lightenFor(
+                $cor,
+                // No escuro o fundo do alerta é o próprio corpo com um véu;
+                // no claro, o tom suave da cor.
+                $dark ? $bodyBg : self::shade($cor, 0.86),
+                4.5
+            );
+            // É daqui que .bg-success, .text-danger, .alert-warning e
+            // .btn-outline-info passam a seguir a identidade, sem recompilar
+            // o Bootstrap: são mais de 800 usos nos módulos.
+            $vars['--bs-' . $estado]              = $cor;
+            $vars['--bs-' . $estado . '-rgb']     = self::rgbTriplet($cor);
+        }
+
+        $bsLight = $dark ? self::shade($bodyBg, 0.22) : '#f8f9fa';
+        $vars += [
             '--bs-primary'                => $primary,
             '--bs-primary-rgb'            => self::rgbTriplet($primary),
-            '--bs-link-color'             => self::shade($primary, -0.05),
-            '--bs-link-hover-color'       => self::shade($primary, -0.25),
+            '--bs-secondary'              => $muted,
+            '--bs-secondary-rgb'          => self::rgbTriplet($muted),
+            '--bs-light'                  => $bsLight,
+            '--bs-light-rgb'              => self::rgbTriplet($bsLight),
+            '--bs-dark'                   => $dark ? '#e5e7eb' : '#212529',
+            '--bs-dark-rgb'               => self::rgbTriplet($dark ? '#e5e7eb' : '#212529'),
+            '--bs-link-color'             => self::shade($primary, $dark ? 0.10 : -0.05),
+            '--bs-link-hover-color'       => self::shade($primary, $dark ? 0.30 : -0.25),
             '--bs-link-color-rgb'         => self::rgbTriplet($primary),
             '--bs-border-radius'          => $radius . 'px',
             '--bs-border-radius-sm'       => max(0, (int) round($radius * 0.6)) . 'px',
             '--bs-border-radius-lg'       => ($radius + 4) . 'px',
+            '--bs-border-color'           => $border,
             '--bs-body-font-family'       => $font,
+            '--bs-body-font-size'         => $fsize . 'px',
             '--bs-body-bg'                => $bodyBg,
-            '--bs-body-color'             => self::isDark($bodyBg) ? '#e5e7eb' : '#212529',
+            '--bs-body-color'             => $text,
+            // Sem o -rgb, o Bootstrap continua derivando --bs-secondary-color
+            // do preto de fábrica: no tema escuro os textos de apoio e os
+            // placeholders ficavam escuros sobre fundo escuro.
+            '--bs-body-color-rgb'         => self::rgbTriplet($text),
+            '--bs-emphasis-color'         => $text,
+            // O Bootstrap 5.3 grava estas com o VALOR já resolvido (não como
+            // rgba(var(--bs-body-color-rgb), …)), então redefinir a cor do
+            // corpo não as alcança: no tema escuro os textos de apoio
+            // (.form-text, .text-body-secondary) ficavam quase pretos sobre
+            // fundo escuro.
+            '--bs-secondary-color'        => 'rgba(' . self::rgbTriplet($text) . ', .75)',
+            '--bs-tertiary-color'         => 'rgba(' . self::rgbTriplet($text) . ', .5)',
+            '--bs-emphasis-color-rgb'     => self::rgbTriplet($text),
+            '--bs-secondary-color-rgb'    => self::rgbTriplet($muted),
+            '--bs-secondary-bg'           => $dark ? self::shade($bodyBg, 0.14) : '#e9ecef',
+            '--bs-tertiary-bg'            => $dark ? self::shade($bodyBg, 0.10) : '#f8f9fa',
+            // Ícone do botão de menu no celular: recolorido conforme o topo.
+            // Fixo em branco, ele sumia por completo num topo claro.
+            '--bs-navbar-toggler-icon-bg' => 'url("data:image/svg+xml,'
+                . rawurlencode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30">'
+                    . '<path stroke="' . self::topbarText($b, $dark) . '" stroke-width="2"'
+                    . ' stroke-linecap="round" d="M4 7h22M4 15h22M4 23h22"/></svg>') . '")',
         ];
 
-        $css = ":root{\n";
+        return $vars;
+    }
+
+    /** @param array<string,string> $vars */
+    private static function paletteCss(array $vars): string
+    {
+        $css = '';
         foreach ($vars as $k => $v) {
             $css .= "    {$k}: {$v};\n";
         }
-        $css .= "}\n";
+        return $css;
+    }
 
-        if (($bg = self::loginBgUrl()) !== '') {
-            $css .= "body.portal-bare{background-image:linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.45)),url('" . core_e($bg) . "');background-size:cover;background-position:center;}\n";
+    /**
+     * Clareia (ou escurece) a cor até ela alcançar a razão de contraste pedida
+     * sobre o fundo informado. É o que permite usar a mesma marca no tema
+     * claro e no escuro sem o administrador escolher duas paletas.
+     */
+    public static function lightenFor(string $hex, string $sobre, float $alvo = 4.5): string
+    {
+        $fundo = self::luminance($sobre);
+        $subir = self::isDark($sobre);
+        $cor   = $hex;
+        for ($i = 0; $i < 22; $i++) {
+            $l     = self::luminance($cor);
+            $ratio = (max($l, $fundo) + 0.05) / (min($l, $fundo) + 0.05);
+            if ($ratio >= $alvo) {
+                return $cor;
+            }
+            $cor = self::shade($cor, $subir ? 0.08 : -0.08);
         }
+        return $cor;
+    }
 
-        return "<style id=\"portal-branding\">\n" . $css . "</style>";
+    /** CSS livre do administrador, já filtrado. */
+    public static function customCss(): string
+    {
+        return self::get('custom_css');
+    }
+
+    /** Versão do CSS livre — sem ela o navegador serviria o antigo do cache. */
+    public static function customCssVersion(): string
+    {
+        $css = self::customCss();
+        return $css === '' ? '' : substr(hash('sha256', $css), 0, 10);
+    }
+
+    /**
+     * <link> do CSS livre. Ele é servido por uma rota própria com
+     * Content-Type: text/css em vez de ir inline num <style> — assim a fuga
+     * de contexto (fechar o <style> e abrir um <script>) deixa de existir por
+     * construção, e o navegador ainda ganha cache.
+     */
+    public static function customCssTag(): string
+    {
+        $v = self::customCssVersion();
+        if ($v === '') {
+            return '';
+        }
+        return '<link rel="stylesheet" href="'
+             . core_e(core_url('index.php?m=auth&a=brand_css&v=' . $v)) . '">';
+    }
+
+    /**
+     * Trecho inline que aplica, ANTES da primeira pintura, o tema e o estado
+     * do menu escolhidos por quem está usando. No fim do <body> seria tarde:
+     * a tela pintaria clara e saltaria para escura.
+     */
+    public static function bootScript(): string
+    {
+        $toggle = self::get('theme_toggle') === '1';
+        $modo   = self::get('theme_mode');
+        $side   = self::get('sidebar_mode');
+        if (!$toggle && $modo !== 'auto' && $side !== 'recolhivel') {
+            return '';
+        }
+        $js = '(function(){try{var d=document.documentElement;';
+        if ($toggle || $modo === 'auto') {
+            $js .= 'var t=localStorage.getItem("portalTema");'
+                 . 'if(t==="escuro"||t==="claro"){d.setAttribute("data-portal-theme",t);}';
+        }
+        if ($side === 'recolhivel') {
+            $js .= 'if(localStorage.getItem("portalMenu")==="recolhido"){'
+                 . 'd.setAttribute("data-portal-sidebar","recolhido");}';
+        }
+        $js .= '}catch(e){}})();';
+        return '<script>' . $js . '</script>';
+    }
+
+    /** theme-color e companhia: a barra do navegador no celular segue a marca. */
+    public static function metaTags(): string
+    {
+        return '<meta name="theme-color" content="' . core_e(self::topbarSolidColor()) . '">' . "\n    "
+             . '<meta name="mobile-web-app-capable" content="yes">' . "\n    "
+             . '<meta name="apple-mobile-web-app-capable" content="yes">' . "\n    "
+             . '<meta name="apple-mobile-web-app-title" content="' . core_e(self::shortName()) . '">' . "\n    "
+             . '<link rel="manifest" href="' . core_e(core_url('index.php?m=auth&a=manifest')) . '">';
+    }
+
+    /** Cor sólida equivalente ao topo (um degradê não serve para theme-color). */
+    public static function topbarSolidColor(): string
+    {
+        $b     = self::all();
+        $style = $b['topbar_style'];
+        if ($style === 'light') {
+            return '#ffffff';
+        }
+        if ($style === 'dark') {
+            return '#1f2937';
+        }
+        $base = self::color($b['topbar_bg'], '') ?: self::color($b['primary'], self::DEFAULTS['primary']);
+        return $style === 'gradient' ? self::shade($base, -0.18) : $base;
+    }
+
+    /**
+     * Manifesto do aplicativo (PWA), gerado pelo PHP para acompanhar a marca
+     * sem ninguém precisar editar um arquivo estático a cada troca de logo.
+     *
+     * @return array<string,mixed>
+     */
+    public static function manifest(): array
+    {
+        $icone = self::faviconUrl() ?: self::logoUrl();
+        $m = [
+            'name'             => self::name(),
+            'short_name'       => self::shortName(),
+            'start_url'        => core_url('index.php'),
+            'scope'            => core_url('index.php'),
+            'display'          => 'standalone',
+            'background_color' => self::get('body_bg') ?: self::DEFAULTS['body_bg'],
+            'theme_color'      => self::topbarSolidColor(),
+            'lang'             => 'pt-BR',
+            'dir'              => 'ltr',
+        ];
+        if ($icone !== '') {
+            $ext = strtolower(pathinfo(parse_url($icone, PHP_URL_PATH) ?: '', PATHINFO_EXTENSION));
+            $m['icons'] = [[
+                'src'     => $icone,
+                'type'    => match ($ext) {
+                    'svg'         => 'image/svg+xml',
+                    'jpg', 'jpeg' => 'image/jpeg',
+                    'ico'         => 'image/x-icon',
+                    default       => 'image/png',
+                },
+                'sizes'   => $ext === 'svg' ? 'any' : '512x512',
+                'purpose' => 'any',
+            ]];
+        }
+        return $m;
     }
 
     // ------------------------------------------------------------------
@@ -355,20 +800,7 @@ final class Branding
             if (!array_key_exists($key, $values)) {
                 continue;
             }
-            $raw = trim((string) $values[$key]);
-            $value = match ($key) {
-                'primary', 'accent', 'sidebar_bg', 'sidebar_text', 'body_bg', 'topbar_bg'
-                    => $raw === '' ? '' : (self::isColor($raw) ? strtolower($raw) : $current[$key]),
-                'topbar_style'  => isset(self::TOPBAR_STYLES[$raw]) ? $raw : $current[$key],
-                'font'          => isset(self::FONTS[$raw]) ? $raw : $current[$key],
-                'density'       => isset(self::DENSITIES[$raw]) ? $raw : $current[$key],
-                'radius'        => (string) max(0, min(24, (int) $raw)),
-                'sidebar_width' => (string) max(180, min(360, (int) $raw)),
-                'topbar_height' => (string) max(44, min(88, (int) $raw)),
-                'name', 'short_name' => mb_substr($raw, 0, 120),
-                'login_message' => mb_substr($raw, 0, 300),
-                default         => $raw,
-            };
+            $value = self::normalizeField($key, (string) $values[$key], $current[$key] ?? '');
             Settings::set('brand.' . $key, $value === '' ? null : $value);
         }
         // Compatibilidade: o nome da organização continua em org_name
@@ -379,6 +811,84 @@ final class Branding
             }
         }
         self::forget();
+    }
+
+    /** Corta o CSS no limite, recuando até a última chave de fechamento. */
+    private static function cortaCss(string $css, int $limite): string
+    {
+        if (mb_strlen($css) <= $limite) {
+            return $css;
+        }
+        $corte = mb_substr($css, 0, $limite);
+        $ultima = mb_strrpos($corte, '}');
+        return $ultima !== false ? mb_substr($corte, 0, $ultima + 1) : $corte;
+    }
+
+    /**
+     * Valida UM campo. É a única fronteira de validação da identidade visual:
+     * save() e a pré-visualização passam por aqui, para nada cru chegar a um
+     * bloco <style> (seria injeção de CSS numa página do próprio portal).
+     */
+    public static function normalizeField(string $key, string $raw, string $atual = ''): string
+    {
+        $raw = trim($raw);
+        $atual = $atual !== '' ? $atual : (self::DEFAULTS[$key] ?? '');
+
+        return match ($key) {
+            'primary', 'accent', 'sidebar_bg', 'sidebar_text', 'body_bg', 'topbar_bg',
+            'success', 'warning', 'danger', 'info', 'dark_body_bg', 'dark_sidebar_bg', 'dark_primary'
+                => $raw === '' ? '' : (self::isColor($raw) ? strtolower($raw) : $atual),
+            'topbar_style'     => isset(self::TOPBAR_STYLES[$raw]) ? $raw : $atual,
+            'font'             => isset(self::FONTS[$raw]) ? $raw : $atual,
+            'density'          => isset(self::DENSITIES[$raw]) ? $raw : $atual,
+            'shadow'           => isset(self::SHADOWS[$raw]) ? $raw : $atual,
+            'sidebar_mode'     => isset(self::SIDEBAR_MODES[$raw]) ? $raw : $atual,
+            'theme_mode'       => isset(self::THEME_MODES[$raw]) ? $raw : $atual,
+            'login_layout'     => isset(self::LOGIN_LAYOUTS[$raw]) ? $raw : $atual,
+            // Booleanos gravam sempre '0' ou '1': um checkbox desmarcado não é
+            // enviado pelo navegador, então o formulário manda um campo oculto
+            // antes dele e a chave sempre chega.
+            'theme_toggle'     => $raw === '1' ? '1' : '0',
+            'radius'           => (string) max(0, min(24, (int) $raw)),
+            'sidebar_width'    => (string) max(180, min(360, (int) $raw)),
+            'topbar_height'    => (string) max(44, min(88, (int) $raw)),
+            'font_size'        => (string) max(13, min(20, (int) $raw ?: 16)),
+            'login_card_width' => (string) max(340, min(620, (int) $raw ?: 420)),
+            'name', 'short_name' => mb_substr($raw, 0, 120),
+            'login_message'    => mb_substr($raw, 0, 300),
+            'login_footer'     => mb_substr($raw, 0, 400),
+            // O corte é avisado pela tela (core_admin_appearance_save compara o
+            // tamanho recebido) e cai na última chave de fechamento, para não
+            // deixar um seletor pela metade — que faz o navegador descartar
+            // também a regra seguinte.
+            'custom_css'       => CssSanitizer::clean(self::cortaCss($raw, 16384)),
+            // Caminhos de imagem nunca vêm do formulário: só de uploadImage().
+            'logo', 'logo_light', 'favicon', 'login_bg' => $atual,
+            default            => mb_substr($raw, 0, 500),
+        };
+    }
+
+    /**
+     * Normaliza um conjunto inteiro, preenchendo o que faltar com o padrão.
+     * Usado pela pré-visualização (valores ainda não salvos).
+     *
+     * @param array<string,mixed> $values
+     * @return array<string,string>
+     */
+    public static function normalizeAll(array $values): array
+    {
+        $out = self::DEFAULTS;
+        foreach (self::DEFAULTS as $key => $default) {
+            if (array_key_exists($key, $values)) {
+                $v = self::normalizeField($key, (string) $values[$key], $default);
+                $out[$key] = $v === '' ? $default : $v;
+            }
+        }
+        // As imagens vêm do que está salvo: o formulário não as transporta.
+        foreach (['logo', 'logo_light', 'favicon', 'login_bg'] as $img) {
+            $out[$img] = self::get($img);
+        }
+        return $out;
     }
 
     /** Aplica um tema pronto (só as cores). */
@@ -512,82 +1022,57 @@ final class Branding
     // Utilidades de cor
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // Matemática de cor — UMA implementação, em Core\Tokens.
+    //
+    // Estes métodos continuam aqui porque meio sistema os chama pelo nome
+    // Branding::, mas o cálculo é um só: três cópias ligeiramente
+    // diferentes da mesma conta era um bug esperando a hora de aparecer
+    // em apenas uma das telas.
+    // ------------------------------------------------------------------
+
     public static function isColor(string $value): bool
     {
-        return (bool) preg_match('/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $value);
+        return Tokens::isColor($value);
     }
 
     private static function color(string $value, string $fallback): string
     {
-        return self::isColor($value) ? strtolower($value) : $fallback;
-    }
-
-    /** @return array{0:int,1:int,2:int} */
-    private static function rgb(string $hex): array
-    {
-        $hex = ltrim($hex, '#');
-        if (strlen($hex) === 3) {
-            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
-        }
-        if (strlen($hex) !== 6) {
-            $hex = '0d5c8f';
-        }
-        return [
-            (int) hexdec(substr($hex, 0, 2)),
-            (int) hexdec(substr($hex, 2, 2)),
-            (int) hexdec(substr($hex, 4, 2)),
-        ];
+        return Tokens::color($value, $fallback);
     }
 
     public static function rgbTriplet(string $hex): string
     {
-        return implode(', ', self::rgb($hex));
+        return Tokens::rgbTriplet($hex);
     }
 
     /** Clareia (fator > 0) ou escurece (fator < 0) uma cor. */
     public static function shade(string $hex, float $factor): string
     {
-        [$r, $g, $b] = self::rgb($hex);
-        $mix = static function (int $c) use ($factor): int {
-            $target = $factor > 0 ? 255 : 0;
-            return (int) round($c + ($target - $c) * abs($factor));
-        };
-        return sprintf('#%02x%02x%02x', $mix($r), $mix($g), $mix($b));
+        return Tokens::shade($hex, $factor);
     }
 
     /** Luminância relativa (0 escuro … 1 claro). */
     public static function luminance(string $hex): float
     {
-        [$r, $g, $b] = self::rgb($hex);
-        $f = static function (int $c): float {
-            $c /= 255;
-            return $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
-        };
-        return 0.2126 * $f($r) + 0.7152 * $f($g) + 0.0722 * $f($b);
+        return Tokens::luminance($hex);
     }
 
-    /** Texto legível sobre a cor informada (branco ou quase preto). */
-    /**
-     * O fundo é escuro? (ou seja: sobre ele o texto legível é claro)
-     * Mesma régua de contraste usada em contrastColor(), para a superfície,
-     * o texto e as bordas acompanharem a cor escolhida sem surpresas.
-     */
+    /** Razão de contraste da WCAG entre duas cores (1:1 a 21:1). */
+    public static function contrastRatio(string $a, string $b): float
+    {
+        return Tokens::contrastRatio($a, $b);
+    }
+
+    /** O fundo é escuro? (ou seja: sobre ele o texto legível é claro) */
     public static function isDark(string $hex): bool
     {
-        return self::contrastColor($hex) === '#ffffff';
+        return Tokens::isDark($hex);
     }
 
-    /**
-     * Cor de texto legível sobre $hex: escolhe entre claro e escuro pela
-     * razão de contraste da WCAG (e não pelo brilho médio, que erra em
-     * tons como o âmbar, onde o branco fica ilegível).
-     */
+    /** Cor de texto legível sobre $hex (pela razão de contraste da WCAG). */
     public static function contrastColor(string $hex): string
     {
-        $bg    = self::luminance($hex);
-        $light = (max($bg, 1.0) + 0.05) / (min($bg, 1.0) + 0.05);
-        $darkL = self::luminance('#1f2937');
-        $dark  = (max($bg, $darkL) + 0.05) / (min($bg, $darkL) + 0.05);
-        return $dark > $light ? '#1f2937' : '#ffffff';
+        return Tokens::contrastColor($hex);
     }
 }

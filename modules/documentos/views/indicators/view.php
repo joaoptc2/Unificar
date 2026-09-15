@@ -350,8 +350,37 @@ $dir_labels = [
     var benchmark= <?php echo ($indicator['benchmark_value'] ?? null) !== null ? (float) $indicator['benchmark_value'] : 'null'; ?>;
 
     var mainCanvas = document.getElementById('mainChart');
-    var chart = null;
-    var palette = ['#0d6efd','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6','#ec4899'];
+    var chart = null, histChart = null, modoAtual = 'result';
+
+    // Paleta e cores de antes do tema. Só entram em cena se o app.js do
+    // núcleo não estiver na página: nesse caso a tela continua como hoje.
+    var PALETA_FIXA = ['#0d6efd','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6','#ec4899'];
+    var CORES_FIXAS = { primary:'#0d6efd', danger:'#ef4444', info:'#8b5cf6', muted:'#64748b' };
+
+    var T = null, palette = PALETA_FIXA;
+
+    /** Cor por NOME de estado — aqui ela tem significado (meta, fora de
+     *  controle), então segue a Aparência e não a posição na paleta. */
+    function cor(nome) {
+        return (T && T.color(nome)) || CORES_FIXAS[nome] || CORES_FIXAS.primary;
+    }
+
+    /* Mesma cor, só que translúcida: faixas de tolerância e preenchimentos
+       precisam acompanhar a cor do tema em vez de um vermelho/azul fixo. */
+    function comAlfa(c, a) {
+        var m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(c).trim());
+        if (!m) { return c; }              // já é rgba()/nome: usa como está
+        var h = m[1];
+        if (h.length === 3) { h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2]; }
+        return 'rgba(' + parseInt(h.slice(0,2),16) + ',' + parseInt(h.slice(2,4),16)
+             + ',' + parseInt(h.slice(4,6),16) + ',' + a + ')';
+    }
+
+    function lerTema() {
+        T = window.PortalTheme || null;
+        if (T) { T.applyChartDefaults(); }   // rótulos, grade e fonte do tema
+        palette = T ? T.palette() : PALETA_FIXA;
+    }
 
     // SPC: limites de controle ±3σ
     var mean = null, ucl = null, lcl = null;
@@ -367,43 +396,45 @@ $dir_labels = [
     function buildResultDS() {
         var ds = [{
             label: 'Valor', data: values,
-            borderColor: '#0d6efd',
-            backgroundColor: chartType==='area'?'rgba(13,110,253,0.15)':'rgba(13,110,253,0.5)',
+            borderColor: cor('primary'),
+            backgroundColor: chartType==='area'?comAlfa(cor('primary'),0.15):comAlfa(cor('primary'),0.5),
             fill: chartType==='area', tension: 0.3, pointRadius: 4,
             pointBackgroundColor: values.map(function(v) {
-                if (ucl !== null && (v > ucl || v < lcl)) return '#ef4444';
-                return '#0d6efd';
+                // Ponto fora dos limites de controle: vermelho de alerta.
+                if (ucl !== null && (v > ucl || v < lcl)) return cor('danger');
+                return cor('primary');
             }),
         }];
         // Meta
         if (goal !== null) {
             ds.push({ label:'Meta', data:Array(labels.length).fill(goal),
-                borderColor:'#ef4444', borderDash:[6,4], pointRadius:0, fill:false, type:'line' });
+                borderColor:cor('danger'), borderDash:[6,4], pointRadius:0, fill:false, type:'line' });
             if (tol > 0) {
                 ds.push({ label:'Meta+tol', data:Array(labels.length).fill(goal+tol),
-                    borderColor:'rgba(239,68,68,0.25)', borderDash:[2,3], pointRadius:0, fill:false, type:'line' });
+                    borderColor:comAlfa(cor('danger'),0.25), borderDash:[2,3], pointRadius:0, fill:false, type:'line' });
                 ds.push({ label:'Meta-tol', data:Array(labels.length).fill(goal-tol),
-                    borderColor:'rgba(239,68,68,0.25)', borderDash:[2,3], pointRadius:0, fill:false, type:'line' });
+                    borderColor:comAlfa(cor('danger'),0.25), borderDash:[2,3], pointRadius:0, fill:false, type:'line' });
             }
         }
-        // Benchmark
+        // Benchmark — referência externa, não é erro nem meta: cor de informação.
         if (benchmark !== null) {
             ds.push({ label:'Benchmark', data:Array(labels.length).fill(benchmark),
-                borderColor:'#8b5cf6', borderDash:[8,4], borderWidth:1.5, pointRadius:0, fill:false, type:'line' });
+                borderColor:cor('info'), borderDash:[8,4], borderWidth:1.5, pointRadius:0, fill:false, type:'line' });
         }
         // SPC: média, UCL, LCL
         if (mean !== null) {
             ds.push({ label:'Média', data:Array(labels.length).fill(mean),
-                borderColor:'#64748b', borderDash:[3,3], borderWidth:1, pointRadius:0, fill:false, type:'line' });
+                borderColor:cor('muted'), borderDash:[3,3], borderWidth:1, pointRadius:0, fill:false, type:'line' });
             ds.push({ label:'LSC (3σ)', data:Array(labels.length).fill(ucl),
-                borderColor:'rgba(239,68,68,0.3)', borderDash:[2,2], borderWidth:1, pointRadius:0, fill:false, type:'line' });
+                borderColor:comAlfa(cor('danger'),0.3), borderDash:[2,2], borderWidth:1, pointRadius:0, fill:false, type:'line' });
             ds.push({ label:'LIC (3σ)', data:Array(labels.length).fill(lcl),
-                borderColor:'rgba(239,68,68,0.3)', borderDash:[2,2], borderWidth:1, pointRadius:0, fill:false, type:'line' });
+                borderColor:comAlfa(cor('danger'),0.3), borderDash:[2,2], borderWidth:1, pointRadius:0, fill:false, type:'line' });
         }
         return ds;
     }
 
     function buildVarDS() {
+        // Variáveis não têm significado de estado: seguem a ordem da paleta.
         var ds = [], i = 0;
         for (var code in varSeries) {
             if (!varSeries.hasOwnProperty(code)) continue;
@@ -418,6 +449,9 @@ $dir_labels = [
     }
 
     function render(mode) {
+        modoAtual = mode;
+        // Redesenhar exige descartar o gráfico anterior: dois Chart no mesmo
+        // <canvas> quebram o Chart.js.
         if (chart) chart.destroy();
         var type = chartType==='bar'?'bar':'line';
         var datasets = mode==='vars'?buildVarDS():buildResultDS();
@@ -431,25 +465,46 @@ $dir_labels = [
             }
         });
     }
-    render('result');
-    document.querySelectorAll('input[name="chartMode"]').forEach(function(r){
-        r.addEventListener('change',function(){render(this.value);});
-    });
 
     var histCanvas = document.getElementById('histChart');
-    if (histCanvas && values.length >= 5) {
+
+    function renderHist() {
+        if (!histCanvas || values.length < 5) return;
+        if (histChart) histChart.destroy();
         var min=Math.min.apply(null,values), max=Math.max.apply(null,values);
         var bins=Math.min(10,Math.ceil(Math.sqrt(values.length))), width=(max-min)/bins||1;
         var counts=Array(bins).fill(0), binLabels=[];
         for(var b=0;b<bins;b++) binLabels.push((min+b*width).toFixed(dec)+'–'+(min+(b+1)*width).toFixed(dec));
         values.forEach(function(v){var idx=Math.min(bins-1,Math.floor((v-min)/width));if(idx<0)idx=0;counts[idx]++;});
-        new Chart(histCanvas,{type:'bar',
+        histChart = new Chart(histCanvas,{type:'bar',
             data:{labels:binLabels,datasets:[{label:'Frequência',data:counts,
-                backgroundColor:'rgba(13,110,253,0.3)',borderColor:'#0d6efd',borderWidth:1}]},
+                backgroundColor:comAlfa(cor('primary'),0.3),borderColor:cor('primary'),borderWidth:1}]},
             options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
                 scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
         });
     }
+
+    function desenharTudo() { lerTema(); render(modoAtual); renderHist(); }
+
+    // O app.js do núcleo entra DEPOIS do conteúdo da página; esperar o DOM
+    // pronto garante que window.PortalTheme já exista ao ler as cores.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', desenharTudo);
+    } else {
+        desenharTudo();
+    }
+    // Botão de tema claro/escuro: redesenhar é o que faz séries e rótulos
+    // acompanharem a troca sem recarregar a tela.
+    // setTimeout: o app.js do núcleo só limpa o cache de cores no próprio
+    // listener deste evento, e o desta página foi registrado antes dele —
+    // redesenhar na hora releria a cor ANTIGA.
+    window.addEventListener('portal:tema', function () {
+        if (chart) { setTimeout(desenharTudo, 0); }
+    });
+
+    document.querySelectorAll('input[name="chartMode"]').forEach(function(r){
+        r.addEventListener('change',function(){render(this.value);});
+    });
 })();
 </script>
 <?php endif; ?>

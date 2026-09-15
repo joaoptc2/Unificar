@@ -25,5 +25,15 @@ modules/*/storage/cache/*
 # Uploads privados (fora do webroot)
 /storage/uploads/*
 !/storage/uploads/.gitkeep
+
+# Pacotes de backup (banco inteiro + arquivos: nunca vão para o repositório).
+# A proteção do diretório e o .gitkeep continuam versionados — o servidor
+# precisa do .htaccess já na primeira instalação, antes do primeiro backup.
+/storage/backups/*
+!/storage/backups/.htaccess
+!/storage/backups/.gitkeep
 modules/*/logs/*
 !modules/*/logs/.gitkeep
+
+# Saída do teste visual (imagens do que mudou) — as referências ficam em scripts/visual-ref/
+.visual-out/

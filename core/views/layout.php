@@ -11,9 +11,11 @@ $shortName  = Core\Branding::shortName();
 $brandLogo  = Core\Branding::topbarLogoUrl();
 $moodleLink = core_config('moodle.enabled') ? core_config('moodle.url') : null;
 $hasSidebar = !empty($sidebar);
+$sideMode   = Core\Branding::get('sidebar_mode');
+$temaLivre  = Core\Branding::get('theme_toggle') === '1' || Core\Branding::get('theme_mode') === 'auto';
 ?>
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR"<?= $sideMode !== 'fixo' ? ' data-portal-sidebar-mode="' . core_e($sideMode) . '"' : '' ?>>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -27,16 +29,22 @@ $hasSidebar = !empty($sidebar);
     <link rel="stylesheet" href="<?= core_asset('core/app.css') ?>">
     <?= Core\Branding::faviconTag() ?>
     <?= Core\Branding::fontTag() ?>
+    <?= Core\Branding::metaTags() ?>
     <?= $head ?>
     <?= Core\Branding::cssVariables() ?>
+    <?= Core\Branding::customCssTag() ?>
+    <?= Core\Branding::bootScript() ?>
 </head>
 <body class="portal-body <?= core_e($body_class) ?>">
 
+<a class="portal-skip" href="#portal-conteudo">Pular para o conteúdo</a>
+
 <!-- ===================== MENU SUPERIOR (módulos) ===================== -->
-<nav class="navbar navbar-expand-lg portal-topbar fixed-top" data-bs-theme="dark">
+<nav class="navbar navbar-expand-lg portal-topbar fixed-top"
+     data-bs-theme="<?= Core\Branding::topbarIsDark() ? 'dark' : 'light' ?>">
     <div class="container-fluid">
         <?php if ($hasSidebar): ?>
-        <button class="btn btn-link text-white d-lg-none px-2" data-bs-toggle="offcanvas" data-bs-target="#portalSidebar" aria-label="Menu">
+        <button class="btn btn-link d-lg-none px-2" data-bs-toggle="offcanvas" data-bs-target="#portalSidebar" aria-label="Menu">
             <i class="bi bi-list fs-4"></i>
         </button>
         <?php endif; ?>
@@ -59,6 +67,14 @@ $hasSidebar = !empty($sidebar);
             <!-- Seletor de módulos: apenas os módulos que o usuário pode acessar -->
             <ul class="navbar-nav portal-module-nav me-auto">
                 <?php foreach ($modules_nav as $slug => $m): ?>
+                    <?php
+                    // "Mostrar no topo" é só isto: o módulo some da barra, mas
+                    // continua na tela inicial e por link direto. Filtrar em
+                    // Modules::forUser() o tornaria inacessível.
+                    if (isset($m['show_in_topbar']) && !$m['show_in_topbar']) {
+                        continue;
+                    }
+                    ?>
                     <li class="nav-item">
                         <a class="nav-link <?= $slug === $topbar_active ? 'active' : '' ?>"
                            href="<?= core_module_url($slug) ?>">
@@ -120,6 +136,14 @@ $hasSidebar = !empty($sidebar);
                         </li>
                         <li><a class="dropdown-item" href="<?= core_module_url('auth', ['a' => 'profile']) ?>"><i class="bi bi-person me-2"></i>Meu perfil</a></li>
                         <li><a class="dropdown-item" href="<?= core_module_url('auth', ['a' => 'security']) ?>"><i class="bi bi-shield-lock me-2"></i>Senha e 2FA</a></li>
+                        <?php if ($temaLivre): ?>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <button type="button" class="dropdown-item" id="portalTemaBtn">
+                                    <i class="bi bi-circle-half me-2"></i><span>Tema claro/escuro</span>
+                                </button>
+                            </li>
+                        <?php endif; ?>
                         <?php if (!empty($admin_link)): ?>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="<?= core_module_url('admin') ?>"><i class="bi bi-gear me-2"></i>Administração</a></li>
@@ -149,6 +173,13 @@ $hasSidebar = !empty($sidebar);
                     <span><?= core_e($manifest['name']) ?></span>
                 </div>
             <?php endif; ?>
+            <?php if ($sideMode === 'recolhivel'): ?>
+                <button type="button" class="btn btn-link btn-sm portal-sidebar-toggle text-decoration-none ms-2 mb-1 d-none d-lg-inline-flex align-items-center gap-1"
+                        id="portalSidebarToggle" aria-label="Recolher menu">
+                    <i class="bi bi-chevron-double-left"></i>
+                    <span class="portal-sidebar-label small">recolher</span>
+                </button>
+            <?php endif; ?>
             <nav class="portal-sidebar-nav flex-grow-1">
                 <?php foreach ($sidebar as $section): ?>
                     <?php if (!empty($section['heading'])): ?>
@@ -160,7 +191,7 @@ $hasSidebar = !empty($sidebar);
                                 <a class="nav-link <?= ($item['key'] ?? '') !== '' && ($item['key'] ?? null) === $active ? 'active' : '' ?>"
                                    href="<?= core_e($item['url']) ?>">
                                     <i class="bi <?= core_e($item['icon'] ?? 'bi-dot') ?>"></i>
-                                    <span><?= core_e($item['label']) ?></span>
+                                    <span class="portal-sidebar-label"><?= core_e($item['label']) ?></span>
                                     <?php if (!empty($item['badge'])): ?>
                                         <span class="badge text-bg-danger ms-auto"><?= core_e($item['badge']) ?></span>
                                     <?php endif; ?>
@@ -196,7 +227,7 @@ $hasSidebar = !empty($sidebar);
             <?php endforeach; ?>
         <?php endforeach; ?>
 
-        <div class="<?= $fluid ? 'portal-content-fluid' : 'portal-content' ?>">
+        <div id="portal-conteudo" class="<?= $fluid ? 'portal-content-fluid' : 'portal-content' ?>">
             <?= $content ?>
         </div>
     </main>
@@ -204,6 +235,12 @@ $hasSidebar = !empty($sidebar);
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="<?= core_asset('core/app.js') ?>"></script>
+<!-- Pré-visualização ao vivo das telas de personalização (~4 KB, com cache).
+     Vai em todas as páginas de propósito: condicionar ao módulo dependeria de
+     uma variável que nem sempre existe, e "por que a amostra não atualiza?"
+     é um bug caro de achar. -->
+<script src="<?= core_asset('core/preview.js') ?>"></script>
+<script src="<?= core_asset('core/contrast.js') ?>"></script>
 <?= $scripts ?>
 </body>
 </html>

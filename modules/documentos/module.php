@@ -67,10 +67,12 @@ return [
         'sectors'      => [
             'label'   => 'Setores (configuração)',
             'actions' => [
-                'view'   => 'Visualizar',
-                'create' => 'Criar',
-                'edit'   => 'Editar',
-                'delete' => 'Excluir',
+                'view'     => 'Visualizar',
+                'create'   => 'Criar',
+                'edit'     => 'Editar',
+                'delete'   => 'Excluir',
+                'assign'   => 'Incluir/remover usuários no setor',
+                'view_all' => 'Ver TODOS os setores (ignora o vínculo do usuário)',
             ],
         ],
         'categories'   => [
@@ -158,8 +160,11 @@ return [
         'icon'  => 'bi-file-earmark-text',
         'entry' => 'admin_panel.php',
         'tabs'  => [
-            'sectors'    => ['label' => 'Setores',    'icon' => 'bi-diagram-3', 'perm' => 'sectors.view'],
-            'categories' => ['label' => 'Categorias', 'icon' => 'bi-tags',      'perm' => 'categories.view'],
+            'sectors'      => ['label' => 'Setores',    'icon' => 'bi-diagram-3', 'perm' => 'sectors.view'],
+            'categories'   => ['label' => 'Categorias', 'icon' => 'bi-tags',      'perm' => 'categories.view'],
+            // Tela de detalhe alcançada pelo botão "Usuários" de cada setor;
+            // 'hidden' a mantém fora da barra de abas do painel.
+            'sector_users' => ['label' => 'Usuários do setor', 'icon' => 'bi-people', 'perm' => 'sectors.view', 'hidden' => true],
         ],
     ],
 

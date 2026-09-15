@@ -8,7 +8,11 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <div>
         <h2 class="h5 mb-1"><i class="bi bi-diagram-3 me-2"></i>Setores da unidade</h2>
-        <p class="text-muted small mb-0">Os setores organizam documentos, indicadores e planos de ação e alimentam o seletor "Setor em foco" do módulo.</p>
+        <p class="text-muted small mb-0">
+            Os setores são <strong>independentes</strong>: cada usuário só enxerga os documentos, indicadores e
+            planos de ação dos setores em que foi incluído. Use o botão <i class="bi bi-people"></i> para definir
+            quem participa de cada setor.
+        </p>
     </div>
     <?php if (core_can('sectors.create')): ?>
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalSector" onclick="clearSectorForm()">
@@ -23,7 +27,7 @@
             <div class="text-center py-5">
                 <i class="bi bi-diagram-3 display-1 text-muted"></i>
                 <p class="text-muted mt-2">Nenhum setor cadastrado.</p>
-                <p class="text-muted small">Crie setores como UTI, Centro Cirúrgico, PS, etc.</p>
+                <p class="text-muted small">Crie setores como UTI, Centro Cirúrgico, PS, etc. e inclua os usuários de cada um.</p>
             </div>
         <?php else: ?>
             <div class="table-responsive">
@@ -35,6 +39,7 @@
                             <th>Descrição</th>
                             <th class="text-center">Documentos</th>
                             <th class="text-center">Indicadores</th>
+                            <th class="text-center">Usuários</th>
                             <th>Status</th>
                             <th class="text-end">Ações</th>
                         </tr>
@@ -47,12 +52,24 @@
                             <td class="text-muted small"><?php echo e($s['description'] ?: '—'); ?></td>
                             <td class="text-center"><span class="badge bg-primary"><?php echo (int) ($s['document_count'] ?? 0); ?></span></td>
                             <td class="text-center"><span class="badge bg-success"><?php echo (int) ($s['indicator_count'] ?? 0); ?></span></td>
+                            <td class="text-center">
+                                <?php $uc = (int) ($s['user_count'] ?? 0); ?>
+                                <a href="<?php echo e(core_admin_url('documentos', 'sector_users', ['sector' => (int) $s['id']])); ?>"
+                                   class="badge <?php echo $uc ? 'bg-info' : 'bg-warning text-dark'; ?> text-decoration-none"
+                                   title="<?php echo $uc ? 'Ver e editar os usuários deste setor' : 'Nenhum usuário enxerga este setor'; ?>">
+                                    <i class="bi bi-people me-1"></i><?php echo $uc; ?>
+                                </a>
+                            </td>
                             <td>
                                 <span class="badge <?php echo $s['is_active'] ? 'badge-ativo' : 'badge-desligado'; ?>">
                                     <?php echo $s['is_active'] ? 'Ativo' : 'Inativo'; ?>
                                 </span>
                             </td>
                             <td class="text-end">
+                                <a href="<?php echo e(core_admin_url('documentos', 'sector_users', ['sector' => (int) $s['id']])); ?>"
+                                   class="btn btn-outline-info btn-action" data-bs-toggle="tooltip" title="Usuários do setor">
+                                    <i class="bi bi-people"></i>
+                                </a>
                                 <?php if (core_can('sectors.edit')): ?>
                                 <button class="btn btn-outline-warning btn-action"
                                         onclick="editSector(<?php echo e(json_encode($s)); ?>)"
@@ -62,7 +79,7 @@
                                 <?php endif; ?>
                                 <?php if (core_can('sectors.delete')): ?>
                                 <form method="POST" action="<?php echo url('admin/sector-delete'); ?>" class="d-inline"
-                                      data-confirm="Remover este setor? Documentos e indicadores vinculados ficam sem setor.">
+                                      data-confirm="Remover este setor? Documentos e indicadores vinculados ficam sem setor (institucionais, visíveis a todos) e os usuários perdem o vínculo.">
                                     <?php echo csrf_field(); ?>
                                     <input type="hidden" name="id" value="<?php echo (int) $s['id']; ?>">
                                     <button type="submit" class="btn btn-outline-danger btn-action"><i class="bi bi-trash"></i></button>

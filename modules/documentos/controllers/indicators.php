@@ -154,7 +154,7 @@ function indicators_create($param = null) {
         'indicator'  => $indicator,
         'variables'  => $variables,
         'editing'    => false,
-        'sectors'    => sector_list(get_hospital_id()),
+        'sectors'    => sector_list_for_user(get_hospital_id()),
         'users'      => user_list_active(),
         'default_sector_id' => get_sector_id(),
         'menu_key'   => 'indicators',
@@ -228,7 +228,7 @@ function indicators_edit($param = null) {
         'indicator'  => $indicator,
         'variables'  => $variables,
         'editing'    => true,
-        'sectors'    => sector_list(get_hospital_id()),
+        'sectors'    => sector_list_for_user(get_hospital_id()),
         'users'      => user_list_active(),
         'default_sector_id' => $indicator['sector_id'],
         'menu_key'   => 'indicators',
@@ -604,7 +604,9 @@ function _indicators_collect_form() {
         'template_slug'       => clean(input('template_slug')) ?: null,
         'sector_id'           => sanitize_int(input('sector_id')) ?: null,
     ];
-    if ($data['sector_id'] && !sector_find_active($data['sector_id'], get_hospital_id())) {
+    // Setor precisa existir, estar ativo E estar no escopo do usuário.
+    if ($data['sector_id'] && (!sector_find_active($data['sector_id'], get_hospital_id())
+                               || !doc_sector_allowed($data['sector_id']))) {
         $data['sector_id'] = null;
     }
 
@@ -708,16 +710,19 @@ function indicators_actions($param = null) {
     core_require('actions.view');
     $indicator_id = sanitize_int(query('indicator_id'));
     $hospital_id  = get_hospital_id();
-    $indicator = null; $actions = [];
+    $indicator = null; $actions = []; $indicators_all = [];
 
     try {
         if ($indicator_id) {
             $indicator = indicator_find($indicator_id, $hospital_id);
+            // Indicador inexistente ou fora do escopo de setor: mostra todos
+            // os planos em vez de uma tela vazia sem explicação.
+            if (!$indicator) $indicator_id = 0;
         }
         $actions = _action_list($indicator_id, $hospital_id, get_sector_id());
-        if (!$indicator_id) {
-            $indicators_all = indicator_list($hospital_id, '', '', '', 500, 0, get_sector_id());
-        }
+        // A lista vai SEMPRE: é ela que alimenta o seletor de indicador do
+        // formulário — inclusive para trocar o vínculo de uma ação existente.
+        $indicators_all = indicator_list($hospital_id, '', '', '', 500, 0, get_sector_id());
     } catch (Exception $ex) { log_error('indicators_actions', $ex); }
 
     view('indicators/actions', [
@@ -748,8 +753,12 @@ function indicators_action_store($param = null) {
         set_flash('error', 'Título da ação é obrigatório.');
         redirect('indicators/actions?indicator_id=' . $indicator_id);
     }
+    // indicator_find já respeita o escopo de setor: indicador de outro setor
+    // é tratado como inexistente.
     if (!$indicator_id || !indicator_find($indicator_id, get_hospital_id())) {
-        set_flash('error', 'Selecione um indicador válido para a ação.');
+        set_flash('error', $indicator_id
+            ? 'Indicador não encontrado nos seus setores.'
+            : 'Selecione o indicador ao qual o plano de ação pertence.');
         redirect('indicators/actions');
     }
 
@@ -775,11 +784,12 @@ function indicators_action_update_status($param = null) {
 
     // A ação precisa pertencer a um indicador desta unidade (o indicator_id
     // vem do registro, não do formulário)
+    [$ssql, $sparams] = doc_sector_where('i.', get_sector_id());
     $action_row = $action_id ? db_query_one(
         "SELECT a.id, a.indicator_id FROM doc_indicator_actions a
          JOIN doc_indicators i ON i.id = a.indicator_id
-         WHERE a.id = ? AND a.deleted_at IS NULL AND i.deleted_at IS NULL AND i.hospital_id = ?",
-        [$action_id, get_hospital_id()]
+         WHERE a.id = ? AND a.deleted_at IS NULL AND i.deleted_at IS NULL AND i.hospital_id = ?" . $ssql,
+        array_merge([$action_id, get_hospital_id()], $sparams)
     ) : null;
     if (!$action_row) {
         set_flash('error', 'Ação não encontrada.');
@@ -802,6 +812,49 @@ function indicators_action_update_status($param = null) {
         set_flash('error', 'Erro ao atualizar status.');
     }
     redirect('indicators/actions?indicator_id=' . $indicator_id);
+}
+
+/**
+ * Troca o indicador ao qual um plano de ação está vinculado. Tanto a ação
+ * quanto o indicador de destino precisam estar no escopo de setor do
+ * usuário — senão a tela viraria um caminho para mover dados entre setores.
+ */
+function indicators_action_relink($param = null) {
+    core_require('actions.edit');
+    if (!is_post()) redirect('indicators/actions');
+    csrf_validate();
+
+    $action_id = sanitize_int(input('action_id'));
+    $novo_id   = sanitize_int(input('indicator_id'));
+
+    [$ssql, $sparams] = doc_sector_where('i.', get_sector_id());
+    $action_row = $action_id ? db_query_one(
+        "SELECT a.id, a.indicator_id, a.title FROM doc_indicator_actions a
+         JOIN doc_indicators i ON i.id = a.indicator_id
+         WHERE a.id = ? AND a.deleted_at IS NULL AND i.deleted_at IS NULL AND i.hospital_id = ?" . $ssql,
+        array_merge([$action_id, get_hospital_id()], $sparams)
+    ) : null;
+
+    if (!$action_row) {
+        set_flash('error', 'Ação não encontrada.');
+        redirect('indicators/actions');
+    }
+    $destino = $novo_id ? indicator_find($novo_id, get_hospital_id()) : null;
+    if (!$destino) {
+        set_flash('error', 'Selecione um indicador válido dos seus setores.');
+        redirect('indicators/actions');
+    }
+
+    try {
+        db_execute("UPDATE doc_indicator_actions SET indicator_id = ?, updated_at = NOW() WHERE id = ?",
+                   [$novo_id, $action_id]);
+        audit_log('action_relinked', "action=$action_id, indicator=$novo_id");
+        set_flash('success', 'Plano de ação vinculado a "' . $destino['name'] . '".');
+    } catch (Exception $ex) {
+        log_error('indicators_action_relink', $ex);
+        set_flash('error', 'Erro ao vincular o indicador.');
+    }
+    redirect('indicators/actions');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -849,7 +902,9 @@ function _action_list($indicator_id = null, $hospital_id = null, $sector_id = 0)
     $params = [];
     if ($indicator_id) { $sql .= " AND a.indicator_id = ?"; $params[] = $indicator_id; }
     if ($hospital_id)  { $sql .= " AND i.hospital_id = ?";  $params[] = $hospital_id; }
-    if ((int) $sector_id > 0) { $sql .= " AND i.sector_id = ?"; $params[] = (int) $sector_id; }
+    [$ssql, $sparams] = doc_sector_where('i.', $sector_id);
+    $sql   .= $ssql;
+    $params = array_merge($params, $sparams);
     $sql .= " ORDER BY FIELD(a.status,'pending','in_progress','done','cancelled'), a.due_date ASC";
     return db_query($sql, $params);
 }

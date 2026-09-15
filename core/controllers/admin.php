@@ -36,9 +36,15 @@ $isGlobal = Auth::isGlobalAdmin();
 $coreActions = [
     'users', 'user_form', 'user_save', 'user_delete', 'user_perms', 'user_perms_save',
     'groups', 'group_form', 'group_save', 'group_delete',
-    'modules', 'settings', 'appearance', 'appearance_save', 'audit',
-    'migrations', 'migrations_apply',
+    'modules', 'settings', 'appearance', 'appearance_save', 'appearance_export', 'audit',
+    'theme_save', 'theme_apply', 'theme_delete', 'theme_preview', 'appearance_unit_save',
+    'surfaces',
+    'migrations', 'migrations_apply', 'health', 'cleanup_save', 'cleanup_run',
+    'backup', 'backup_create', 'backup_download', 'backup_delete', 'backup_verify',
+    'backup_schedule_save',
     'mailqueue', 'mailqueue_process', 'mailqueue_retry',
+    'mail', 'mail_save', 'mail_test', 'mail_probe',
+    'mail_layout_save', 'mail_layout_preview', 'mail_inbox_save', 'mail_inbox_test',
 ];
 if (in_array($action, $coreActions, true)) {
     Auth::requireGlobalAdmin();
@@ -61,7 +67,8 @@ function admin_sidebar(): array
         $core[] = ['label' => 'Configurações',       'url' => core_module_url('admin', ['a' => 'settings']),   'icon' => 'bi-sliders',      'key' => 'settings'];
         $core[] = ['label' => 'Aparência',           'url' => core_module_url('admin', ['a' => 'appearance']), 'icon' => 'bi-palette',      'key' => 'appearance'];
         $core[] = ['label' => 'Atualizações de banco','url' => core_module_url('admin', ['a' => 'migrations']),'icon' => 'bi-database-up',  'key' => 'migrations'];
-        $core[] = ['label' => 'Fila de e-mails',     'url' => core_module_url('admin', ['a' => 'mailqueue']),  'icon' => 'bi-envelope-paper','key' => 'mailqueue'];
+        $core[] = ['label' => 'Backup',              'url' => core_module_url('admin', ['a' => 'backup']),     'icon' => 'bi-hdd-stack',    'key' => 'backup'];
+        $core[] = ['label' => 'E-mail',              'url' => core_module_url('admin', ['a' => 'mail']),       'icon' => 'bi-envelope-at',  'key' => 'mail'];
         $core[] = ['label' => 'Auditoria',           'url' => core_module_url('admin', ['a' => 'audit']),      'icon' => 'bi-journal-text', 'key' => 'audit'];
     }
     $sections[] = ['heading' => 'Administração', 'items' => $core];
@@ -273,7 +280,7 @@ switch ($action) {
             <div class="alert alert-info py-2 small">
                 <i class="bi bi-envelope-paper me-1"></i>Fila de e-mails: <strong><?= $mailStats['pending'] ?></strong> pendente(s),
                 <strong><?= $mailStats['failed'] ?></strong> com falha —
-                <a href="<?= core_module_url('admin', ['a' => 'mailqueue']) ?>">gerenciar</a>.
+                <a href="<?= core_module_url('admin', ['a' => 'mail', 'tab' => 'queue']) ?>">gerenciar</a>.
             </div>
         <?php endif; ?>
         <div class="card">
@@ -353,6 +360,12 @@ switch ($action) {
         </div>
         <ul class="nav nav-tabs mb-3 admin-module-tabs">
             <?php foreach ($tabs as $key => $t): ?>
+                <?php
+                // Aba 'hidden': tela de detalhe alcançada por um botão de
+                // dentro de outra aba (ex.: "Usuários do setor"). Continua
+                // navegável e com permissão própria — só não ocupa a barra.
+                if (!empty($t['hidden']) && $key !== $tab) { continue; }
+                ?>
                 <li class="nav-item">
                     <a class="nav-link <?= $key === $tab ? 'active' : '' ?>" href="<?= AdminPanel::url($slug, (string) $key) ?>">
                         <?php if (!empty($t['icon'])): ?><i class="bi <?= core_e($t['icon']) ?> me-1"></i><?php endif; ?>
@@ -389,16 +402,73 @@ switch ($action) {
         };
         break;
 
+    // ================= BACKUP E RESTAURAÇÃO =================
+
+    case 'backup':
+    case 'backup_create':
+    case 'backup_download':
+    case 'backup_delete':
+    case 'backup_verify':
+    case 'backup_schedule_save':
+        require CORE_PATH . '/controllers/admin_backup.php';
+        match ($action) {
+            'backup'               => admin_render('Backup', core_admin_backup(), 'backup'),
+            'backup_create'        => core_admin_backup_create(),
+            'backup_download'      => core_admin_backup_download(),
+            'backup_delete'        => core_admin_backup_delete(),
+            'backup_verify'        => core_admin_backup_verify(),
+            'backup_schedule_save' => core_admin_backup_schedule_save(),
+        };
+        break;
+
+    // ================= E-MAIL (configuração, teste, fila, diagnóstico) =================
+
+    case 'mail':
+    case 'mail_save':
+    case 'mail_test':
+    case 'mail_probe':
+    case 'mail_layout_save':
+    case 'mail_layout_preview':
+    case 'mail_inbox_save':
+    case 'mail_inbox_test':
+        require CORE_PATH . '/controllers/admin_mail.php';
+        match ($action) {
+            'mail'                 => admin_render('E-mail', core_admin_mail(), 'mail'),
+            'mail_save'            => core_admin_mail_save(),
+            'mail_test'            => core_admin_mail_test(),
+            'mail_probe'           => core_admin_mail_probe(),
+            'mail_layout_save'     => core_admin_mail_layout_save(),
+            'mail_layout_preview'  => core_admin_mail_layout_preview(),
+            'mail_inbox_save'      => core_admin_mail_inbox_save(),
+            'mail_inbox_test'      => core_admin_mail_inbox_test(),
+        };
+        break;
+
     // ================= APARÊNCIA (identidade visual) =================
 
     case 'appearance':
     case 'appearance_save':
+    case 'appearance_export':
+    case 'appearance_preview':
+    case 'theme_save':
+    case 'theme_apply':
+    case 'theme_delete':
+    case 'theme_preview':
+    case 'appearance_unit_save':
         require CORE_PATH . '/controllers/admin_appearance.php';
         match ($action) {
-            'appearance'      => admin_render('Aparência', core_admin_appearance(), 'appearance'),
-            'appearance_save' => core_admin_appearance_save(),
+            'appearance'         => admin_render('Aparência', core_admin_appearance(), 'appearance'),
+            'appearance_save'    => core_admin_appearance_save(),
+            'appearance_export'  => core_admin_appearance_export(),
+            'appearance_preview' => core_admin_appearance_preview(),
+            'theme_save'         => core_admin_theme_save(),
+            'theme_apply'        => core_admin_theme_apply(),
+            'theme_delete'       => core_admin_theme_delete(),
+            'theme_preview'      => core_admin_theme_preview(),
+            'appearance_unit_save' => core_admin_appearance_unit_save(),
         };
         break;
+
 
     // ================= USUÁRIOS =================
 
@@ -897,9 +967,21 @@ switch ($action) {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Csrf::check();
             foreach ((array) ($_POST['mod'] ?? []) as $slug => $data) {
+                // label/custom_icon vazios significam "usar o do manifesto".
+                $label = trim((string) ($data['label'] ?? ''));
+                $icon  = trim((string) ($data['icon'] ?? ''));
                 DB::execute(
-                    'UPDATE modules SET active = ?, sort_order = ? WHERE slug = ?',
-                    [!empty($data['active']) ? 1 : 0, (int) ($data['sort'] ?? 0), (string) $slug]
+                    'UPDATE modules
+                        SET active = ?, sort_order = ?, show_in_topbar = ?, label = ?, custom_icon = ?
+                      WHERE slug = ?',
+                    [
+                        !empty($data['active']) ? 1 : 0,
+                        max(0, min(9999, (int) ($data['sort'] ?? 0))),
+                        !empty($data['topbar']) ? 1 : 0,
+                        $label !== '' ? mb_substr($label, 0, 100) : null,
+                        $icon !== '' && preg_match('/^bi-[a-z0-9-]{1,50}$/', $icon) ? $icon : null,
+                        (string) $slug,
+                    ]
                 );
             }
             Flash::set('success', 'Módulos atualizados.');
@@ -921,15 +1003,35 @@ switch ($action) {
             <div class="card">
                 <div class="table-responsive">
                     <table class="table mb-0 align-middle">
-                        <thead><tr><th>Módulo</th><th style="width:120px">Ordem</th><th class="text-center" style="width:100px">Ativo</th></tr></thead>
+                        <thead><tr>
+                            <th>Módulo</th>
+                            <th style="width:200px">Nome no sistema</th>
+                            <th style="width:140px">Ícone</th>
+                            <th style="width:90px">Ordem</th>
+                            <th class="text-center" style="width:90px">No topo</th>
+                            <th class="text-center" style="width:80px">Ativo</th>
+                        </tr></thead>
                         <tbody>
                         <?php foreach ($rows as $r): $m = Modules::manifest((string) $r['slug']); ?>
                             <tr>
-                                <td><i class="bi <?= core_e($r['icon'] ?? '') ?> me-2"></i><?= core_e($r['name']) ?>
+                                <td><i class="bi <?= core_e($r['custom_icon'] ?: ($r['icon'] ?? '')) ?> me-2"></i><?= core_e($r['label'] ?: $r['name']) ?>
                                     <?php if (!$m): ?><span class="badge text-bg-warning">arquivos ausentes</span><?php endif; ?>
                                     <?php if ($m && !empty($m['description'])): ?><div class="small text-muted"><?= core_e($m['description']) ?></div><?php endif; ?>
                                 </td>
-                                <td><input type="number" class="form-control form-control-sm" name="mod[<?= core_e($r['slug']) ?>][sort]" value="<?= (int) $r['sort_order'] ?>"></td>
+                                <td>
+                                    <input class="form-control form-control-sm" name="mod[<?= core_e($r['slug']) ?>][label]"
+                                           value="<?= core_e($r['label'] ?? '') ?>" maxlength="100"
+                                           placeholder="<?= core_e($m['name'] ?? $r['name']) ?>">
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm" name="mod[<?= core_e($r['slug']) ?>][icon]"
+                                           value="<?= core_e($r['custom_icon'] ?? '') ?>" maxlength="60"
+                                           placeholder="<?= core_e($m['icon'] ?? 'bi-app') ?>">
+                                </td>
+                                <td><input type="number" class="form-control form-control-sm" min="0" max="9999" name="mod[<?= core_e($r['slug']) ?>][sort]" value="<?= (int) $r['sort_order'] ?>"></td>
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input" name="mod[<?= core_e($r['slug']) ?>][topbar]" value="1" <?= ($r['show_in_topbar'] ?? 1) ? 'checked' : '' ?>>
+                                </td>
                                 <td class="text-center">
                                     <input type="checkbox" class="form-check-input" name="mod[<?= core_e($r['slug']) ?>][active]" value="1" <?= $r['active'] ? 'checked' : '' ?>>
                                 </td>
@@ -950,6 +1052,10 @@ switch ($action) {
             Csrf::check();
             Settings::set('org_name', trim((string) ($_POST['org_name'] ?? '')));
             Settings::set('default_hospital_id', (string) max(1, (int) ($_POST['default_hospital_id'] ?? 1)));
+            // Notificações: os limites evitam tanto o "tempo real" que
+            // multiplica a carga quanto o atraso de minutos.
+            Settings::set('notifications.poll_active', (string) max(2, min(120, (int) ($_POST['notif_poll_active'] ?? 5))));
+            Settings::set('notifications.poll_idle',   (string) max(10, min(600, (int) ($_POST['notif_poll_idle'] ?? 20))));
             Flash::set('success', 'Configurações salvas.');
             core_redirect('index.php?m=admin&a=settings');
         }
@@ -971,11 +1077,109 @@ switch ($action) {
                                 <input type="number" class="form-control" name="default_hospital_id" value="<?= core_e(Settings::get('default_hospital_id', '1')) ?>">
                                 <div class="form-text">Usado pelos módulos Documentos e Manutenção, que herdaram estrutura multi-unidade.</div>
                             </div>
+                            <hr>
+                            <h2 class="h6"><i class="bi bi-bell me-1"></i>Notificações</h2>
+                            <p class="small text-muted">
+                                De quanto em quanto tempo o sino procura novidades. Valores menores deixam a
+                                notificação mais imediata e aumentam o número de consultas; a aba em segundo
+                                plano usa o intervalo maior.
+                            </p>
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <label class="form-label" for="notifAtivo">Aba à frente (segundos)</label>
+                                    <input type="number" class="form-control" id="notifAtivo" name="notif_poll_active"
+                                           min="2" max="120" value="<?= core_e(Settings::get('notifications.poll_active', '5')) ?>">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label" for="notifOculto">Aba em segundo plano (segundos)</label>
+                                    <input type="number" class="form-control" id="notifOculto" name="notif_poll_idle"
+                                           min="10" max="600" value="<?= core_e(Settings::get('notifications.poll_idle', '20')) ?>">
+                                </div>
+                            </div>
+                            <div class="form-text mb-3">Padrão: 5 s e 20 s (a mesma ordem de grandeza do chat).</div>
+
                             <button class="btn btn-primary">Salvar</button>
                         </form>
                     </div>
                 </div>
             </div>
+            <div class="col-12">
+                <?php
+                $limpezaDias = Core\Cleanup::all();
+                $ultima      = Core\Cleanup::ultimaExecucao();
+                $ultimaQtd   = (int) Settings::get('cleanup.last_run_count', '0');
+                ?>
+                <div class="card mb-3">
+                    <div class="card-header d-flex flex-wrap align-items-center gap-2">
+                        <span><i class="bi bi-trash3 me-1"></i>Limpeza automática</span>
+                        <span class="ms-auto small text-muted">
+                            <?php if ($ultima !== ''): ?>
+                                última execução em <?= core_e(date('d/m/Y H:i', strtotime($ultima))) ?>
+                                (<?= $ultimaQtd ?> registro(s) removidos)
+                            <?php else: ?>
+                                ainda não executou
+                            <?php endif; ?>
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small">
+                            Por quantos dias cada tipo de registro é guardado. Passado o prazo, o cron apaga —
+                            <strong>0 significa nunca apagar</strong>. O que ainda está em uso nunca é removido:
+                            notificação não lida, e-mail pendente na fila e o backup mais recente ficam.
+                        </p>
+
+                        <form method="post" action="<?= core_module_url('admin', ['a' => 'cleanup_save']) ?>">
+                            <?= Csrf::field() ?>
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" role="switch" name="enabled" id="clEnabled"
+                                       value="1" <?= Core\Cleanup::habilitado() ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="clEnabled">Executar a limpeza junto com a rotina periódica (cron)</label>
+                            </div>
+
+                            <div class="row g-3">
+                                <?php foreach (Core\Cleanup::ALVOS as $chave => $def): ?>
+                                <div class="col-12 col-md-6 col-xl-4">
+                                    <label class="form-label" for="cl_<?= $chave ?>"><?= core_e($def['label']) ?></label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="cl_<?= $chave ?>" name="<?= $chave ?>"
+                                               min="0" max="3650" value="<?= (int) $limpezaDias[$chave] ?>">
+                                        <span class="input-group-text">dias</span>
+                                    </div>
+                                    <div class="form-text">
+                                        <?= core_e($def['detalhe']) ?>
+                                        <?php if ($def['minimo'] > 0): ?>
+                                            <br>Mínimo <?= (int) $def['minimo'] ?> dias (ou 0 para nunca apagar).
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-3">
+                                <button class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar prazos</button>
+                                <a class="btn btn-outline-secondary" href="<?= core_module_url('admin', ['a' => 'cleanup_run', 'simular' => 1]) ?>">
+                                    <i class="bi bi-search me-1"></i>Simular (só contar)
+                                </a>
+                                <!-- Formulário próprio (fora deste): <form> dentro de <form> é
+                                     HTML inválido e o navegador descarta o de dentro. -->
+                                <button class="btn btn-outline-danger" form="clRunForm"
+                                        onclick="return confirm('Executar a limpeza agora? Os registros fora do prazo serão apagados.')">
+                                    <i class="bi bi-trash3 me-1"></i>Limpar agora
+                                </button>
+                            </div>
+                        </form>
+                        <form method="post" action="<?= core_module_url('admin', ['a' => 'cleanup_run']) ?>" id="clRunForm" class="d-none">
+                            <?= Csrf::field() ?>
+                        </form>
+                        <p class="small text-muted mt-3 mb-0">
+                            A retenção dos <strong>pacotes de backup</strong> (quantos diários, semanais e mensais guardar)
+                            fica em <a href="<?= core_module_url('admin', ['a' => 'backup']) ?>">Administração &rsaquo; Backup</a>,
+                            porque lá ela aparece junto com a lista dos pacotes.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <div class="col-12 col-lg-6">
                 <div class="card mb-3">
                     <div class="card-header">E-mail (SMTP)</div>
@@ -987,7 +1191,7 @@ switch ($action) {
                             <p><span class="badge text-bg-secondary">Desabilitado</span></p>
                             <p class="small text-muted mb-0">Habilite em <code>config/config.php</code> (bloco <code>mail</code>) para o envio de comunicados,
                                 pesquisas, alertas de vencimento e redefinição de senha. Os envios ficam na
-                                <a href="<?= core_module_url('admin', ['a' => 'mailqueue']) ?>">fila de e-mails</a>.</p>
+                                <a href="<?= core_module_url('admin', ['a' => 'mail', 'tab' => 'queue']) ?>">fila de e-mails</a>.</p>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -1069,6 +1273,9 @@ switch ($action) {
         ob_start(); ?>
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
             <h1 class="h4 mb-0"><i class="bi bi-database-up me-2"></i>Atualizações de banco de dados</h1>
+            <a class="btn btn-outline-primary" href="<?= core_module_url('admin', ['a' => 'health']) ?>">
+                <i class="bi bi-heart-pulse me-1"></i>Checkup do sistema
+            </a>
             <?php if ($pending): ?>
                 <form method="post" action="<?= core_module_url('admin', ['a' => 'migrations_apply']) ?>"
                       onsubmit="return confirm('Aplicar <?= count($pending) ?> atualização(ões) pendente(s) no banco de dados agora?')">
@@ -1110,6 +1317,129 @@ switch ($action) {
         admin_render('Atualizações de banco', (string) ob_get_clean(), 'migrations');
         break;
 
+    case 'cleanup_save':
+        Csrf::check();
+        Settings::set('cleanup.enabled', !empty($_POST['enabled']) ? '1' : '0');
+        Core\Cleanup::save($_POST);
+        Audit::log('cleanup.save', 'settings', null, null, null, 'admin');
+        Flash::set('success', 'Prazos de limpeza salvos.');
+        core_redirect('index.php?m=admin&a=settings');
+        break;
+
+    case 'cleanup_run':
+        // GET com ?simular=1 apenas conta; a execução de verdade é POST com
+        // CSRF, para que um link não apague nada.
+        $simular = $_SERVER['REQUEST_METHOD'] !== 'POST';
+        if (!$simular) {
+            Csrf::check();
+        }
+        $r = Core\Cleanup::run($simular);
+        $linhas = [];
+        foreach ($r['itens'] as $i) {
+            if (($i['qtd'] ?? 0) > 0) {
+                $linhas[] = $i['label'] . ': ' . $i['qtd'];
+            }
+        }
+        $resumo = $linhas === [] ? 'nada fora do prazo' : implode(' · ', $linhas);
+        Flash::set($r['total'] > 0 ? 'success' : 'info',
+            ($simular ? 'Simulação — seriam removidos ' : 'Limpeza concluída — removidos ')
+            . $r['total'] . ' registro(s). ' . $resumo);
+        core_redirect('index.php?m=admin&a=settings');
+        break;
+
+    case 'surfaces':
+        ob_start();
+        require CORE_PATH . '/views/surfaces.php';
+        admin_render('Galeria de superfícies', (string) ob_get_clean(), 'appearance');
+        break;
+
+    case 'health':
+        $grupos = Core\HealthCheck::all();
+        $resumo = Core\HealthCheck::resumo($grupos);
+        $cores  = ['ok' => 'success', 'aviso' => 'warning', 'erro' => 'danger', 'info' => 'secondary'];
+        $icones = ['ok' => 'bi-check-circle-fill', 'aviso' => 'bi-exclamation-triangle-fill',
+                   'erro' => 'bi-x-octagon-fill', 'info' => 'bi-info-circle-fill'];
+        ob_start(); ?>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h1 class="h4 mb-0"><i class="bi bi-heart-pulse me-2"></i>Checkup de saúde do sistema</h1>
+            <div class="d-flex gap-2">
+                <a class="btn btn-outline-secondary" href="<?= core_module_url('admin', ['a' => 'migrations']) ?>">
+                    <i class="bi bi-database-up me-1"></i>Atualizações de banco
+                </a>
+                <a class="btn btn-outline-primary" href="<?= core_module_url('admin', ['a' => 'health']) ?>">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Verificar de novo
+                </a>
+            </div>
+        </div>
+
+        <div class="alert alert-<?= $resumo['erro'] > 0 ? 'danger' : ($resumo['aviso'] > 0 ? 'warning' : 'success') ?> d-flex flex-wrap align-items-center gap-3">
+            <div class="fs-2">
+                <i class="bi <?= $resumo['erro'] > 0 ? 'bi-x-octagon' : ($resumo['aviso'] > 0 ? 'bi-exclamation-triangle' : 'bi-check-circle') ?>"></i>
+            </div>
+            <div class="flex-grow-1">
+                <h2 class="h5 mb-1">
+                    <?php if ($resumo['erro'] > 0): ?>
+                        <?= (int) $resumo['erro'] ?> item(ns) precisam de atenção
+                    <?php elseif ($resumo['aviso'] > 0): ?>
+                        Nada impede o funcionamento, mas há <?= (int) $resumo['aviso'] ?> recomendação(ões)
+                    <?php else: ?>
+                        Tudo certo
+                    <?php endif; ?>
+                </h2>
+                <div class="small">
+                    <span class="badge text-bg-success"><?= (int) $resumo['ok'] ?> ok</span>
+                    <span class="badge text-bg-warning"><?= (int) $resumo['aviso'] ?> atenção</span>
+                    <span class="badge text-bg-danger"><?= (int) $resumo['erro'] ?> problema</span>
+                    <span class="badge text-bg-secondary"><?= (int) $resumo['info'] ?> informação</span>
+                    <span class="text-muted ms-2">verificado em <?= core_e(date('d/m/Y H:i')) ?></span>
+                </div>
+            </div>
+        </div>
+
+        <p class="text-muted small">
+            Todos os itens são apenas leitura: esta página não altera nada no sistema. O que estiver marcado como
+            problema vem com o que fazer a respeito.
+        </p>
+
+        <?php foreach ($grupos as $chave => $itens):
+            $meta = Core\HealthCheck::GRUPOS[$chave] ?? ['label' => $chave, 'icon' => 'bi-dot'];
+            $piores = ['erro' => 0, 'aviso' => 0];
+            foreach ($itens as $i) { if (isset($piores[$i['nivel']])) { $piores[$i['nivel']]++; } }
+        ?>
+        <div class="card mb-3">
+            <div class="card-header d-flex flex-wrap align-items-center gap-2">
+                <i class="bi <?= core_e($meta['icon']) ?>"></i>
+                <strong><?= core_e($meta['label']) ?></strong>
+                <span class="ms-auto small">
+                    <?php if ($piores['erro']): ?><span class="badge text-bg-danger"><?= $piores['erro'] ?> problema(s)</span><?php endif; ?>
+                    <?php if ($piores['aviso']): ?><span class="badge text-bg-warning"><?= $piores['aviso'] ?> atenção</span><?php endif; ?>
+                    <?php if (!$piores['erro'] && !$piores['aviso']): ?><span class="badge text-bg-success">tudo ok</span><?php endif; ?>
+                </span>
+            </div>
+            <ul class="list-group list-group-flush">
+                <?php foreach ($itens as $i): ?>
+                <li class="list-group-item d-flex gap-3">
+                    <div class="text-<?= $cores[$i['nivel']] ?? 'secondary' ?> pt-1">
+                        <i class="bi <?= $icones[$i['nivel']] ?? 'bi-dot' ?>"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold"><?= core_e($i['titulo']) ?></div>
+                        <div class="small text-body-secondary"><?= core_e($i['detalhe']) ?></div>
+                        <?php if (!empty($i['acao'])): ?>
+                            <div class="small mt-1">
+                                <i class="bi bi-arrow-right-short"></i><strong>O que fazer:</strong> <?= core_e($i['acao']) ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <?php endforeach; ?>
+        <?php
+        admin_render('Checkup do sistema', (string) ob_get_clean(), 'migrations');
+        break;
+
     case 'migrations_apply':
         Csrf::check();
         $results = Migrations::applyAll();
@@ -1123,65 +1453,24 @@ switch ($action) {
     // ================= FILA DE E-MAILS =================
 
     case 'mailqueue':
-        $stats  = MailQueue::stats();
-        $recent = MailQueue::recent(60);
-        ob_start(); ?>
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-            <h1 class="h4 mb-0"><i class="bi bi-envelope-paper me-2"></i>Fila de e-mails</h1>
-            <div class="d-flex gap-2">
-                <form method="post" action="<?= core_module_url('admin', ['a' => 'mailqueue_process']) ?>">
-                    <?= Csrf::field() ?>
-                    <button class="btn btn-primary btn-sm" <?= $stats['pending'] ? '' : 'disabled' ?>><i class="bi bi-send me-1"></i>Processar agora</button>
-                </form>
-                <form method="post" action="<?= core_module_url('admin', ['a' => 'mailqueue_retry']) ?>">
-                    <?= Csrf::field() ?>
-                    <button class="btn btn-outline-secondary btn-sm" <?= $stats['failed'] ? '' : 'disabled' ?>><i class="bi bi-arrow-repeat me-1"></i>Reenfileirar falhas</button>
-                </form>
-            </div>
-        </div>
-        <div class="row g-3 mb-3">
-            <?php foreach ([['Pendentes', $stats['pending'], 'warning'], ['Enviados', $stats['sent'], 'success'], ['Falhas', $stats['failed'], 'danger']] as [$l, $v, $c]): ?>
-                <div class="col-4"><div class="card"><div class="card-body py-2"><div class="fs-4 fw-semibold text-<?= $c ?>"><?= (int) $v ?></div><div class="small text-muted"><?= $l ?></div></div></div></div>
-            <?php endforeach; ?>
-        </div>
-        <p class="text-muted small">Os e-mails são enviados pelo cron unificado (<code>cron.php</code>, a cada execução) ou pelo botão acima.
-            <?php if (!core_config('mail.enabled')): ?><strong class="text-danger">O envio de e-mail está desabilitado em config/config.php (mail.enabled).</strong><?php endif; ?></p>
-        <div class="card">
-            <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0 align-middle">
-                    <thead><tr><th>Quando</th><th>Para</th><th>Assunto</th><th>Origem</th><th class="text-center">Status</th><th>Erro</th></tr></thead>
-                    <tbody>
-                    <?php if (!$recent): ?><tr><td colspan="6" class="text-center text-muted py-4">Fila vazia.</td></tr><?php endif; ?>
-                    <?php foreach ($recent as $r): ?>
-                        <tr>
-                            <td class="text-nowrap small"><?= core_e(date('d/m H:i', strtotime((string) $r['created_at']))) ?></td>
-                            <td class="small"><?= core_e($r['to_email']) ?></td>
-                            <td class="small"><?= core_e($r['subject']) ?></td>
-                            <td><span class="badge text-bg-light border"><?= core_e($r['module'] ?? '—') ?></span></td>
-                            <td class="text-center"><span class="badge text-bg-<?= ['pending' => 'warning', 'sent' => 'success', 'failed' => 'danger'][$r['status']] ?? 'secondary' ?>"><?= core_e($r['status']) ?></span></td>
-                            <td class="small text-muted"><?= core_e(mb_substr((string) ($r['last_error'] ?? ''), 0, 80)) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        <?php
-        admin_render('Fila de e-mails', (string) ob_get_clean(), 'mailqueue');
+        // A fila virou uma aba da tela de E-mail (onde também ficam a
+        // configuração, o teste de entrega e o diagnóstico). A rota antiga
+        // continua valendo para links salvos e para o alerta da visão geral.
+        core_redirect('index.php?m=admin&a=mail&tab=queue');
         break;
 
     case 'mailqueue_process':
         Csrf::check();
         $s = MailQueue::process(200);
         Flash::set('success', "Processado: {$s['sent']} enviado(s), {$s['failed']} falha(s), {$s['retried']} reagendado(s).");
-        core_redirect('index.php?m=admin&a=mailqueue');
+        core_redirect('index.php?m=admin&a=mail&tab=queue');
         break;
 
     case 'mailqueue_retry':
         Csrf::check();
         $n = MailQueue::retryFailed();
         Flash::set('success', "{$n} e-mail(s) reenfileirado(s).");
-        core_redirect('index.php?m=admin&a=mailqueue');
+        core_redirect('index.php?m=admin&a=mail&tab=queue');
         break;
 
     default:

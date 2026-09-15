@@ -35,7 +35,7 @@ $panels = [
     'departments' => ['DepartmentController',     ['index', 'create', 'edit']],
     'positions'   => ['PositionController',       ['index', 'create', 'edit']],
     'access'      => ['EmployeeAccessController', ['index', 'ensure', 'reset', 'create_all']],
-    'birthdays'   => ['BirthdayController',       ['configure', 'save_config', 'preview']],
+    'birthdays'   => ['BirthdayController',       ['configure', 'save_config', 'preview', 'to_advanced', 'reset_visual']],
 ];
 
 if (!isset($panels[$tab])) {

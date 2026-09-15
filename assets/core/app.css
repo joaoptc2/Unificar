@@ -36,9 +36,23 @@
     --portal-border: rgba(0, 0, 0, .09);
     --portal-radius: 8px;
     --portal-radius-sm: 5px;
+    --portal-font-size: 16px;
+    --portal-sidebar-w-min: 64px;
+    --portal-surface-2: #f8fafc;
+    --portal-shadow-card: 0 1px 2px rgba(16, 24, 40, .04);
+    --portal-shadow-topbar: 0 1px 6px rgba(0, 0, 0, .18);
+    --portal-shadow-hover: 0 8px 22px rgba(16, 24, 40, .10);
+    --portal-login-card-w: 420px;
+    --portal-success: #198754;
+    --portal-warning: #ffc107;
+    --portal-danger: #dc3545;
+    --portal-info: #0dcaf0;
     --portal-font: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
     --portal-density: 1;
 }
+
+/* O tamanho da fonte base escala o sistema inteiro: todo o CSS usa rem. */
+html { font-size: var(--portal-font-size); }
 
 body.portal-body {
     background: var(--portal-body-bg);
@@ -52,8 +66,31 @@ body.portal-body {
 .portal-topbar {
     background: var(--portal-topbar-bg);
     color: var(--portal-topbar-text);
-    min-height: var(--portal-topbar-h);
-    box-shadow: 0 1px 6px rgba(0, 0, 0, .18);
+    /* Altura EXATA, não mínima: o corpo reserva o mesmo valor em padding-top,
+       e com min-height a barra crescia com a fonte e passava a cobrir o começo
+       de todas as páginas. */
+    height: var(--portal-topbar-h);
+    padding-block: 0;
+    box-shadow: var(--portal-shadow-topbar);
+}
+.portal-topbar > .container-fluid {
+    height: 100%;
+    align-items: center;
+    flex-wrap: nowrap;
+}
+/* No celular o menu abre para baixo e precisa escapar da barra de altura fixa. */
+@media (max-width: 991.98px) {
+    .portal-topbar { overflow: visible; }
+    .portal-topbar .navbar-collapse {
+        position: absolute;
+        top: var(--portal-topbar-h);
+        left: 0; right: 0;
+        background: var(--portal-topbar-bg);
+        padding: .5rem 1rem 1rem;
+        box-shadow: var(--portal-shadow-topbar);
+        max-height: calc(100vh - var(--portal-topbar-h));
+        overflow-y: auto;
+    }
 }
 
 .portal-topbar .navbar-brand,
@@ -68,7 +105,17 @@ body.portal-body {
     display: block;
 }
 
+.portal-module-nav {
+    /* Rótulo longo de módulo empurrava os outros para fora da barra, sem
+       rolagem: agora a lista rola e cada nome é truncado com reticências. */
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
 .portal-module-nav .nav-link {
+    max-width: 22ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: color-mix(in srgb, var(--portal-topbar-text) 82%, transparent);
     border-radius: var(--portal-radius-sm);
     padding: .35rem .75rem;
@@ -165,6 +212,65 @@ body.portal-body {
     border-left-color: var(--portal-primary);
 }
 
+/* ---------- Menu lateral: modos de exibição ----------
+   O estado fica no <html> (data-portal-sidebar), escrito por um script
+   curtíssimo no <head> — no fim do <body> a barra pintaria aberta e
+   saltaria para fechada na frente do usuário. */
+@media (min-width: 992px) {
+    .portal-sidebar-toggle { display: inline-flex; }
+
+    /* Recolhido (por escolha de quem usa) ou modo "só ícones" */
+    html[data-portal-sidebar="recolhido"] .portal-shell.has-sidebar .portal-sidebar,
+    html[data-portal-sidebar-mode="icones"] .portal-shell.has-sidebar .portal-sidebar {
+        width: var(--portal-sidebar-w-min);
+        overflow-x: hidden;
+        transition: width .16s ease;
+    }
+    html[data-portal-sidebar="recolhido"] .portal-shell.has-sidebar .portal-main,
+    html[data-portal-sidebar-mode="icones"] .portal-shell.has-sidebar .portal-main {
+        margin-left: var(--portal-sidebar-w-min);
+        transition: margin-left .16s ease;
+    }
+    html[data-portal-sidebar="recolhido"] .portal-sidebar .portal-sidebar-label,
+    html[data-portal-sidebar="recolhido"] .portal-sidebar .portal-sidebar-heading,
+    html[data-portal-sidebar="recolhido"] .portal-sidebar .portal-sidebar-brand span,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar .portal-sidebar-label,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar .portal-sidebar-heading,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar .portal-sidebar-brand span {
+        display: none;
+    }
+    html[data-portal-sidebar="recolhido"] .portal-sidebar-nav .nav-link,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar-nav .nav-link {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    /* No modo "só ícones" a barra se abre ao passar o mouse, sobrepondo o
+       conteúdo — assim nada precisa ser recalculado e não há salto. */
+    html[data-portal-sidebar-mode="icones"] .portal-shell.has-sidebar .portal-sidebar:hover,
+    html[data-portal-sidebar-mode="icones"] .portal-shell.has-sidebar .portal-sidebar:focus-within {
+        width: var(--portal-sidebar-w);
+        box-shadow: var(--portal-shadow-hover);
+    }
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar:hover .portal-sidebar-label,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar:focus-within .portal-sidebar-label,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar:hover .portal-sidebar-heading,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar:focus-within .portal-sidebar-heading {
+        display: block;
+    }
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar:hover .portal-sidebar-nav .nav-link,
+    html[data-portal-sidebar-mode="icones"] .portal-sidebar:focus-within .portal-sidebar-nav .nav-link {
+        justify-content: flex-start;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
+@media (max-width: 991.98px) {
+    /* No celular o menu já é um painel deslizante: os modos não se aplicam. */
+    .portal-sidebar-toggle { display: none; }
+}
+
 /* ---------- Conteúdo ---------- */
 .portal-main { flex: 1 1 auto; min-width: 0; }
 
@@ -179,7 +285,7 @@ body.portal-bare {
     font-family: var(--portal-font);
 }
 .portal-bare-card {
-    width: 420px; max-width: 94vw; border: 0;
+    width: var(--portal-login-card-w); max-width: 94vw; border: 0;
     border-radius: calc(var(--portal-radius) * 1.6);
     background: var(--portal-surface);
     color: var(--portal-text);
@@ -195,13 +301,90 @@ body.portal-bare {
 .portal-bare-logo.has-image { background: none; width: auto; height: auto; max-height: 90px; }
 .portal-bare-logo.has-image img { max-height: 90px; width: auto; }
 
+/* Entrada em duas colunas: imagem de um lado, formulário do outro.
+   Abaixo de 768px vira uma coluna só — o cartão continua legível no
+   celular, que é como boa parte do hospital entra no sistema. */
+body.portal-bare.is-split {
+    display: block;
+    padding: 0;
+}
+.portal-bare-split {
+    display: flex;
+    min-height: 100vh;
+}
+.portal-bare-split .portal-bare-visual {
+    flex: 1 1 55%;
+    min-width: 0;   /* pode encolher: sem isso o nome do hospital segurava a coluna */
+    background: inherit;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: flex-end;
+    padding: 2.5rem;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, .5);
+}
+.portal-bare-split .portal-bare-panel {
+    /* 0 1 (e não 0 0): entre 768 e ~890px o cartão largo era empurrado para
+       fora da tela e a página ganhava rolagem horizontal. */
+    flex: 0 1 min(var(--portal-login-card-w), 92vw);
+    min-width: 320px;
+    background: var(--portal-surface);
+    color: var(--portal-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.5rem;
+}
+.portal-bare-split .portal-bare-card {
+    box-shadow: none;
+    background: transparent;
+    width: 100%;
+}
+@media (max-width: 991.98px) {
+    .portal-bare-split { flex-direction: column; min-height: 100vh; }
+    .portal-bare-split .portal-bare-visual { flex: 0 0 26vh; padding: 1.25rem; }
+    .portal-bare-split .portal-bare-panel { flex: 1 1 auto; }
+}
+
+.portal-bare-footer {
+    margin-top: 1.5rem;
+    font-size: .8rem;
+    color: var(--portal-muted);
+    text-align: center;
+}
+body.portal-bare:not(.is-split) .portal-bare-footer { color: rgba(255, 255, 255, .85); }
+
+/* ---------- Acessibilidade ---------- */
+/* Balcão e posto de enfermagem navegam muito por teclado: o foco precisa
+   aparecer, e precisa haver um jeito de pular o menu inteiro. */
+.portal-skip {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 2000;
+    padding: .6rem 1rem;
+    background: var(--portal-surface);
+    color: var(--portal-text);
+    border-radius: 0 0 var(--portal-radius) 0;
+}
+.portal-skip:focus { left: 0; }
+
+.portal-sidebar-nav .nav-link:focus-visible,
+.portal-topbar .nav-link:focus-visible,
+.portal-topbar .navbar-brand:focus-visible,
+.portal-skip:focus-visible {
+    outline: 2px solid var(--portal-accent);
+    outline-offset: -2px;
+}
+
 /* ---------- Utilidades comuns aos módulos ---------- */
 .card {
     border: 1px solid var(--portal-border);
     border-radius: var(--portal-radius);
     background: var(--portal-surface);
     color: var(--portal-text);
-    box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+    box-shadow: var(--portal-shadow-card);
 }
 .table > :not(caption) > * > * { vertical-align: middle; }
 
@@ -262,6 +445,140 @@ body.portal-bare {
 .link-primary { color: var(--portal-primary) !important; }
 .text-bg-primary { background-color: var(--portal-primary) !important; color: var(--portal-on-primary) !important; }
 .badge.bg-primary { color: var(--portal-on-primary); }
+
+/* ---------- Cores de estado ----------
+   O Bootstrap 5.3 compila .btn-success, .alert-danger e .text-bg-warning com
+   a cor LITERAL dentro da regra, e não com var(--bs-success). Redefinir a
+   variável, portanto, não alcança esses componentes: é preciso reapontar
+   cada um. São mais de oitocentos usos nos módulos — selos de conforme e
+   vencido, alertas, botões de excluir — e é o que faz a escolha de cores de
+   estado da Aparência valer de verdade. */
+.btn-success, .btn-warning, .btn-danger, .btn-info,
+.btn-outline-success, .btn-outline-warning, .btn-outline-danger, .btn-outline-info {
+    --bs-btn-focus-shadow-rgb: var(--portal-primary-rgb);
+}
+.btn-success {
+    --bs-btn-bg: var(--portal-success); --bs-btn-border-color: var(--portal-success);
+    --bs-btn-color: var(--portal-on-success);
+    --bs-btn-hover-bg: var(--portal-success); --bs-btn-hover-border-color: var(--portal-success);
+    --bs-btn-hover-color: var(--portal-on-success);
+    --bs-btn-active-bg: var(--portal-success); --bs-btn-active-border-color: var(--portal-success);
+    --bs-btn-active-color: var(--portal-on-success);
+    --bs-btn-disabled-bg: var(--portal-success); --bs-btn-disabled-border-color: var(--portal-success);
+    --bs-btn-disabled-color: var(--portal-on-success);
+}
+.btn-warning {
+    --bs-btn-bg: var(--portal-warning); --bs-btn-border-color: var(--portal-warning);
+    --bs-btn-color: var(--portal-on-warning);
+    --bs-btn-hover-bg: var(--portal-warning); --bs-btn-hover-border-color: var(--portal-warning);
+    --bs-btn-hover-color: var(--portal-on-warning);
+    --bs-btn-active-bg: var(--portal-warning); --bs-btn-active-border-color: var(--portal-warning);
+    --bs-btn-active-color: var(--portal-on-warning);
+    --bs-btn-disabled-bg: var(--portal-warning); --bs-btn-disabled-border-color: var(--portal-warning);
+    --bs-btn-disabled-color: var(--portal-on-warning);
+}
+.btn-danger {
+    --bs-btn-bg: var(--portal-danger); --bs-btn-border-color: var(--portal-danger);
+    --bs-btn-color: var(--portal-on-danger);
+    --bs-btn-hover-bg: var(--portal-danger); --bs-btn-hover-border-color: var(--portal-danger);
+    --bs-btn-hover-color: var(--portal-on-danger);
+    --bs-btn-active-bg: var(--portal-danger); --bs-btn-active-border-color: var(--portal-danger);
+    --bs-btn-active-color: var(--portal-on-danger);
+    --bs-btn-disabled-bg: var(--portal-danger); --bs-btn-disabled-border-color: var(--portal-danger);
+    --bs-btn-disabled-color: var(--portal-on-danger);
+}
+.btn-info {
+    --bs-btn-bg: var(--portal-info); --bs-btn-border-color: var(--portal-info);
+    --bs-btn-color: var(--portal-on-info);
+    --bs-btn-hover-bg: var(--portal-info); --bs-btn-hover-border-color: var(--portal-info);
+    --bs-btn-hover-color: var(--portal-on-info);
+    --bs-btn-active-bg: var(--portal-info); --bs-btn-active-border-color: var(--portal-info);
+    --bs-btn-active-color: var(--portal-on-info);
+    --bs-btn-disabled-bg: var(--portal-info); --bs-btn-disabled-border-color: var(--portal-info);
+    --bs-btn-disabled-color: var(--portal-on-info);
+}
+.btn-outline-success { --bs-btn-color: var(--portal-success); --bs-btn-border-color: var(--portal-success);
+    --bs-btn-hover-bg: var(--portal-success); --bs-btn-hover-border-color: var(--portal-success);
+    --bs-btn-hover-color: var(--portal-on-success);
+    --bs-btn-active-bg: var(--portal-success); --bs-btn-active-border-color: var(--portal-success);
+    --bs-btn-active-color: var(--portal-on-success); --bs-btn-disabled-color: var(--portal-success); }
+.btn-outline-warning { --bs-btn-color: var(--portal-warning); --bs-btn-border-color: var(--portal-warning);
+    --bs-btn-hover-bg: var(--portal-warning); --bs-btn-hover-border-color: var(--portal-warning);
+    --bs-btn-hover-color: var(--portal-on-warning);
+    --bs-btn-active-bg: var(--portal-warning); --bs-btn-active-border-color: var(--portal-warning);
+    --bs-btn-active-color: var(--portal-on-warning); --bs-btn-disabled-color: var(--portal-warning); }
+.btn-outline-danger { --bs-btn-color: var(--portal-danger); --bs-btn-border-color: var(--portal-danger);
+    --bs-btn-hover-bg: var(--portal-danger); --bs-btn-hover-border-color: var(--portal-danger);
+    --bs-btn-hover-color: var(--portal-on-danger);
+    --bs-btn-active-bg: var(--portal-danger); --bs-btn-active-border-color: var(--portal-danger);
+    --bs-btn-active-color: var(--portal-on-danger); --bs-btn-disabled-color: var(--portal-danger); }
+.btn-outline-info { --bs-btn-color: var(--portal-info); --bs-btn-border-color: var(--portal-info);
+    --bs-btn-hover-bg: var(--portal-info); --bs-btn-hover-border-color: var(--portal-info);
+    --bs-btn-hover-color: var(--portal-on-info);
+    --bs-btn-active-bg: var(--portal-info); --bs-btn-active-border-color: var(--portal-info);
+    --bs-btn-active-color: var(--portal-on-info); --bs-btn-disabled-color: var(--portal-info); }
+
+/* Selos e fundos utilitários */
+.text-bg-success { background-color: var(--portal-success) !important; color: var(--portal-on-success) !important; }
+.text-bg-warning { background-color: var(--portal-warning) !important; color: var(--portal-on-warning) !important; }
+.text-bg-danger  { background-color: var(--portal-danger)  !important; color: var(--portal-on-danger)  !important; }
+.text-bg-info    { background-color: var(--portal-info)    !important; color: var(--portal-on-info)    !important; }
+.badge.bg-success { color: var(--portal-on-success); }
+.badge.bg-warning { color: var(--portal-on-warning); }
+.badge.bg-danger  { color: var(--portal-on-danger); }
+.badge.bg-info    { color: var(--portal-on-info); }
+/* .text-bg-light e .text-bg-secondary cravam color:#000 / #fff no Bootstrap:
+   com a paleta invertida o selo ficava preto sobre cinza-escuro. */
+.portal-body .text-bg-light, .portal-body .bg-light {
+    background-color: var(--portal-surface-2) !important;
+    color: var(--portal-text) !important;
+}
+.portal-body .text-bg-secondary, .portal-body .bg-secondary {
+    background-color: var(--portal-muted) !important;
+    color: var(--portal-surface) !important;
+}
+.portal-body .text-bg-dark, .portal-body .bg-dark {
+    background-color: var(--portal-text) !important;
+    color: var(--portal-surface) !important;
+}
+/* .text-dark/.text-light acompanham o tema (a paleta inverte --bs-dark). */
+.portal-body .text-dark { color: var(--portal-text) !important; }
+
+/* Alertas de estado */
+.alert-success { --bs-alert-color: var(--portal-success-text, var(--portal-success)); --bs-alert-bg: var(--portal-success-soft);
+                 --bs-alert-border-color: rgba(var(--portal-success-rgb), .35); }
+.alert-warning { --bs-alert-color: var(--portal-warning-text, var(--portal-warning)); --bs-alert-bg: var(--portal-warning-soft);
+                 --bs-alert-border-color: rgba(var(--portal-warning-rgb), .35); }
+.alert-danger  { --bs-alert-color: var(--portal-danger-text, var(--portal-danger));  --bs-alert-bg: var(--portal-danger-soft);
+                 --bs-alert-border-color: rgba(var(--portal-danger-rgb), .35); }
+.alert-info    { --bs-alert-color: var(--portal-info-text, var(--portal-info));    --bs-alert-bg: var(--portal-info-soft);
+                 --bs-alert-border-color: rgba(var(--portal-info-rgb), .35); }
+.portal-body .alert-light, .portal-body .alert-secondary {
+    --bs-alert-bg: var(--portal-surface-2); --bs-alert-color: var(--portal-text);
+    --bs-alert-border-color: var(--portal-border);
+}
+
+/* Linhas destacadas de tabela (.table-primary e companhia) */
+.table-primary { --bs-table-bg: var(--portal-primary-soft); --bs-table-color: var(--portal-text); }
+.table-success { --bs-table-bg: var(--portal-success-soft); --bs-table-color: var(--portal-text); }
+.table-warning { --bs-table-bg: var(--portal-warning-soft); --bs-table-color: var(--portal-text); }
+.table-danger  { --bs-table-bg: var(--portal-danger-soft);  --bs-table-color: var(--portal-text); }
+.table-info    { --bs-table-bg: var(--portal-info-soft);    --bs-table-color: var(--portal-text); }
+.portal-body .table-light { --bs-table-bg: var(--portal-surface-2); --bs-table-color: var(--portal-text); }
+
+/* Barras de progresso e textos de estado */
+.progress-bar.bg-success { background-color: var(--portal-success) !important; }
+.progress-bar.bg-warning { background-color: var(--portal-warning) !important; }
+.progress-bar.bg-danger  { background-color: var(--portal-danger) !important; }
+.progress-bar.bg-info    { background-color: var(--portal-info) !important; }
+.text-success { color: var(--portal-success-text, var(--portal-success)) !important; }
+.text-warning { color: var(--portal-warning-text, var(--portal-warning)) !important; }
+.text-danger  { color: var(--portal-danger-text, var(--portal-danger)) !important; }
+.text-info    { color: var(--portal-info-text, var(--portal-info)) !important; }
+.border-success { border-color: var(--portal-success) !important; }
+.border-warning { border-color: var(--portal-warning) !important; }
+.border-danger  { border-color: var(--portal-danger) !important; }
+.border-info    { border-color: var(--portal-info) !important; }
 
 a { color: var(--bs-link-color, var(--portal-primary)); }
 a:hover { color: var(--bs-link-hover-color, var(--portal-primary-dark)); }
@@ -365,3 +682,42 @@ a:hover { color: var(--bs-link-hover-color, var(--portal-primary-dark)); }
         padding-top: 0;
     }
 }
+
+/* ── Avisos de notificação (canto da tela) ──────────────────────────────
+   Aparecem quando uma notificação chega com a aba à frente. Curtos e
+   discretos: o registro fica no sino, isto é só o aviso de chegada. */
+.portal-avisos {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 1090;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    max-width: min(22rem, calc(100vw - 2rem));
+    pointer-events: none;
+}
+.portal-aviso {
+    background: var(--portal-surface, var(--bs-body-bg));
+    color: var(--bs-body-color);
+    border: 1px solid var(--portal-border, var(--bs-border-color));
+    border-left: 3px solid var(--portal-primary, var(--bs-primary));
+    border-radius: var(--portal-radius, .5rem);
+    box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15);
+    padding: .625rem .875rem;
+    opacity: 0;
+    transform: translateY(.5rem);
+    transition: opacity .25s ease, transform .25s ease;
+    pointer-events: auto;
+}
+.portal-aviso.visivel { opacity: 1; transform: translateY(0); }
+.portal-aviso-titulo { font-weight: 600; font-size: .9rem; }
+.portal-aviso-corpo  { font-size: .825rem; color: var(--bs-secondary-color); margin-top: .125rem; }
+.portal-aviso-link   { cursor: pointer; }
+.portal-aviso-link:hover { border-left-color: var(--portal-primary-hover, var(--portal-primary, var(--bs-primary))); }
+.portal-aviso-link:focus-visible { outline: 2px solid var(--portal-primary, var(--bs-primary)); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .portal-aviso { transition: none; opacity: 1; transform: none; }
+}
+@media print { .portal-avisos { display: none; } }

@@ -41,13 +41,23 @@ final class Modules
             self::$manifests[$manifest['slug']] = $manifest;
         }
 
-        // Ordem/ativação definidas na tabela modules (quando o BD existe)
+        // Ordem, ativação, nome e ícone escolhidos na Administração > Módulos.
+        // O nome e o ícone do hospital ficam em colunas PRÓPRIAS (label,
+        // custom_icon): name/icon são reescritos com os valores do manifesto
+        // toda vez que a tela de Módulos é aberta.
         try {
-            $rows = DB::query('SELECT slug, sort_order, active FROM modules');
+            $rows = DB::query('SELECT slug, label, custom_icon, sort_order, active, show_in_topbar FROM modules');
             $meta = array_column($rows, null, 'slug');
             foreach (self::$manifests as $slug => &$m) {
-                $m['sort_order'] = (int) ($meta[$slug]['sort_order'] ?? 999);
-                $m['active']     = (bool) ($meta[$slug]['active'] ?? true);
+                $m['sort_order']     = (int) ($meta[$slug]['sort_order'] ?? 999);
+                $m['active']         = (bool) ($meta[$slug]['active'] ?? true);
+                $m['show_in_topbar'] = (bool) ($meta[$slug]['show_in_topbar'] ?? true);
+                if (!empty($meta[$slug]['label'])) {
+                    $m['name'] = (string) $meta[$slug]['label'];
+                }
+                if (!empty($meta[$slug]['custom_icon'])) {
+                    $m['icon'] = (string) $meta[$slug]['custom_icon'];
+                }
             }
             unset($m);
             uasort(self::$manifests, fn ($a, $b) => ($a['sort_order'] ?? 999) <=> ($b['sort_order'] ?? 999));

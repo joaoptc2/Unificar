@@ -147,10 +147,132 @@ administração central mesmo sem ser administrador global.
 | Manutenção | Setores, Categorias de equipamentos |
 
 Também na Administração: **Aparência** (identidade visual — cores,
-logotipo, favicon, nome; ver a seção abaixo), **Padronização → Layouts
-de documentos** (papel timbrado compartilhado por Documentos e
-Intranet), **Atualizações de banco** e **Fila de e-mails** (comunicados, pesquisas e alertas são
+logotipo, favicon, nome; ver a seção abaixo), **E-mail** (configuração do
+SMTP, teste de entrega, fila e diagnóstico), **Backup** (cópias, agendamento
+e restauração), **Padronização → Layouts de documentos** (papel timbrado
+compartilhado por Documentos e Intranet), **Atualizações de banco** (comunicados, pesquisas e alertas são
 enfileirados e enviados pelo cron).
+
+## E-mail (Administração → E-mail)
+
+Uma tela só para o e-mail, com sete abas:
+
+- **Configuração** — servidor SMTP, porta, segurança (STARTTLS, SSL/TLS ou
+  sem criptografia), usuário e senha, endereço e nome do remetente,
+  "responder para", nome na apresentação (EHLO) e tempo limite. O que é
+  gravado aqui **sobrepõe** o bloco `mail` de `config/config.php`, e cada
+  campo mostra de onde vem o valor em uso (tela, arquivo ou padrão). A senha
+  fica cifrada no banco (AES-256-GCM com a `app.key`). Para travar tudo no
+  arquivo, acrescente `'lock' => true` ao bloco `mail`.
+- **Layout** — a casca de TODOS os e-mails do portal: cabeçalho com logo e
+  cor, corpo, rodapé com assinatura e aviso, mais fonte, largura e cantos.
+  A pré-visualização ao lado acompanha cada ajuste. A casca é aplicada no
+  momento do envio, num ponto só, então vale inclusive para o que já está na
+  fila — e pode ser desligada para voltar ao comportamento anterior (cada
+  módulo com o seu HTML). O HTML gerado usa tabelas e estilo embutido, que é
+  o que Outlook e Gmail renderizam de forma previsível.
+- **Teste de entrega** — envia uma mensagem de teste, com assunto e corpo
+  fixos escritos pelo próprio sistema, por um destes caminhos: direto pelo
+  SMTP, pela função `mail()` do PHP ou **pela fila** (este último é o que
+  prova que o cron está agendado na hospedagem). Limite de 12 testes por
+  hora, para o botão não virar ferramenta de disparo.
+- **Recebimento** — abre a caixa do portal por **IMAP ou POP3** e lista o
+  que chegou. Com "ciclo completo" ela envia uma mensagem com um código no
+  assunto e procura por ele na caixa, respondendo a pergunta inteira: saiu e
+  chegou. Não depende da extensão `imap` do PHP (ausente na maioria das
+  hospedagens) — fala o protocolo direto, como o envio faz com SMTP. A senha
+  da caixa fica cifrada, como a do SMTP.
+Toda mensagem sai como **multipart/alternative**: HTML e texto puro na mesma
+mensagem. Isso pesa a favor nos filtros de spam e atende quem lê em texto —
+por preferência, por leitor de tela ou por um cliente antigo. A conversão
+preserva o endereço dos links ("texto (endereço)").
+
+- **Fila** — pendentes, retidas, falhas e enviadas, com o motivo de cada
+  falha e a via usada (SMTP ou `mail()`). É a antiga tela "Fila de e-mails";
+  a rota `?m=admin&a=mailqueue` continua funcionando e cai aqui.
+- **Diagnóstico** — o que dá para verificar sem sair do servidor (OpenSSL,
+  sockets, `mail()`, tempo de execução, alinhamento entre o remetente e o
+  servidor de saída, saúde da fila e do cron) e, sob clique, o que precisa de
+  rede: **SPF, DKIM e DMARC** do domínio do remetente e **quais portas de
+  saída** a hospedagem libera (25, 465, 587, 2525). A tela também diz, com
+  todas as letras, o que **não** é possível saber daqui — como se a mensagem
+  caiu na caixa de entrada ou no spam do destinatário.
+- **Histórico de testes** — cada teste com o tempo de cada etapa (DNS,
+  conexão, saudação, EHLO, TLS, autenticação, envelope, mensagem) e a
+  **conversa completa com o servidor**, com usuário e senha mascarados.
+  Os registros são apagados depois de 90 dias.
+
+Quando um teste falha, a tela mostra o código do erro e o que fazer: porta
+bloqueada pela hospedagem, certificado inválido, senha de aplicativo exigida
+pelo provedor, remetente fora do domínio da conta, relay negado, e assim por
+diante.
+
+**Fila confiável.** Duas correções sentidas em produção: o processador agora
+*reserva* as linhas antes de enviar (duas execuções sobrepostas — o cron e o
+botão "Processar agora" — não mandam mais a mesma mensagem duas vezes), e uma
+falha de **configuração** (envio desligado, sem servidor, senha recusada) não
+gasta tentativa: a mensagem fica *retida* e sai sozinha assim que a
+configuração for corrigida, em vez de virar "falha" permanente.
+
+## Backup e restauração (Administração → Backup)
+
+Não existia backup no sistema. Agora existe, em PHP puro — sem depender de
+`mysqldump` nem de acesso a linha de comando, porque em hospedagem
+compartilhada nenhum dos dois é garantido.
+
+**O que entra no pacote** (um `.tar.gz` com manifesto):
+
+- estrutura e dados de todas as tabelas, mais views, gatilhos, rotinas e
+  eventos, se houver;
+- os arquivos enviados (`uploads/` e `storage/uploads/`), quando marcado —
+  inclusive os `.htaccess` ocultos que protegem as pastas;
+- um **manifesto**: data, versão, quem gerou, PHP e MariaDB, migrações
+  aplicadas e pendentes, e — por tabela — número de linhas e uma **soma de
+  verificação do conteúdo**. É com ela que se prova, depois, que a
+  restauração devolveu o mesmo dado.
+
+`config/config.php` **não** entra por padrão: ele guarda a senha do banco e a
+chave do aplicativo. Guarde-o à parte.
+
+**Onde fica.** Fora da pasta pública sempre que possível (o diretório irmão da
+instalação); se não der, em `storage/backups/` com `.htaccess` negando acesso
+e nome de arquivo com 32 caracteres aleatórios. A tela diz qual dos dois está
+em uso.
+
+**Tela** (`Administração → Backup`): gerar agora, listar, conferir a
+integridade de um pacote, baixar (com registro de quem baixou na auditoria) e
+excluir. Mais o **agendamento** — hora, o que incluir e quanto guardar
+(dias recentes, semanas, meses e um teto em MB) — que roda dentro da rotina
+periódica (`cron.php`): o backup sai na primeira execução depois da hora
+marcada, desde que o último tenha mais de 20 horas, para um cron atrasado não
+deixar o dia sem cópia.
+
+**Restaurar** é pela linha de comando, de propósito: a operação apaga e recria
+as tabelas, não tem volta, e no dia em que ela é necessária — banco perdido —
+a tela do sistema nem abre.
+
+```bash
+php scripts/restore.php --list
+php scripts/restore.php --inspect=<id>              # confere; não toca no banco
+php scripts/restore.php --restore=<id> --target=portal_teste   # ensaio
+php scripts/restore.php --restore=<id> --target=producao       # de verdade
+php scripts/backup_verify.php --b=portal_teste      # compara tabela a tabela
+```
+
+Antes de restaurar em produção o sistema gera **um backup de segurança
+automático**, e depois cuida do que o dump traz de volta e faria estrago:
+cancela os e-mails que ficaram pendentes (senão o cron reenviaria ao corpo
+clínico uma leva já entregue), limpa tokens de redefinição de senha e
+tentativas de login, apaga os caches em disco e derruba as sessões abertas
+antes da restauração. O relatório final diz quantos de cada.
+
+No **modo de teste** (restaurar em outro banco) as credenciais da cópia são
+neutralizadas por padrão — senhas, segundo fator e envio de e-mail — para uma
+base de ensaio não virar um segundo cofre com os dados de todo o hospital.
+
+**Um backup que ninguém testou é uma promessa, não uma cópia.** O roteiro
+acima — restaurar num banco separado e rodar o `backup_verify.php` — é o que
+transforma uma coisa na outra, e leva menos de um minuto.
 
 ## Identidade visual (Administração → Aparência)
 
@@ -165,16 +287,56 @@ núcleo, para os seis módulos e para a tela de login, sem editar CSS:
 - **Cores** — cor principal, cor de destaque, fundo das páginas, fundo e
   texto do menu lateral, estilo do topo (degradê, sólido, escuro, claro)
   e cor própria do topo.
-- **Tipografia e formas** — família tipográfica, densidade (compacta,
-  normal, confortável), raio dos cantos, largura do menu e altura do
-  topo.
+- **Cores de estado** — sucesso, alerta, erro e informação. São as cores de
+  significado, usadas em mais de oitocentos lugares nos módulos (selos de
+  "conforme" e "vencido", alertas, barras de progresso, colunas de situação).
+  Os valores de fábrica são os do Bootstrap, então atualizar não muda nada em
+  quem nunca abriu a tela.
+- **Tema claro e escuro** — "sempre claro", "sempre escuro" ou **seguir o
+  aparelho de cada pessoa** (plantão noturno com tela escura, expediente com
+  tela clara). Opcionalmente cada pessoa alterna pelo menu do usuário, e a
+  escolha fica no navegador dela. As cores do tema escuro (fundo, menu e a
+  cor da marca) são configuráveis; deixando a cor da marca em branco, o
+  sistema a clareia só o quanto for preciso para continuar legível sobre o
+  fundo escuro.
+- **Tipografia e formas** — família tipográfica, **tamanho da letra** (13 a
+  20 px, e como todo o CSS usa `rem` isso escala o sistema inteiro),
+  densidade, sombras, raio dos cantos, largura do menu e altura do topo.
+- **Menu lateral** — sempre aberto, aberto com botão para recolher em ícones,
+  ou só ícones abrindo ao passar o mouse. Em telas de 1366 px — posto de
+  enfermagem, recepção — isso devolve espaço útil para as tabelas. No celular
+  o menu continua deslizando pela lateral.
+- **Tela de entrada** — cartão centralizado ou **imagem de um lado e
+  formulário do outro**, largura do cartão e um rodapé institucional (aviso
+  de uso restrito, LGPD, ramal do suporte).
+- **CSS do administrador** — a válvula de escape para o ajuste que nenhum
+  campo cobre. É servido como folha de estilo própria (não embutido na
+  página), e passa por um filtro que remove `@import`, `expression()`,
+  `javascript:` e endereços externos.
+- **Exportar e importar tema** — leva a identidade de homologação para
+  produção sem redigitar, e serve de cópia das escolhas. As imagens continuam
+  por upload.
 - **Temas prontos** — Azul institucional, Verde saúde, Teal moderno,
   Índigo, Bordô, Grafite (escuro) e Alto contraste. Aplicar um tema
   preenche o formulário; o botão **Restaurar padrão** volta tudo ao
   original (com a opção de manter as imagens enviadas).
 
-A pré-visualização ao lado do formulário mostra topo, menu, cartão,
-botões e etiquetas com as cores digitadas antes de salvar.
+A pré-visualização ao lado do formulário é a **página real** — montada pelo
+servidor com as mesmas regras do sistema e com os valores que estão no
+formulário —, com topo, menu, tabela, formulário, os quatro alertas, selos de
+estado, botões e gráfico, e um botão para ver o mesmo no tema escuro. Nada é
+salvo até clicar em *Salvar aparência*. Se uma combinação de cores ficar
+ilegível (texto do menu quase sumindo no fundo escolhido), a tela avisa antes,
+com a razão de contraste medida.
+
+Ainda na **Administração → Módulos**: cada módulo pode receber o nome e o
+ícone que o hospital usa ("Manutenção" vira "Engenharia Clínica") e pode sair
+da barra superior sem perder o acesso — continua na tela inicial e por link
+direto.
+
+No celular, a barra do navegador recebe a cor da marca e o portal pode ser
+instalado na tela inicial com o nome e o ícone do hospital (manifesto gerado
+pelo PHP, em `?m=auth&a=manifest`).
 
 **Como funciona por dentro.** `Core\Branding` guarda as escolhas em
 `settings` (prefixo `brand.`) e publica um bloco `<style>` com as
@@ -190,6 +352,65 @@ imprimir, o papel volta a ser branco com texto preto.
 As imagens ficam em `uploads/branding/` (execução bloqueada por
 `.htaccess`); SVG enviado é sanitizado (script, `on*`, referências
 externas e afins são removidos) e o favicon aceita também `.ico`.
+
+## Como a personalização é organizada
+
+Toda superfície do portal — tela, e-mail e papel — sai da mesma base:
+
+- **`Core\Tokens`** é a fundação: uma implementação de normalização (cor,
+  número com faixa, opção de lista), uma da matemática de cor (mistura,
+  luminância, contraste WCAG) e a **herança** de tokens.
+- **Herança**: um valor vazio numa peça herda do módulo, e o do módulo herda
+  da marca (`cartaz → impressão → marca`). É o que faz "mudei a cor do
+  hospital" valer no e-mail, no cartaz de aniversário e na etiqueta sem
+  repetir a cor em cinco telas.
+- **`assets/core/preview.js`** é a pré-visualização única das telas de
+  personalização; **`assets/core/contrast.js`** é o selo de legibilidade.
+
+### Temas
+
+Um tema guarda o **conjunto inteiro** de valores da aparência (não um
+delta), então aplicar um tema dá o mesmo resultado independentemente do que
+estava valendo antes. Antes de aplicar qualquer tema, o estado atual é
+guardado automaticamente: os 5 últimos ficam disponíveis em *Desfazer*.
+Há pré-visualização em aba nova, que mostra a página real com as cores do
+tema sem aplicar nada.
+
+### Legibilidade
+
+Cada seletor de cor traz um selo ao vivo ("4,6:1 · AA") com as faixas da
+WCAG 2.1. A conta existe no servidor (`Tokens::contrastReport`) e no
+navegador — o selo precisa responder enquanto se arrasta o seletor — e
+`scripts/test_contraste.php` compara as duas em 218 pares, falhando se
+divergirem.
+
+### Identidade por unidade
+
+Quando existe mais de uma unidade ativa, cada uma pode ter nome, logotipo,
+favicon e cores próprios; o que ficar em branco herda do portal. São poucas
+chaves de propósito: quem circula entre as unidades precisa reconhecer o
+mesmo sistema. Em instalação de unidade única a sobreposição é inerte.
+
+### Galeria de superfícies e CSS livre
+
+*Administração › Aparência › Galeria de superfícies* mostra todas as peças
+de uma vez, com o contraste de cada cor. A mesma página lista as **classes
+estáveis** (`.portal-topbar`, `.portal-sidebar`, `.portal-main`…) que o CSS
+livre do hospital pode usar sem medo de uma atualização renomear — prefira
+as variáveis (`var(--portal-primary)`) a cores fixas, para o seu CSS
+acompanhar o tema e o modo escuro.
+
+### Testes da aparência
+
+```
+php scripts/test_contraste.php                      # paridade servidor/navegador
+COOKIES=sessao.json node scripts/test_visual.mjs    # regressão visual
+COOKIES=sessao.json node scripts/test_visual.mjs --atualizar   # aceita as mudanças
+```
+
+O teste visual decodifica os PNG e compara **pixel a pixel** (comparar os
+bytes do arquivo faria qualquer mudança virar "100%"), com tolerância por
+canal para o antialiasing.
 
 ## Layouts de documentos (papel timbrado)
 
@@ -207,9 +428,16 @@ timbrado — use "Salvar como PDF" do navegador.
 
 ## Módulo Documentos (gestão documental / qualidade)
 
-- **Seletor de setor** no topo de todas as telas ("Todos os setores" ou
-  um setor específico), filtrando documentos, indicadores, planos de ação
-  e dashboard.
+- **Setores independentes**: cada usuário enxerga apenas os documentos,
+  indicadores e planos de ação dos setores em que foi **incluído**
+  (Administração → Documentos → Setores → botão *Usuários*). Não é filtro de
+  tela: a restrição entra no `WHERE` de toda consulta, e abrir um id de outro
+  setor pela URL devolve "não encontrado". Documento **sem setor** é
+  institucional e aparece para todos. Quem tem `sectors.view_all` (ou é
+  administrador da plataforma) vê tudo.
+- **Seletor de setor** no topo de todas as telas, agora limitado aos setores
+  do próprio usuário — "Todos os setores" significa "todos os MEUS setores".
+  Ele apenas estreita a visão, nunca a amplia.
 - **Documentos controlados** (status, validade, revisão periódica,
   aprovação, ciência digital, alertas de vencimento) e **documentos não
   controlados** (apenas armazenados para consulta, sem validade nem
@@ -221,6 +449,17 @@ timbrado — use "Salvar como PDF" do navegador.
 - **Indicadores** em uma única tela (filtros, cartões total / na meta /
   fora da meta / dentro da tolerância, gráficos e tabela), modelos por
   categoria — inclusive **Financeiro** — e planos de ação (PDCA).
+- **Ciência com ciclo**: toda mudança de status (e toda versão nova)
+  **redefine** as confirmações de leitura — quem leu o texto anterior confirma
+  de novo. As confirmações antigas não são apagadas: viram histórico, com o
+  ciclo, a versão e o status em que foram dadas. É a prova que a acreditação
+  pede.
+- **Histórico de modificações** de cada documento: cadastro, edições (com os
+  campos que mudaram, de/para), mudanças de status, versões, revisões,
+  redefinições de ciência e as próprias ciências.
+- **Planos de ação (PDCA)** com o indicador escolhido no próprio formulário,
+  agrupado por setor, e a possibilidade de vincular um plano existente a
+  outro indicador.
 - **Conformidade** integrada ao dashboard.
 
 ## Módulo Comunicação (chat)
@@ -231,6 +470,14 @@ presença. Funções extras do sistema antigo (tarefas, reuniões,
 calendário, equipes, processos, enquetes, painel) foram descontinuadas;
 categorias de canais e emojis personalizados são configurados na
 Administração.
+
+**Exclusão de mensagens**: só dentro de uma janela curta depois do envio (1
+minuto por padrão, de "não permitir" a 24 h em Administração → Comunicação →
+Mensagens). O prazo vale para **todos**, inclusive para quem tem
+`chat.moderate` — há uma exceção que precisa ser ligada de propósito, para os
+casos de conteúdo impróprio. O botão de excluir some da tela quando o tempo
+acaba, sem recarregar a página, e a idade é medida pelo relógio do banco (o
+mesmo que gravou a mensagem).
 
 ## Módulo RH
 
@@ -254,7 +501,13 @@ Administração.
 - **Brindes**: o RH cadastra brindes com custo em pontos e estoque; o
   funcionário resgata pelo portal e o RH aprova/entrega.
 - **Aniversariantes**: exportação em A4 (imprimir/PDF) com layout
-  personalizável (Administração → RH → Aniversariantes).
+  personalizável **sem escrever HTML** (Administração → RH →
+  Aniversariantes): modelo (cartões, lista, tabela ou faixas), número de
+  colunas, cor de destaque, fundo, cor do texto, borda, tamanho do título e
+  do nome, formato e tamanho da foto e quais informações aparecem — tudo com
+  pré-visualização ao lado que acompanha cada ajuste. O modo **avançado**
+  (HTML e CSS na mão) continua disponível, e um botão gera o código a partir
+  do visual para servir de ponto de partida.
 - Departamentos e cargos são configurados na Administração.
 
 ## Módulo Manutenção
@@ -262,8 +515,13 @@ Administração.
 - Todo equipamento recebe um **código de identificação único de 12
   dígitos** (com dígito verificador) que gera **código de barras** e
   **QR code**; equipamentos antigos recebem o código automaticamente.
-- **Etiquetas** (50×30 mm, 70×40 mm ou folha A4) para impressão,
-  individuais ou em lote; **busca por código** (leitor USB ou digitação)
+- **Etiquetas** (50×30 mm, 70×40 mm, 100×50 mm ou folha A4) para impressão,
+  individuais ou em lote, com **cada elemento ocultável** na barra de
+  ferramentas (organização, nome, setor/código interno, QR, código de barras,
+  código em texto) e o **layout se reajustando** ao que sobrou — ocultar o
+  código de barras faz o QR crescer, ocultar o QR devolve a largura inteira
+  ao nome. A escolha vai na URL (sobrevive à impressão) e fica guardada no
+  navegador; **busca por código** (leitor USB ou digitação)
   e página de **histórico** do equipamento (OS, calibrações,
   preventivas, peças, custos, disponibilidade).
 - Setores e categorias de equipamentos são configurados na
@@ -343,10 +601,75 @@ php /caminho/para/cron.php            # CLI
 https://seu-dominio/cron.php?token=<cron_secret do config>   # HTTP
 ```
 
-Executa a fila de e-mails do núcleo e as rotinas de todos os módulos
-(vencimentos de documentos, preventivas de manutenção e códigos de
-equipamentos, aniversários/vencimentos do RH etc.). Use
-`--module=<slug>` (ou `&module=`) para executar só um módulo.
+Executa, nesta ordem: a fila de e-mails, o **backup agendado**, a **limpeza
+automática** (sempre depois do backup — o backup do dia é feito antes de
+qualquer coisa ser apagada) e as rotinas de todos os módulos (vencimentos de
+documentos, preventivas de manutenção e códigos de equipamentos,
+aniversários/vencimentos do RH etc.). Use `--module=<slug>` (ou `&module=`)
+para executar só um módulo.
+
+A Administração usa a marca de execução do cron para avisar quando ele
+parou, em vez de deixar tudo pendente em silêncio — ver o **checkup** abaixo.
+
+## Checkup de saúde do sistema (Administração → Atualizações de banco)
+
+A pergunta que aparece depois de toda atualização — "está tudo certo?" —
+respondida numa página só, agrupada em banco de dados, PHP e extensões,
+pastas e arquivos, segurança, rotinas/e-mail e backup. Cada problema vem com
+**o que fazer a respeito**.
+
+Entre o que ela detecta: migrações pendentes; tabelas que os módulos ativos
+esperam e não existem; tabela fora de InnoDB ou de utf8mb4;
+`max_allowed_packet` pequeno demais para restaurar um backup; extensões
+faltando; `post_max_size` menor que `upload_max_filesize` (que faz o upload
+falhar em silêncio); pasta sem permissão de escrita; disco quase cheio;
+`install.php` esquecido no servidor; `app.key` ainda a do exemplo; `app.debug`
+ligado em produção; cron parado; fila de e-mail travada; e backup velho ou
+inexistente.
+
+A página **só lê** — não altera nada — e é segura de abrir a qualquer
+momento, inclusive em produção.
+
+## Limpeza automática (Administração → Configurações)
+
+Por quantos dias cada tipo de registro é guardado. Passado o prazo, o cron
+apaga; **0 significa nunca apagar**.
+
+| Registro | Padrão | Mínimo |
+| --- | --- | --- |
+| Auditoria | 365 dias | 90 |
+| Notificações já lidas | 90 dias | 7 |
+| Fila de e-mail (enviados/descartados) | 60 dias | 7 |
+| Histórico de testes de e-mail | 30 dias | 1 |
+| Tentativas de login | 30 dias | 7 |
+| Pedidos de redefinição de senha | 7 dias | 1 |
+| Histórico de documentos | nunca | 365 |
+| Arquivos de log | 60 dias | 7 |
+| Temporários de backup | 2 dias | 1 |
+
+Três cuidados que valem a pena conhecer:
+
+- **O que está em uso nunca sai**: notificação não lida, e-mail pendente na
+  fila e o backup mais recente ficam, por mais velhos que sejam.
+- **Cada prazo tem um piso**, então um "30" digitado no lugar errado não
+  apaga um ano de auditoria — o valor é elevado ao mínimo da linha.
+- **A exclusão vai em lotes** de 2 mil linhas: um `DELETE` de milhões trava a
+  tabela e derrubaria o portal justamente durante a rotina noturna.
+
+Há **simulação** ("só contar") antes de apagar, e um botão para executar na
+hora. A retenção dos *pacotes* de backup (quantos diários, semanais e
+mensais) fica em Administração → Backup, junto da lista dos pacotes.
+
+## Notificações
+
+O sino consulta o servidor a cada **5 segundos** com a aba à frente e **20**
+em segundo plano (ambos configuráveis em Administração → Configurações),
+atualiza a lista junto e anuncia a chegada num aviso de canto. Voltar para a
+aba, focar a janela ou abrir o sino consulta na hora.
+
+É **um** poller para o portal inteiro: os contadores dos módulos se penduram
+nele (`window.PortalNotificacoes.aoAtualizar`) em vez de cada um abrir o seu,
+então a atualização ficou muito mais rápida sem multiplicar os pedidos.
 
 ## Segurança
 

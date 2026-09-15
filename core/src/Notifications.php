@@ -43,6 +43,70 @@ final class Notifications
         return DB::query($sql, $params);
     }
 
+    /**
+     * Intervalo (segundos) entre consultas do sino, por estado da aba.
+     * Configurável em Administração > Configurações; os limites impedem
+     * tanto o "tempo real" que derruba o servidor quanto o atraso de
+     * minutos que gerou esta mudança.
+     */
+    public static function pollSeconds(bool $visivel = true): int
+    {
+        $chave = $visivel ? 'notifications.poll_active' : 'notifications.poll_idle';
+        $padrao = $visivel ? 5 : 20;
+        $v = (int) Settings::get($chave, (string) $padrao);
+        return $visivel ? max(2, min(120, $v)) : max(10, min(600, $v ?: $padrao));
+    }
+
+    /**
+     * Alimenta o sino: contagem não lida + as notificações mais recentes.
+     * Com $sinceId > 0 devolve em 'novas' só o que chegou depois daquele id —
+     * é o que permite avisar na hora sem reprocessar a lista inteira.
+     *
+     * @return array{count:int, last_id:int, items:array, novas:array}
+     */
+    public static function feed(int $userId, int $sinceId = 0, int $limit = 10): array
+    {
+        $items = self::latest($userId, $limit);
+        $maior = 0;
+        foreach ($items as $i) {
+            $maior = max($maior, (int) $i['id']);
+        }
+        $novas = [];
+        if ($sinceId > 0) {
+            foreach ($items as $i) {
+                if ((int) $i['id'] > $sinceId) {
+                    $novas[] = $i;
+                }
+            }
+        }
+        return [
+            'count'   => self::unreadCount($userId),
+            'last_id' => $maior,
+            'items'   => array_map(self::publicRow(...), $items),
+            'novas'   => array_map(self::publicRow(...), $novas),
+        ];
+    }
+
+    /** Só os campos que a tela usa — a linha crua não vai para o navegador. */
+    private static function publicRow(array $r): array
+    {
+        // A data vai em ISO-8601 COM o fuso. "2026-09-15 17:52:00" sem fuso é
+        // interpretado pelo navegador como hora local dele: num navegador em
+        // UTC, uma notificação recém-criada aparecia como "há 3 h".
+        $ts = strtotime((string) $r['created_at']) ?: time();
+
+        return [
+            'id'         => (int) $r['id'],
+            'title'      => (string) $r['title'],
+            'message'    => (string) ($r['message'] ?? ''),
+            'link'       => (string) ($r['link'] ?? ''),
+            'module'     => (string) ($r['module'] ?? ''),
+            'type'       => (string) ($r['type'] ?? ''),
+            'read'       => !empty($r['read_at']),
+            'created_at' => date('c', $ts),
+        ];
+    }
+
     public static function markRead(int $userId, ?int $id = null): void
     {
         if ($id === null) {

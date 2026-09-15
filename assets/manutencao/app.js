@@ -168,6 +168,20 @@
                 .catch(function () {});
         }
 
+        // O núcleo já consulta as notificações de poucos em poucos segundos
+        // para o sino: as notificações do sistema operacional passam a sair
+        // de lá. Antes eram 5 minutos de atraso, e por um poller à parte.
+        if (window.PortalNotificacoes) {
+            window.PortalNotificacoes.aoAtualizar(function (d) {
+                (d && d.novas ? d.novas : []).forEach(function (n) {
+                    new Notification(n.title || 'Manutenção', {
+                        body: n.message || '',
+                        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%230d6efd" rx="20" width="100" height="100"/><text x="50" y="62" font-size="50" text-anchor="middle" fill="white">🏥</text></svg>'
+                    });
+                });
+            });
+            return;
+        }
         pollNotifications();
         setInterval(pollNotifications, 300000);
     })();

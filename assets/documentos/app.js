@@ -119,17 +119,28 @@
         if (!badge) return;
         var url = document.body.getAttribute('data-notif-url');
         if (!url) return;
+        function pintar(d) {
+            if (!d || typeof d.count === 'undefined') return;
+            if (d.count > 0) {
+                badge.textContent = d.count > 99 ? '99+' : d.count;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+        // O núcleo já consulta as notificações para o sino, e agora de poucos
+        // em poucos segundos: pendurar o contador do módulo ali deixa este
+        // badge igualmente rápido SEM abrir um segundo poller.
+        if (window.PortalNotificacoes) {
+            window.PortalNotificacoes.aoAtualizar(pintar);
+            window.PortalNotificacoes.atualizar();
+            return;
+        }
+        // Núcleo indisponível (página sem o app.js do portal): consulta própria.
         function update() {
             fetch(url, { credentials: 'same-origin' })
                 .then(function (r) { return r.json(); })
-                .then(function (d) {
-                    if (d.count > 0) {
-                        badge.textContent = d.count > 99 ? '99+' : d.count;
-                        badge.style.display = 'inline-block';
-                    } else {
-                        badge.style.display = 'none';
-                    }
-                })
+                .then(pintar)
                 .catch(function () {});
         }
         update();

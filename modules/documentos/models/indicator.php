@@ -45,7 +45,10 @@ function _indicator_filter_where(array $f) {
     $params = [(int) ($f['hospital_id'] ?? 0)];
     if (!empty($f['type']))      { $sql .= " AND i.type = ?";     $params[] = $f['type']; }
     if (!empty($f['category']))  { $sql .= " AND i.category = ?"; $params[] = $f['category']; }
-    if ((int) ($f['sector_id'] ?? 0) > 0) { $sql .= " AND i.sector_id = ?"; $params[] = (int) $f['sector_id']; }
+    // Escopo de setor do usuário + setor em foco (models/sector.php).
+    [$ssql, $sparams] = doc_sector_where('i.', (int) ($f['sector_id'] ?? 0));
+    $sql .= $ssql;
+    $params = array_merge($params, $sparams);
     if (!empty($f['accreditation'])) { $sql .= " AND i.accreditation LIKE ?"; $params[] = '%' . $f['accreditation'] . '%'; }
     if ((int) ($f['responsible_user_id'] ?? 0) > 0) { $sql .= " AND i.responsible_user_id = ?"; $params[] = (int) $f['responsible_user_id']; }
     if (!empty($f['search'])) {
@@ -112,6 +115,11 @@ function indicator_find($id, $hospital_id) {
          WHERE i.id = ? AND i.hospital_id = ? AND i.deleted_at IS NULL",
         [(int) $id, (int) $hospital_id]
     );
+    // Setor fora do escopo do usuário: some como se não existisse. Sem isto,
+    // o id na URL contornaria a independência entre setores.
+    if ($row && !doc_sector_allowed($row['sector_id'] ?? 0)) {
+        return null;
+    }
     return indicator_hydrate($row);
 }
 

@@ -5,7 +5,8 @@
  * Incluído por Core\AdminPanel (index.php?m=admin&a=module&slug=chat&tab=...)
  * com MODULE_SLUG/MODULE_PATH/MODULE_URL, CORE_ADMIN_TAB e MODULE_PERMS já
  * definidos. O que for renderizado via Core\Layout aparece dentro do
- * "chrome" da administração (sidebar + abas). Abas: categories | emojis.
+ * "chrome" da administração (sidebar + abas).
+ * Abas: categories | emojis | settings.
  *
  * Os formulários postam para ?m=chat&page=admin&action=... (AdminController),
  * que ao final redireciona de volta para core_admin_url('chat', <aba>).
@@ -27,6 +28,10 @@ $controller = new AdminController();
 switch ($tab) {
     case 'emojis':
         $controller->emojis();
+        break;
+
+    case 'settings':
+        $controller->settings();
         break;
 
     case 'categories':

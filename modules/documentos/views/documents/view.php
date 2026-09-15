@@ -147,9 +147,15 @@ $review_due = $is_controlled && ($document['next_review_date'] ?? null) && strto
         <?php if ($is_controlled): ?>
         <!-- Ciência digital -->
         <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-check2-square me-1"></i>Ciência do documento</span>
-                <span class="badge bg-primary"><?php echo count($ack_status['acknowledged']); ?> leitura(s)</span>
+            <div class="card-header bg-white fw-semibold d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span>
+                    <i class="bi bi-check2-square me-1"></i>Ciência do documento
+                    <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle align-middle"
+                          title="As confirmações valem para o ciclo atual; mudar o status abre um ciclo novo">
+                        ciclo <?php echo (int) ($ack_status['cycle'] ?? 1); ?>
+                    </span>
+                </span>
+                <span class="badge bg-primary"><?php echo count($ack_status['acknowledged']); ?> leitura(s) neste ciclo</span>
             </div>
             <div class="card-body">
                 <?php if (!$user_acked && core_can('documents.acknowledge')): ?>
@@ -166,24 +172,141 @@ $review_due = $is_controlled && ($document['next_review_date'] ?? null) && strto
                     </div>
                 <?php endif; ?>
 
+                <?php if (!empty($document['ack_reset_at'])): ?>
+                    <p class="small text-muted mb-3">
+                        <i class="bi bi-arrow-clockwise me-1"></i>As confirmações foram redefinidas em
+                        <?php echo format_datetime($document['ack_reset_at']); ?> — o documento mudou desde a última leitura.
+                        O que foi confirmado antes continua guardado no histórico abaixo.
+                    </p>
+                <?php endif; ?>
+
                 <?php if (!empty($ack_status['acknowledged'])): ?>
                 <div class="table-responsive">
                     <table class="table table-sm mb-0">
-                        <thead><tr><th>Usuário</th><th>Data</th></tr></thead>
+                        <thead><tr><th>Usuário</th><th>Data</th><th class="text-center">Versão</th></tr></thead>
                         <tbody>
                         <?php foreach ($ack_status['acknowledged'] as $ack): ?>
                             <tr>
                                 <td class="small"><?php echo e($ack['user_name']); ?></td>
                                 <td class="small text-muted"><?php echo format_datetime($ack['acknowledged_at']); ?></td>
+                                <td class="small text-muted text-center">v<?php echo (int) ($ack['document_version'] ?? 1); ?></td>
                             </tr>
                         <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
+                <?php else: ?>
+                    <p class="small text-muted mb-0"><i class="bi bi-hourglass me-1"></i>Ninguém confirmou leitura neste ciclo ainda.</p>
+                <?php endif; ?>
+
+                <?php
+                // Ciclos anteriores: a prova de quem leu cada versão do
+                // documento. Fica recolhido para não competir com o atual.
+                $anteriores = array_values(array_filter($ack_history ?? [], fn ($c) => empty($c['corrente'])));
+                ?>
+                <?php if ($anteriores): ?>
+                <div class="mt-3">
+                    <button class="btn btn-link btn-sm p-0 text-decoration-none" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#ackHistorico">
+                        <i class="bi bi-clock-history me-1"></i>Histórico de ciências anteriores
+                        (<?php echo count($anteriores); ?> ciclo(s))
+                    </button>
+                    <div class="collapse mt-2" id="ackHistorico">
+                        <?php foreach ($anteriores as $ciclo): ?>
+                        <div class="border rounded p-2 mb-2">
+                            <div class="small fw-semibold mb-1">
+                                Ciclo <?php echo (int) $ciclo['cycle']; ?>
+                                <span class="text-muted fw-normal">— <?php echo count($ciclo['acks']); ?> leitura(s)</span>
+                            </div>
+                            <table class="table table-sm table-borderless mb-0">
+                                <tbody>
+                                <?php foreach ($ciclo['acks'] as $ack): ?>
+                                    <tr>
+                                        <td class="small py-1"><?php echo e($ack['user_name']); ?></td>
+                                        <td class="small text-muted py-1"><?php echo format_datetime($ack['acknowledged_at']); ?></td>
+                                        <td class="small text-muted py-1 text-end">
+                                            v<?php echo (int) ($ack['document_version'] ?? 1); ?>
+                                            <?php if (!empty($ack['document_status'])): ?>
+                                                · <?php echo e(document_status_label($ack['document_status'])); ?>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
                 <?php endif; ?>
             </div>
         </div>
         <?php endif; ?>
+
+        <?php
+        // ── Histórico de modificações ─────────────────────────────────────
+        $history = $history ?? [];
+        $hist_icons = [
+            'created'      => ['bi-plus-circle',      'primary'],
+            'updated'      => ['bi-pencil',           'secondary'],
+            'status'       => ['bi-arrow-left-right', 'info'],
+            'version'      => ['bi-layers',           'warning'],
+            'ack_reset'    => ['bi-arrow-clockwise',  'warning'],
+            'acknowledged' => ['bi-check2-circle',    'success'],
+            'reviewed'     => ['bi-clipboard-check',  'success'],
+            'deleted'      => ['bi-trash',            'danger'],
+        ];
+        ?>
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-clock-history me-1"></i>Histórico de modificações</span>
+                <span class="badge bg-secondary"><?php echo count($history); ?> registro(s)</span>
+            </div>
+            <div class="card-body">
+                <?php if (!$history): ?>
+                    <p class="small text-muted mb-0">
+                        Nenhuma modificação registrada ainda. O histórico começa a partir desta versão do sistema.
+                    </p>
+                <?php else: ?>
+                <ol class="list-unstyled mb-0 doc-timeline">
+                    <?php foreach ($history as $h):
+                        [$icone, $cor] = $hist_icons[$h['event']] ?? ['bi-dot', 'secondary'];
+                        $campos = $h['details'] ? json_decode((string) $h['details'], true) : null;
+                    ?>
+                    <li class="d-flex gap-2 pb-3">
+                        <div class="flex-shrink-0">
+                            <span class="badge rounded-pill text-bg-<?php echo $cor; ?>"><i class="bi <?php echo $icone; ?>"></i></span>
+                        </div>
+                        <div class="flex-grow-1 small">
+                            <div class="fw-semibold"><?php echo e($h['summary'] ?: $h['event']); ?></div>
+                            <div class="text-muted">
+                                <?php echo format_datetime($h['created_at']); ?>
+                                <?php if (!empty($h['user_name'])): ?> · <?php echo e($h['user_name']); ?><?php endif; ?>
+                                <?php if (!empty($h['version'])): ?> · v<?php echo (int) $h['version']; ?><?php endif; ?>
+                                <?php if (!empty($h['cycle'])): ?> · ciclo <?php echo (int) $h['cycle']; ?><?php endif; ?>
+                            </div>
+                            <?php if (is_array($campos) && $campos): ?>
+                            <ul class="text-muted mb-0 mt-1 ps-3">
+                                <?php foreach ($campos as $campo => $v): ?>
+                                    <li>
+                                        <?php if (is_array($v) && isset($v['de'], $v['para'])): ?>
+                                            <strong><?php echo e((string) $campo); ?>:</strong>
+                                            <span class="text-decoration-line-through"><?php echo e((string) $v['de'] ?: '—'); ?></span>
+                                            → <?php echo e((string) $v['para'] ?: '—'); ?>
+                                        <?php else: ?>
+                                            <strong><?php echo e((string) $campo); ?>:</strong> <?php echo e((string) (is_scalar($v) ? $v : json_encode($v))); ?>
+                                        <?php endif; ?>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                            <?php endif; ?>
+                        </div>
+                    </li>
+                    <?php endforeach; ?>
+                </ol>
+                <?php endif; ?>
+            </div>
+        </div>
     </div>
 
     <div class="col-lg-4">

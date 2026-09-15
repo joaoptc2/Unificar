@@ -25,6 +25,40 @@ if ($action === '') {
 
 switch ($action) {
 
+    // ===== Recursos públicos da identidade visual =====
+    // Ficam aqui (e não na administração) porque a TELA DE LOGIN também
+    // precisa deles, e lá ninguém está autenticado ainda.
+
+    /**
+     * CSS livre do administrador (Administração > Aparência).
+     * Servido como folha própria em vez de embutido na página: assim não
+     * existe o ataque de fechar o <style> e abrir um <script>, e o navegador
+     * ainda guarda em cache. A URL carrega a versão do conteúdo.
+     */
+    case 'brand_css':
+        header('Content-Type: text/css; charset=utf-8');
+        header('X-Content-Type-Options: nosniff');
+        $brandCss = Core\Branding::customCss();
+        // O cache longo só vale quando o conteúdo servido é mesmo o que a
+        // versão pedida promete. Sem isso, uma piscada do banco (que devolve
+        // CSS vazio) ficaria guardada por sete dias sob a mesma URL, e o
+        // administrador não teria como consertar pela tela.
+        $versaoPedida = (string) ($_GET['v'] ?? '');
+        header($versaoPedida !== '' && $versaoPedida === Core\Branding::customCssVersion()
+            ? 'Cache-Control: public, max-age=604800'
+            : 'Cache-Control: no-store');
+        echo "/* Administração > Aparência — CSS do administrador */\n";
+        echo $brandCss;
+        exit;
+
+    /** Manifesto do aplicativo (PWA): nome, ícone e cor da marca no celular. */
+    case 'manifest':
+        header('Content-Type: application/manifest+json; charset=utf-8');
+        header('Cache-Control: public, max-age=3600');
+        echo json_encode(Core\Branding::manifest(),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        exit;
+
     // ================= LOGIN =================
     case 'login':
         if (Auth::check()) {
@@ -255,6 +289,48 @@ switch ($action) {
     case 'notifications_count':
         header('Content-Type: application/json');
         echo json_encode(['count' => Auth::check() ? Notifications::unreadCount((int) Auth::id()) : 0]);
+        break;
+
+    /**
+     * Alimenta o sino. Substitui a consulta de 60 em 60 segundos que só
+     * trazia o número: agora vem a lista e, com ?since=<id>, o que chegou
+     * depois — assim a tela avisa na hora em vez de no minuto seguinte.
+     */
+    case 'notifications_feed':
+        header('Content-Type: application/json');
+        header('Cache-Control: no-store');
+        if (!Auth::check()) {
+            http_response_code(401);
+            echo json_encode(['erro' => 'sessao', 'count' => 0, 'items' => [], 'novas' => []]);
+            break;
+        }
+        // A sessão é fechada antes da consulta: enquanto este pedido corre, o
+        // navegador do mesmo usuário precisa conseguir abrir outra página.
+        // Sem isto, o sino segura a sessão e a navegação fica travada.
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        $since = max(0, (int) ($_GET['since'] ?? 0));
+        $feed  = Notifications::feed((int) Auth::id(), $since, 10);
+        $feed['poll'] = [
+            'ativo'  => Notifications::pollSeconds(true),
+            'oculto' => Notifications::pollSeconds(false),
+        ];
+        echo json_encode($feed, JSON_UNESCAPED_UNICODE);
+        break;
+
+    /** Marca como lida via JS (sem recarregar a página). */
+    case 'notifications_read_ajax':
+        header('Content-Type: application/json');
+        if (!Auth::check() || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(401);
+            echo json_encode(['ok' => false]);
+            break;
+        }
+        Csrf::check();
+        $id = (int) ($_POST['id'] ?? 0);
+        Notifications::markRead((int) Auth::id(), $id > 0 ? $id : null);
+        echo json_encode(['ok' => true, 'count' => Notifications::unreadCount((int) Auth::id())]);
         break;
 
     case 'notifications_read_all':
