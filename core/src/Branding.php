@@ -140,11 +140,78 @@ final class Branding
 
     /** @var array<string, string>|null cache por request */
     private static ?array $cache = null;
+    /** Unidade a que o cache acima pertence (a identidade varia por unidade). */
+    private static ?int $cacheUnit = null;
 
     /** @return array<string, string> configuração efetiva (padrões + salvos) */
+    /**
+     * Chaves que uma UNIDADE pode ter diferentes do portal. É um conjunto
+     * curto de propósito: um grupo com dois hospitais quer o próprio nome e
+     * o próprio logotipo no topo, não um sistema com duas caras inteiras —
+     * isso confundiria quem circula entre as unidades.
+     */
+    public const POR_UNIDADE = ['name', 'short_name', 'logo', 'logo_light', 'favicon', 'primary', 'accent'];
+
+    /**
+     * Unidade em foco nesta requisição (0 = nenhuma/portal).
+     * Vem da sessão, que o núcleo preenche no login.
+     */
+    public static function unitId(): int
+    {
+        return (int) ($_SESSION['hospital_id'] ?? 0);
+    }
+
+    /** Há mais de uma unidade ativa? (a tela só aparece nesse caso) */
+    public static function multiUnidade(): bool
+    {
+        try {
+            $r = DB::queryOne(
+                "SELECT COUNT(*) AS n FROM doc_hospitals WHERE deleted_at IS NULL AND is_active = 1"
+            );
+            return (int) ($r['n'] ?? 0) > 1;
+        } catch (\Throwable $e) {
+            return false;   // instalação sem o módulo Documentos: mono-unidade
+        }
+    }
+
+    /** Sobreposições gravadas para uma unidade. */
+    public static function unitOverrides(int $unidade): array
+    {
+        if ($unidade <= 0) {
+            return [];
+        }
+        $out = [];
+        foreach (self::POR_UNIDADE as $k) {
+            $v = Settings::get('brand.unit.' . $unidade . '.' . $k);
+            if ($v !== null && $v !== '') {
+                $out[$k] = (string) $v;
+            }
+        }
+        return $out;
+    }
+
+    /** Grava (ou apaga, quando vazio) as sobreposições de uma unidade. */
+    public static function saveUnit(int $unidade, array $values): void
+    {
+        if ($unidade <= 0) {
+            return;
+        }
+        $atual = self::unitOverrides($unidade);
+        foreach (self::POR_UNIDADE as $k) {
+            if (!array_key_exists($k, $values)) {
+                continue;
+            }
+            $v = self::normalizeField($k, (string) $values[$k], $atual[$k] ?? '');
+            // Vazio = "herda do portal", e não "grava string vazia".
+            Settings::set('brand.unit.' . $unidade . '.' . $k, $v === '' ? null : $v);
+        }
+        self::forget();
+    }
+
     public static function all(): array
     {
-        if (self::$cache !== null) {
+        $unidade = self::unitId();
+        if (self::$cache !== null && self::$cacheUnit === $unidade) {
             return self::$cache;
         }
         $out = self::DEFAULTS;
@@ -154,6 +221,15 @@ final class Branding
                 $out[$key] = (string) $value;
             }
         }
+        // A unidade sobrepõe o portal no punhado de chaves permitidas. Sem
+        // nenhuma gravada — o caso de toda instalação de uma unidade só —
+        // isto não muda nada e não custa consulta nenhuma extra.
+        if ($unidade > 0 && self::multiUnidade()) {
+            foreach (self::unitOverrides($unidade) as $k => $v) {
+                $out[$k] = $v;
+            }
+        }
+        self::$cacheUnit = $unidade;
         return self::$cache = $out;
     }
 
@@ -165,6 +241,7 @@ final class Branding
     public static function forget(): void
     {
         self::$cache = null;
+        self::$cacheUnit = null;
     }
 
     // ------------------------------------------------------------------

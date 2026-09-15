@@ -378,6 +378,81 @@ function core_admin_appearance(): string
         </div>
     </div>
 
+    <?php if (Branding::multiUnidade()): ?>
+    <!-- Identidade por unidade — só aparece quando existe mais de uma -->
+    <?php
+    $unidades = Core\DB::query(
+        'SELECT id, name FROM doc_hospitals WHERE deleted_at IS NULL AND is_active = 1 ORDER BY name'
+    );
+    ?>
+    <div class="card mb-3">
+        <div class="card-header d-flex flex-wrap align-items-center gap-2">
+            <span><i class="bi bi-buildings me-1"></i>Identidade por unidade</span>
+            <span class="small text-muted">
+                O que ficar em branco herda do portal. São poucas chaves de propósito: quem circula entre
+                as unidades precisa reconhecer o mesmo sistema.
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="accordion" id="accUnidades">
+                <?php foreach ($unidades as $i => $u): $ov = Branding::unitOverrides((int) $u['id']); ?>
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#un<?= (int) $u['id'] ?>">
+                            <?= core_e($u['name']) ?>
+                            <?php if ($ov): ?>
+                                <span class="badge text-bg-info ms-2"><?= count($ov) ?> personalização(ões)</span>
+                            <?php else: ?>
+                                <span class="badge text-bg-light border ms-2">herda tudo do portal</span>
+                            <?php endif; ?>
+                        </button>
+                    </h2>
+                    <div id="un<?= (int) $u['id'] ?>" class="accordion-collapse collapse" data-bs-parent="#accUnidades">
+                        <div class="accordion-body">
+                            <form method="post" action="<?= core_module_url('admin', ['a' => 'appearance_unit_save']) ?>"
+                                  class="row g-2 align-items-end">
+                                <?= Csrf::field() ?>
+                                <input type="hidden" name="unidade" value="<?= (int) $u['id'] ?>">
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label small">Nome exibido</label>
+                                    <input class="form-control form-control-sm" name="name" maxlength="120"
+                                           value="<?= core_e($ov['name'] ?? '') ?>"
+                                           placeholder="<?= core_e(Branding::get('name')) ?>">
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label small">Cor primária</label>
+                                    <input type="text" class="form-control form-control-sm" name="primary"
+                                           value="<?= core_e($ov['primary'] ?? '') ?>"
+                                           placeholder="<?= core_e(Branding::get('primary')) ?>"
+                                           pattern="^(#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}))?$" maxlength="7">
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label small">Cor de destaque</label>
+                                    <input type="text" class="form-control form-control-sm" name="accent"
+                                           value="<?= core_e($ov['accent'] ?? '') ?>"
+                                           placeholder="<?= core_e(Branding::get('accent')) ?>"
+                                           pattern="^(#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}))?$" maxlength="7">
+                                </div>
+                                <div class="col-12 col-md-2">
+                                    <button class="btn btn-sm btn-primary w-100">Salvar</button>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-text">
+                                        Em branco = usa o valor do portal (mostrado como sugestão no campo).
+                                        O logotipo por unidade é enviado pela tela de cada unidade.
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <form method="post" action="<?= core_module_url('admin', ['a' => 'appearance_save']) ?>" enctype="multipart/form-data" id="brandForm">
         <?= Csrf::field() ?>
         <input type="hidden" name="op" value="save">
@@ -894,4 +969,22 @@ function core_admin_theme_preview(): void
     header('X-Frame-Options: SAMEORIGIN');
     require CORE_PATH . '/views/appearance_preview.php';
     exit;
+}
+
+/** POST: grava as sobreposições de identidade de UMA unidade. */
+function core_admin_appearance_unit_save(): void
+{
+    Auth::requireGlobalAdmin();
+    Csrf::check();
+
+    $unidade = (int) ($_POST['unidade'] ?? 0);
+    if ($unidade <= 0) {
+        Flash::set('error', 'Unidade inválida.');
+        core_redirect('index.php?m=admin&a=appearance');
+    }
+
+    Branding::saveUnit($unidade, $_POST);
+    Audit::log('appearance.unit_save', 'doc_hospitals', (string) $unidade, null, null, 'admin');
+    Flash::set('success', 'Identidade da unidade salva. O que ficou em branco herda do portal.');
+    core_redirect('index.php?m=admin&a=appearance');
 }
