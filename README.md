@@ -182,6 +182,11 @@ Uma tela só para o e-mail, com sete abas:
   chegou. Não depende da extensão `imap` do PHP (ausente na maioria das
   hospedagens) — fala o protocolo direto, como o envio faz com SMTP. A senha
   da caixa fica cifrada, como a do SMTP.
+Toda mensagem sai como **multipart/alternative**: HTML e texto puro na mesma
+mensagem. Isso pesa a favor nos filtros de spam e atende quem lê em texto —
+por preferência, por leitor de tela ou por um cliente antigo. A conversão
+preserva o endereço dos links ("texto (endereço)").
+
 - **Fila** — pendentes, retidas, falhas e enviadas, com o motivo de cada
   falha e a via usada (SMTP ou `mail()`). É a antiga tela "Fila de e-mails";
   a rota `?m=admin&a=mailqueue` continua funcionando e cai aqui.
@@ -347,6 +352,65 @@ imprimir, o papel volta a ser branco com texto preto.
 As imagens ficam em `uploads/branding/` (execução bloqueada por
 `.htaccess`); SVG enviado é sanitizado (script, `on*`, referências
 externas e afins são removidos) e o favicon aceita também `.ico`.
+
+## Como a personalização é organizada
+
+Toda superfície do portal — tela, e-mail e papel — sai da mesma base:
+
+- **`Core\Tokens`** é a fundação: uma implementação de normalização (cor,
+  número com faixa, opção de lista), uma da matemática de cor (mistura,
+  luminância, contraste WCAG) e a **herança** de tokens.
+- **Herança**: um valor vazio numa peça herda do módulo, e o do módulo herda
+  da marca (`cartaz → impressão → marca`). É o que faz "mudei a cor do
+  hospital" valer no e-mail, no cartaz de aniversário e na etiqueta sem
+  repetir a cor em cinco telas.
+- **`assets/core/preview.js`** é a pré-visualização única das telas de
+  personalização; **`assets/core/contrast.js`** é o selo de legibilidade.
+
+### Temas
+
+Um tema guarda o **conjunto inteiro** de valores da aparência (não um
+delta), então aplicar um tema dá o mesmo resultado independentemente do que
+estava valendo antes. Antes de aplicar qualquer tema, o estado atual é
+guardado automaticamente: os 5 últimos ficam disponíveis em *Desfazer*.
+Há pré-visualização em aba nova, que mostra a página real com as cores do
+tema sem aplicar nada.
+
+### Legibilidade
+
+Cada seletor de cor traz um selo ao vivo ("4,6:1 · AA") com as faixas da
+WCAG 2.1. A conta existe no servidor (`Tokens::contrastReport`) e no
+navegador — o selo precisa responder enquanto se arrasta o seletor — e
+`scripts/test_contraste.php` compara as duas em 218 pares, falhando se
+divergirem.
+
+### Identidade por unidade
+
+Quando existe mais de uma unidade ativa, cada uma pode ter nome, logotipo,
+favicon e cores próprios; o que ficar em branco herda do portal. São poucas
+chaves de propósito: quem circula entre as unidades precisa reconhecer o
+mesmo sistema. Em instalação de unidade única a sobreposição é inerte.
+
+### Galeria de superfícies e CSS livre
+
+*Administração › Aparência › Galeria de superfícies* mostra todas as peças
+de uma vez, com o contraste de cada cor. A mesma página lista as **classes
+estáveis** (`.portal-topbar`, `.portal-sidebar`, `.portal-main`…) que o CSS
+livre do hospital pode usar sem medo de uma atualização renomear — prefira
+as variáveis (`var(--portal-primary)`) a cores fixas, para o seu CSS
+acompanhar o tema e o modo escuro.
+
+### Testes da aparência
+
+```
+php scripts/test_contraste.php                      # paridade servidor/navegador
+COOKIES=sessao.json node scripts/test_visual.mjs    # regressão visual
+COOKIES=sessao.json node scripts/test_visual.mjs --atualizar   # aceita as mudanças
+```
+
+O teste visual decodifica os PNG e compara **pixel a pixel** (comparar os
+bytes do arquivo faria qualquer mudança virar "100%"), com tolerância por
+canal para o antialiasing.
 
 ## Layouts de documentos (papel timbrado)
 
