@@ -173,15 +173,21 @@ class Announcement extends Model
         $attach  = !empty($a['attachment_name'])
             ? '<p style="margin:16px 0 0;font-size:13px;color:#555">📎 Anexo disponível no portal: ' . Sanitize::e($a['attachment_name']) . '</p>' : '';
 
-        return '<!DOCTYPE html><html lang="pt-BR"><body style="margin:0;padding:24px;background:#f3f5f8;font-family:Arial,Helvetica,sans-serif;color:#222">'
-            . '<div style="max-width:640px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06)">'
-            . '<div style="background:' . $color . ';color:#fff;padding:18px 24px">'
-            . '<div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;opacity:.85">' . Sanitize::e($org) . ' · ' . Sanitize::e($label) . '</div>'
-            . '<h1 style="margin:6px 0 0;font-size:22px">' . Sanitize::e((string)$a['title']) . '</h1></div>'
-            . '<div style="padding:24px;font-size:15px;line-height:1.55">' . $img . $summary . $body . $attach
-            . '<p style="margin:24px 0 0"><a href="' . Sanitize::e($link) . '" style="display:inline-block;background:' . $color . ';color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:bold">Abrir no portal do funcionário</a></p>'
-            . '</div>'
-            . '<div style="padding:12px 24px;background:#f8f9fa;color:#888;font-size:11px">E-mail automático do módulo RH — ' . Sanitize::e($org) . '. Não responda a esta mensagem.</div>'
-            . '</div></body></html>';
+        // Só o CORPO: o cabeçalho, o rodapé e as cores vêm da casca do portal
+        // (Core\MailTemplate, Administração > E-mail > Layout), aplicada no
+        // envio. Assim o comunicado acompanha a identidade sem ter a sua.
+        $corpo = '<p style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:' . $color . ';margin:0 0 8px">'
+               . Sanitize::e($label) . '</p>'
+               . $img . $summary . $body . $attach;
+
+        return Core\MailTemplate::wrap(
+            (string)$a['title'],
+            $corpo,
+            [
+                'accent'    => $color,          // urgente/celebração mantêm a cor própria
+                'preheader' => mb_substr(trim(strip_tags((string)($a['summary'] ?: $a['body'] ?? ''))), 0, 140),
+                'cta'       => ['label' => 'Abrir no portal do funcionário', 'url' => $link],
+            ]
+        );
     }
 }

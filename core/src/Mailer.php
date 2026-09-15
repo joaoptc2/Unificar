@@ -55,8 +55,11 @@ final class Mailer
      *
      * @param array{
      *   config?: array<string,string>, password?: string,
-     *   transcript?: bool, fallback?: bool, timeout?: int, reply_to?: string
-     * } $opts  config/password permitem testar valores ainda não salvos
+     *   transcript?: bool, fallback?: bool, timeout?: int, reply_to?: string,
+     *   raw?: bool, layout?: array<string,mixed>
+     * } $opts  config/password permitem testar valores ainda não salvos;
+     *          raw=true não aplica a casca (MailTemplate); layout passa
+     *          opções da casca (preheader, cta, accent)
      *
      * @return array{ok:bool, path:string, code:string, error:string,
      *                steps:array<string,float>, transcript:array<int,string>, ms:float}
@@ -69,6 +72,14 @@ final class Mailer
             'ok' => false, 'path' => 'nenhum', 'code' => '', 'error' => '',
             'steps' => [], 'transcript' => [], 'ms' => 0.0,
         ];
+
+        // Casca do portal (Administração > E-mail > Layout). Aplicada aqui,
+        // num ponto só, para que TODO e-mail saia com a mesma aparência sem
+        // que cada remetente precise saber disso. Corpo que já é um documento
+        // completo, ou layout desligado, passa intacto (ver MailTemplate).
+        if (empty($opts['raw'])) {
+            $html = MailTemplate::wrap($subject, $html, $opts['layout'] ?? []);
+        }
 
         if (!MailConfig::isEmail($to)) {
             return self::finish($res, $t0, self::ERR_BAD_ADDRESS, 'Endereço de destino inválido.');

@@ -266,14 +266,20 @@ class Survey extends Model
         $link = core_url('index.php?m=rh&page=my&action=survey&id=' . (int)$s['id']);
         $until = !empty($s['ends_at']) ? '<p style="color:#555;font-size:13px">Disponível até ' . Sanitize::formatDate($s['ends_at']) . '.</p>' : '';
         $anon  = (int)$s['anonymous'] ? '<p style="color:#555;font-size:13px">🔒 Esta pesquisa é <strong>anônima</strong>: suas respostas não são vinculadas ao seu nome.</p>' : '';
-        return '<!DOCTYPE html><html lang="pt-BR"><body style="margin:0;padding:24px;background:#f3f5f8;font-family:Arial,Helvetica,sans-serif;color:#222">'
-            . '<div style="max-width:640px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06)">'
-            . '<div style="background:#6610f2;color:#fff;padding:18px 24px"><div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;opacity:.85">' . Sanitize::e($org) . ' · Pesquisa</div>'
-            . '<h1 style="margin:6px 0 0;font-size:22px">' . Sanitize::e((string)$s['title']) . '</h1></div>'
-            . '<div style="padding:24px;font-size:15px;line-height:1.55">'
-            . (!empty($s['description']) ? '<p>' . nl2br(Sanitize::e((string)$s['description'])) . '</p>' : '')
-            . $until . $anon
-            . '<p style="margin:24px 0 0"><a href="' . Sanitize::e($link) . '" style="display:inline-block;background:#6610f2;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:bold">Responder agora</a></p>'
-            . '</div><div style="padding:12px 24px;background:#f8f9fa;color:#888;font-size:11px">E-mail automático do módulo RH — ' . Sanitize::e($org) . '.</div></div></body></html>';
+        // Só o CORPO — a casca do portal (Core\MailTemplate) põe cabeçalho,
+        // cores e rodapé no envio.
+        $corpo = '<p style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#6610f2;margin:0 0 8px">Pesquisa</p>'
+               . (!empty($s['description']) ? '<p>' . nl2br(Sanitize::e((string)$s['description'])) . '</p>' : '')
+               . $until . $anon;
+
+        return Core\MailTemplate::wrap(
+            (string)$s['title'],
+            $corpo,
+            [
+                'accent'    => '#6610f2',
+                'preheader' => mb_substr(trim(strip_tags((string)($s['description'] ?? ''))), 0, 140),
+                'cta'       => ['label' => 'Responder agora', 'url' => $link],
+            ]
+        );
     }
 }

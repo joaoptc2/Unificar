@@ -42,6 +42,7 @@ $coreActions = [
     'backup_schedule_save',
     'mailqueue', 'mailqueue_process', 'mailqueue_retry',
     'mail', 'mail_save', 'mail_test', 'mail_probe',
+    'mail_layout_save', 'mail_layout_preview', 'mail_inbox_save', 'mail_inbox_test',
 ];
 if (in_array($action, $coreActions, true)) {
     Auth::requireGlobalAdmin();
@@ -424,12 +425,20 @@ switch ($action) {
     case 'mail_save':
     case 'mail_test':
     case 'mail_probe':
+    case 'mail_layout_save':
+    case 'mail_layout_preview':
+    case 'mail_inbox_save':
+    case 'mail_inbox_test':
         require CORE_PATH . '/controllers/admin_mail.php';
         match ($action) {
-            'mail'       => admin_render('E-mail', core_admin_mail(), 'mail'),
-            'mail_save'  => core_admin_mail_save(),
-            'mail_test'  => core_admin_mail_test(),
-            'mail_probe' => core_admin_mail_probe(),
+            'mail'                 => admin_render('E-mail', core_admin_mail(), 'mail'),
+            'mail_save'            => core_admin_mail_save(),
+            'mail_test'            => core_admin_mail_test(),
+            'mail_probe'           => core_admin_mail_probe(),
+            'mail_layout_save'     => core_admin_mail_layout_save(),
+            'mail_layout_preview'  => core_admin_mail_layout_preview(),
+            'mail_inbox_save'      => core_admin_mail_inbox_save(),
+            'mail_inbox_test'      => core_admin_mail_inbox_test(),
         };
         break;
 

@@ -1,6 +1,7 @@
 <?php
 /**
- * ADMINISTRAÇÃO — E-mail (configuração, teste de entrega, fila e diagnóstico).
+ * ADMINISTRAÇÃO — E-mail (configuração, layout, teste de entrega e de
+ * recebimento, fila e diagnóstico).
  *
  * A configuração do SMTP saiu de "só editando config/config.php" e passou a
  * poder ser feita aqui (Core\MailConfig grava em settings e sobrepõe o
@@ -22,7 +23,9 @@ use Core\Csrf;
 use Core\Flash;
 use Core\MailConfig;
 use Core\MailDiagnostics;
+use Core\MailInbox;
 use Core\MailQueue;
+use Core\MailTemplate;
 use Core\MailSecret;
 use Core\Mailer;
 use Core\MailTester;
@@ -33,7 +36,9 @@ function core_mail_tabs(): array
 {
     return [
         'config' => ['label' => 'Configuração', 'icon' => 'bi-sliders'],
+        'layout' => ['label' => 'Layout', 'icon' => 'bi-palette'],
         'test'   => ['label' => 'Teste de entrega', 'icon' => 'bi-send-check'],
+        'inbox'  => ['label' => 'Recebimento', 'icon' => 'bi-inbox'],
         'queue'  => ['label' => 'Fila', 'icon' => 'bi-list-ol'],
         'diag'   => ['label' => 'Diagnóstico', 'icon' => 'bi-activity'],
         'log'    => ['label' => 'Histórico de testes', 'icon' => 'bi-clock-history'],
@@ -211,11 +216,13 @@ function core_admin_mail(): string
     </ul>
 
     <?= match ($tab) {
-        'test'  => core_admin_mail_tab_test(),
-        'queue' => core_admin_mail_tab_queue(),
-        'diag'  => core_admin_mail_tab_diag(),
-        'log'   => core_admin_mail_tab_log(),
-        default => core_admin_mail_tab_config($cfg, $locked),
+        'layout' => core_admin_mail_tab_layout(),
+        'test'   => core_admin_mail_tab_test(),
+        'inbox'  => core_admin_mail_tab_inbox(),
+        'queue'  => core_admin_mail_tab_queue(),
+        'diag'   => core_admin_mail_tab_diag(),
+        'log'    => core_admin_mail_tab_log(),
+        default  => core_admin_mail_tab_config($cfg, $locked),
     } ?>
     <?php
     return (string) ob_get_clean();
@@ -752,6 +759,536 @@ function core_admin_mail_tab_log(): string
         </div>
         <p class="small text-muted">Os registros são apagados depois de 90 dias.</p>
     <?php endif; ?>
+    <?php
+    return (string) ob_get_clean();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ABA LAYOUT — a casca de todos os e-mails do portal
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** POST: grava o layout dos e-mails. */
+function core_admin_mail_layout_save(): void
+{
+    Auth::requireGlobalAdmin();
+    Csrf::check();
+
+    if (!empty($_POST['restaurar'])) {
+        MailTemplate::reset();
+        Audit::log('mail.layout.reset', 'settings', null, null, null, 'admin');
+        Flash::set('success', 'Layout dos e-mails restaurado ao padrão.');
+        core_redirect('index.php?m=admin&a=mail&tab=layout');
+    }
+
+    $valores = [];
+    foreach (array_keys(MailTemplate::DEFAULTS) as $k) {
+        // Caixas de seleção ausentes no POST significam "desmarcado".
+        $valores[$k] = in_array($k, ['enabled', 'show_logo', 'show_name'], true)
+            ? (!empty($_POST[$k]) ? '1' : '0')
+            : (string) ($_POST[$k] ?? '');
+    }
+    MailTemplate::save($valores);
+    Audit::log('mail.layout.save', 'settings', null, null, null, 'admin');
+    Flash::set('success', 'Layout dos e-mails salvo. Vale para os próximos envios, inclusive os que já estão na fila.');
+    core_redirect('index.php?m=admin&a=mail&tab=layout');
+}
+
+/** Pré-visualização do layout (HTML do e-mail, servido para o iframe). */
+function core_admin_mail_layout_preview(): void
+{
+    Auth::requireGlobalAdmin();
+
+    // Valores do formulário (POST) ou os salvos (GET). A pré-visualização
+    // passa pela MESMA normalização da gravação: o que se vê é o que sai.
+    $cfg = MailTemplate::all();
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        Csrf::check();
+        foreach (array_keys(MailTemplate::DEFAULTS) as $k) {
+            $bruto = in_array($k, ['enabled', 'show_logo', 'show_name'], true)
+                ? (!empty($_POST[$k]) ? '1' : '0')
+                : (string) ($_POST[$k] ?? $cfg[$k]);
+            $cfg[$k] = MailTemplate::normalize($k, $bruto);
+        }
+    }
+
+    $html = MailTemplate::wrap(
+        'Exemplo de mensagem do portal',
+        MailTemplate::sampleBody(),
+        [
+            'preheader' => 'Assim aparece a prévia na caixa de entrada.',
+            'cta'       => ['label' => 'Abrir o portal', 'url' => core_url('index.php')],
+        ],
+        $cfg
+    );
+
+    header('Content-Type: text/html; charset=UTF-8');
+    header('Content-Security-Policy: sandbox allow-same-origin');
+    echo $html;
+    exit;
+}
+
+function core_admin_mail_tab_layout(): string
+{
+    $cfg    = MailTemplate::all();
+    $fontes = MailTemplate::fonts();
+
+    ob_start(); ?>
+    <p class="text-muted">
+        A casca de todos os e-mails do portal — comunicados, pesquisas, avisos de vencimento,
+        redefinição de senha. Cada mensagem traz o seu texto; o cabeçalho, as cores e o rodapé
+        vêm daqui. Vale também para o que já está na fila, porque a casca é aplicada no envio.
+    </p>
+
+    <form method="post" action="<?= core_module_url('admin', ['a' => 'mail_layout_save']) ?>" id="mailLayoutForm">
+        <?= Csrf::field() ?>
+        <div class="row g-3">
+            <div class="col-12 col-xl-5">
+                <div class="card mb-3">
+                    <div class="card-header">Cabeçalho</div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" role="switch" name="enabled" id="mlEnabled"
+                                   value="1" <?= $cfg['enabled'] === '1' ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="mlEnabled">Aplicar este layout aos e-mails</label>
+                            <div class="form-text">Desligado, cada mensagem sai como o módulo a escreveu (comportamento antigo).</div>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <label class="form-label" for="mlHeaderBg">Cor do cabeçalho</label>
+                                <input type="color" class="form-control form-control-color w-100" name="header_bg" id="mlHeaderBg"
+                                       value="<?= core_e(MailTemplate::headerBg($cfg)) ?>">
+                                <div class="form-text">Padrão: a cor da marca.</div>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label" for="mlHeaderText">Texto do cabeçalho</label>
+                                <input type="color" class="form-control form-control-color w-100" name="header_text" id="mlHeaderText"
+                                       value="<?= core_e(MailTemplate::headerText($cfg)) ?>">
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-3 mt-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="show_logo" id="mlLogo" value="1" <?= $cfg['show_logo'] === '1' ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="mlLogo">Mostrar o logotipo</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="show_name" id="mlName" value="1" <?= $cfg['show_name'] === '1' ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="mlName">Mostrar o nome da organização</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Corpo</div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-6 col-md-4">
+                                <label class="form-label" for="mlBodyBg">Fundo da página</label>
+                                <input type="color" class="form-control form-control-color w-100" name="body_bg" id="mlBodyBg" value="<?= core_e($cfg['body_bg']) ?>">
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label" for="mlCardBg">Fundo do cartão</label>
+                                <input type="color" class="form-control form-control-color w-100" name="card_bg" id="mlCardBg" value="<?= core_e($cfg['card_bg']) ?>">
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label" for="mlTextColor">Cor do texto</label>
+                                <input type="color" class="form-control form-control-color w-100" name="text_color" id="mlTextColor" value="<?= core_e($cfg['text_color']) ?>">
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label" for="mlLinkColor">Cor dos links</label>
+                                <input type="color" class="form-control form-control-color w-100" name="link_color" id="mlLinkColor" value="<?= core_e(MailTemplate::linkColor($cfg)) ?>">
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label" for="mlWidth">Largura (px)</label>
+                                <input type="number" class="form-control" name="width" id="mlWidth" min="320" max="900" step="10" value="<?= core_e($cfg['width']) ?>">
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label" for="mlRadius">Cantos (px)</label>
+                                <input type="number" class="form-control" name="radius" id="mlRadius" min="0" max="24" value="<?= core_e($cfg['radius']) ?>">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="mlFont">Fonte</label>
+                                <select class="form-select" name="font" id="mlFont">
+                                    <?php foreach ($fontes as $pilha => $rotulo): ?>
+                                        <option value="<?= core_e($pilha) ?>" <?= $cfg['font'] === $pilha ? 'selected' : '' ?>><?= core_e($rotulo) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div class="form-text">Só fontes que existem nos clientes de e-mail — fonte da web não carrega no Outlook.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Rodapé</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label" for="mlSignature">Assinatura</label>
+                            <input type="text" class="form-control" name="signature" id="mlSignature" maxlength="120"
+                                   value="<?= core_e($cfg['signature']) ?>" placeholder="<?= core_e(Core\Branding::name()) ?>">
+                            <div class="form-text">Vazio usa o nome da organização.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="mlFooterNote">Aviso</label>
+                            <textarea class="form-control" name="footer_note" id="mlFooterNote" rows="2" maxlength="500"><?= core_e($cfg['footer_note']) ?></textarea>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label" for="mlFooterExtra">Texto adicional (HTML simples)</label>
+                            <textarea class="form-control font-monospace" name="footer_extra" id="mlFooterExtra" rows="2" maxlength="500"
+                                      placeholder="Endereço, telefone, aviso de confidencialidade…"><?= core_e($cfg['footer_extra']) ?></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    <button class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar layout</button>
+                    <button class="btn btn-outline-secondary" name="restaurar" value="1"
+                            onclick="return confirm('Restaurar o layout padrão dos e-mails?')">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Restaurar padrão
+                    </button>
+                    <a class="btn btn-outline-primary ms-auto" href="<?= core_module_url('admin', ['a' => 'mail', 'tab' => 'test']) ?>">
+                        <i class="bi bi-send-check me-1"></i>Enviar um teste
+                    </a>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-7">
+                <div class="card position-sticky" style="top:1rem">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <span><i class="bi bi-eye me-1"></i>Pré-visualização</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="mlRefresh" title="Atualizar">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        <iframe name="mailLayoutFrame" id="mailLayoutFrame" title="Pré-visualização do e-mail"
+                                style="width:100%;height:72vh;min-height:460px;border:0;background:#fff"></iframe>
+                    </div>
+                    <div class="card-footer small text-muted">
+                        Mostra os valores atuais do formulário, ainda não salvos. O HTML usa tabelas e estilo
+                        embutido — é o que Outlook e Gmail renderizam de forma previsível.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <form method="post" action="<?= core_module_url('admin', ['a' => 'mail_layout_preview']) ?>"
+          target="mailLayoutFrame" id="mailLayoutPreview"><?= Csrf::field() ?></form>
+
+    <script>
+    (function () {
+        var form = document.getElementById('mailLayoutForm');
+        var prev = document.getElementById('mailLayoutPreview');
+        if (!form || !prev) return;
+
+        var TEXTO = ['header_bg','header_text','body_bg','card_bg','text_color','link_color',
+                     'font','width','radius','signature','footer_note','footer_extra'];
+        var CHECK = ['enabled','show_logo','show_name'];
+
+        function atualizar() {
+            prev.querySelectorAll('[data-copy]').forEach(function (e) { e.remove(); });
+            var add = function (n, v) {
+                var h = document.createElement('input');
+                h.type = 'hidden'; h.name = n; h.value = v; h.setAttribute('data-copy', '1');
+                prev.appendChild(h);
+            };
+            TEXTO.forEach(function (n) { var el = form.querySelector('[name="' + n + '"]'); if (el) add(n, el.value); });
+            CHECK.forEach(function (n) { var el = form.querySelector('[name="' + n + '"]'); if (el && el.checked) add(n, '1'); });
+            prev.submit();
+        }
+
+        var t = null;
+        form.addEventListener('input',  function () { clearTimeout(t); t = setTimeout(atualizar, 400); });
+        form.addEventListener('change', function () { clearTimeout(t); t = setTimeout(atualizar, 150); });
+        document.getElementById('mlRefresh').addEventListener('click', atualizar);
+        atualizar();
+    })();
+    </script>
+    <?php
+    return (string) ob_get_clean();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ABA RECEBIMENTO — teste de IMAP/POP3 (fecha o ciclo com o envio)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** POST: grava a configuração da caixa de recebimento. */
+function core_admin_mail_inbox_save(): void
+{
+    Auth::requireGlobalAdmin();
+    Csrf::check();
+
+    if (!empty($_POST['esquecer_senha'])) {
+        MailInbox::forgetPassword();
+        Flash::set('success', 'Senha da caixa removida.');
+        core_redirect('index.php?m=admin&a=mail&tab=inbox');
+    }
+
+    $valores = [];
+    foreach (array_keys(MailInbox::DEFAULTS) as $k) {
+        $valores[$k] = in_array($k, ['enabled', 'verify_peer'], true)
+            ? (!empty($_POST[$k]) ? '1' : '0')
+            : (string) ($_POST[$k] ?? '');
+    }
+    $senha = (string) ($_POST['password'] ?? '');
+    MailInbox::save($valores, $senha !== '' ? $senha : null);
+
+    Audit::log('mail.inbox.save', 'settings', null, null, null, 'admin');
+    Flash::set('success', 'Configuração de recebimento salva.');
+    core_redirect('index.php?m=admin&a=mail&tab=inbox');
+}
+
+/**
+ * POST: testa o recebimento. Com "ciclo completo", envia primeiro um e-mail
+ * com um código no assunto e depois procura por ele na caixa — que é a
+ * pergunta que o administrador realmente tem: "chega ou não chega?".
+ */
+function core_admin_mail_inbox_test(): void
+{
+    Auth::requireGlobalAdmin();
+    Csrf::check();
+
+    $override = [];
+    foreach (array_keys(MailInbox::DEFAULTS) as $k) {
+        if (isset($_POST[$k]) && $_POST[$k] !== '') {
+            $override[$k] = (string) $_POST[$k];
+        }
+    }
+    $senha  = (string) ($_POST['password'] ?? '');
+    $ciclo  = !empty($_POST['ciclo']);
+    $codigo = '';
+    $envio  = null;
+
+    if ($ciclo) {
+        $para = trim((string) ($_POST['para'] ?? ($override['user'] ?? MailInbox::all()['user'])));
+        $codigo = 'PORTAL-' . strtoupper(bin2hex(random_bytes(3)));
+        $envio = Mailer::sendDetailed(
+            $para,
+            'Teste de recebimento ' . $codigo,
+            '<p>Se esta mensagem chegou, o envio e o recebimento estão funcionando.</p>'
+            . '<p>Código deste teste: <strong>' . core_e($codigo) . '</strong></p>',
+            ['transcript' => false]
+        );
+        if (!$envio['ok']) {
+            // Sem envio não há o que procurar: mostra logo o erro do envio.
+            $_SESSION['_mail_inbox_result'] = [
+                'ok' => false, 'code' => 'ENVIO', 'error' => $envio['error'],
+                'total' => 0, 'mensagens' => [], 'encontrada' => null,
+                'transcript' => [], 'ms' => $envio['ms'], 'codigo' => $codigo,
+                'envio' => $envio, 'protocol' => $override['protocol'] ?? MailInbox::all()['protocol'],
+            ];
+            core_redirect('index.php?m=admin&a=mail&tab=inbox');
+        }
+        // O servidor precisa de um instante para entregar na caixa.
+        sleep(3);
+    }
+
+    $r = MailInbox::test($override, $senha !== '' ? $senha : null, $codigo);
+    $r['codigo'] = $codigo;
+    $r['envio']  = $envio;
+    $_SESSION['_mail_inbox_result'] = $r;
+
+    Audit::log('mail.inbox.test', 'settings', null, null,
+        ['ok' => $r['ok'], 'code' => $r['code'], 'ciclo' => $ciclo], 'admin');
+    core_redirect('index.php?m=admin&a=mail&tab=inbox');
+}
+
+function core_admin_mail_tab_inbox(): string
+{
+    $cfg = MailInbox::all();
+    $r   = $_SESSION['_mail_inbox_result'] ?? null;
+    unset($_SESSION['_mail_inbox_result']);
+
+    ob_start(); ?>
+    <p class="text-muted">
+        Confere se a caixa do portal <strong>recebe</strong> mensagens. O teste de entrega, na aba ao lado,
+        mostra que o servidor de saída aceitou o e-mail; este abre a caixa e lê o que chegou.
+        Juntos respondem a pergunta inteira: saiu e chegou.
+    </p>
+
+    <?php if (!function_exists('imap_open')): ?>
+        <div class="alert alert-light border d-flex gap-2 py-2 small">
+            <i class="bi bi-info-circle mt-1"></i>
+            <div>Este servidor não tem a extensão <code>imap</code> do PHP — comum nas hospedagens.
+            O teste abaixo não depende dela: fala IMAP e POP3 diretamente, como o envio já faz com SMTP.</div>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($r): ?>
+        <?php
+        $ok    = !empty($r['ok']);
+        $achou = !empty($r['encontrada']);
+        $classe = $ok ? ($r['codigo'] !== '' ? ($achou ? 'success' : 'warning') : 'success') : 'danger';
+        ?>
+        <div class="alert alert-<?= $classe ?>">
+            <h2 class="h6 mb-2">
+                <?php if (!$ok): ?>
+                    <i class="bi bi-x-octagon me-1"></i>Não foi possível ler a caixa
+                <?php elseif ($r['codigo'] === ''): ?>
+                    <i class="bi bi-check-circle me-1"></i>Caixa acessada com sucesso
+                <?php elseif ($achou): ?>
+                    <i class="bi bi-check-circle me-1"></i>Ciclo completo: a mensagem enviada chegou
+                <?php else: ?>
+                    <i class="bi bi-hourglass-split me-1"></i>A caixa abriu, mas a mensagem ainda não apareceu
+                <?php endif; ?>
+                <span class="small fw-normal ms-1">(<?= (float) $r['ms'] ?> ms)</span>
+            </h2>
+
+            <?php if (!$ok): ?>
+                <p class="mb-1"><strong><?= core_e($r['code']) ?></strong> — <?= core_e($r['error']) ?></p>
+                <?php $dica = $r['code'] === 'ENVIO' ? 'O envio falhou antes da procura; resolva na aba "Teste de entrega".' : MailInbox::explain((string) $r['code']); ?>
+                <?php if ($dica !== ''): ?><p class="mb-0 small"><?= core_e($dica) ?></p><?php endif; ?>
+            <?php else: ?>
+                <p class="mb-1 small">
+                    <?= (int) $r['total'] ?> mensagem(ns) na caixa.
+                    <?php if ($r['codigo'] !== '' && !$achou): ?>
+                        A procura foi pelo código <code><?= core_e($r['codigo']) ?></code> — a entrega pode levar
+                        alguns segundos a mais. Repita o teste em instantes.
+                    <?php endif; ?>
+                </p>
+            <?php endif; ?>
+        </div>
+
+        <?php if (!empty($r['mensagens'])): ?>
+        <div class="card mb-3">
+            <div class="card-header">Últimas mensagens da caixa</div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0 align-middle">
+                    <thead><tr><th>De</th><th>Assunto</th><th>Data</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($r['mensagens'] as $m): ?>
+                        <tr class="<?= ($r['codigo'] !== '' && str_contains((string) $m['subject'], (string) $r['codigo'])) ? 'table-success' : '' ?>">
+                            <td class="small"><?= core_e($m['from'] ?: '—') ?></td>
+                            <td class="small"><?= core_e($m['subject'] ?: '(sem assunto)') ?></td>
+                            <td class="small text-muted"><?= core_e($m['date'] ?: '—') ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($r['transcript'])): ?>
+        <details class="mb-3">
+            <summary class="small text-muted">Conversa com o servidor</summary>
+            <pre class="small bg-body-tertiary border rounded p-2 mt-2 mb-0" style="max-height:18rem;overflow:auto"><?php
+                foreach ($r['transcript'] as $l) { echo core_e($l), "\n"; }
+            ?></pre>
+        </details>
+        <?php endif; ?>
+    <?php endif; ?>
+
+    <div class="row g-3">
+        <div class="col-12 col-lg-7">
+            <form method="post" action="<?= core_module_url('admin', ['a' => 'mail_inbox_save']) ?>">
+                <?= Csrf::field() ?>
+                <div class="card">
+                    <div class="card-header">Servidor de recebimento</div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label" for="miProto">Protocolo</label>
+                                <select class="form-select" name="protocol" id="miProto">
+                                    <option value="imap" <?= $cfg['protocol'] === 'imap' ? 'selected' : '' ?>>IMAP</option>
+                                    <option value="pop3" <?= $cfg['protocol'] === 'pop3' ? 'selected' : '' ?>>POP3</option>
+                                </select>
+                                <div class="form-text">IMAP mantém as mensagens no servidor; prefira-o.</div>
+                            </div>
+                            <div class="col-12 col-md-8">
+                                <label class="form-label" for="miHost">Servidor</label>
+                                <input class="form-control" name="host" id="miHost" value="<?= core_e($cfg['host']) ?>"
+                                       placeholder="imap.seudominio.com.br">
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label" for="miSec">Segurança</label>
+                                <select class="form-select" name="security" id="miSec">
+                                    <option value="ssl"      <?= $cfg['security'] === 'ssl' ? 'selected' : '' ?>>SSL/TLS direto</option>
+                                    <option value="starttls" <?= $cfg['security'] === 'starttls' ? 'selected' : '' ?>>STARTTLS</option>
+                                    <option value="none"     <?= $cfg['security'] === 'none' ? 'selected' : '' ?>>Sem criptografia</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label" for="miPort">Porta</label>
+                                <input type="number" class="form-control" name="port" id="miPort" min="1" max="65535"
+                                       value="<?= core_e($cfg['port']) ?>">
+                                <div class="form-text">993/143 IMAP · 995/110 POP3</div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label" for="miTimeout">Tempo limite (s)</label>
+                                <input type="number" class="form-control" name="timeout" id="miTimeout" min="3" max="60"
+                                       value="<?= core_e($cfg['timeout']) ?>">
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label" for="miUser">Usuário</label>
+                                <input class="form-control" name="user" id="miUser" value="<?= core_e($cfg['user']) ?>"
+                                       autocomplete="off" placeholder="portal@seudominio.com.br">
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label" for="miPass">Senha</label>
+                                <input type="password" class="form-control" name="password" id="miPass"
+                                       autocomplete="new-password"
+                                       placeholder="<?= MailInbox::passwordIsSet() ? 'já configurada — deixe em branco para manter' : 'senha da caixa' ?>">
+                                <div class="form-text">
+                                    Guardada cifrada, como a do SMTP. Em contas com verificação em duas etapas, use senha de aplicativo.
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label" for="miBox">Caixa (IMAP)</label>
+                                <input class="form-control" name="mailbox" id="miBox" value="<?= core_e($cfg['mailbox']) ?>" placeholder="INBOX">
+                            </div>
+                            <div class="col-12 col-md-6 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="verify_peer" id="miVerify" value="1"
+                                           <?= $cfg['verify_peer'] === '1' ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="miVerify">Verificar o certificado do servidor</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex flex-wrap gap-2">
+                        <button class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+                        <?php if (MailInbox::passwordIsSet()): ?>
+                        <button class="btn btn-outline-secondary" name="esquecer_senha" value="1"
+                                onclick="return confirm('Remover a senha guardada desta caixa?')">Esquecer a senha</button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="col-12 col-lg-5">
+            <form method="post" action="<?= core_module_url('admin', ['a' => 'mail_inbox_test']) ?>">
+                <?= Csrf::field() ?>
+                <div class="card">
+                    <div class="card-header">Testar</div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" role="switch" name="ciclo" id="miCiclo" value="1" checked>
+                            <label class="form-check-label" for="miCiclo">Ciclo completo (enviar e procurar)</label>
+                            <div class="form-text">
+                                Envia uma mensagem com um código no assunto e procura por ela na caixa.
+                                Desligado, apenas abre a caixa e lista o que já está lá.
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="miPara">Enviar para</label>
+                            <input class="form-control" name="para" id="miPara"
+                                   value="<?= core_e($cfg['user']) ?>" placeholder="a própria caixa">
+                            <div class="form-text">Normalmente o próprio endereço da caixa acima.</div>
+                        </div>
+                        <p class="small text-muted mb-0">
+                            O teste usa os valores <strong>salvos</strong>. Altere e salve o formulário ao lado antes de testar.
+                        </p>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-primary w-100"><i class="bi bi-inbox me-1"></i>Testar recebimento</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
     <?php
     return (string) ob_get_clean();
 }
