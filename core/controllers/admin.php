@@ -37,7 +37,7 @@ $coreActions = [
     'users', 'user_form', 'user_save', 'user_delete', 'user_perms', 'user_perms_save',
     'groups', 'group_form', 'group_save', 'group_delete',
     'modules', 'settings', 'appearance', 'appearance_save', 'appearance_export', 'audit',
-    'migrations', 'migrations_apply', 'health',
+    'migrations', 'migrations_apply', 'health', 'cleanup_save', 'cleanup_run',
     'backup', 'backup_create', 'backup_download', 'backup_delete', 'backup_verify',
     'backup_schedule_save',
     'mailqueue', 'mailqueue_process', 'mailqueue_retry',
@@ -1091,6 +1091,83 @@ switch ($action) {
                     </div>
                 </div>
             </div>
+            <div class="col-12">
+                <?php
+                $limpezaDias = Core\Cleanup::all();
+                $ultima      = Core\Cleanup::ultimaExecucao();
+                $ultimaQtd   = (int) Settings::get('cleanup.last_run_count', '0');
+                ?>
+                <div class="card mb-3">
+                    <div class="card-header d-flex flex-wrap align-items-center gap-2">
+                        <span><i class="bi bi-trash3 me-1"></i>Limpeza automática</span>
+                        <span class="ms-auto small text-muted">
+                            <?php if ($ultima !== ''): ?>
+                                última execução em <?= core_e(date('d/m/Y H:i', strtotime($ultima))) ?>
+                                (<?= $ultimaQtd ?> registro(s) removidos)
+                            <?php else: ?>
+                                ainda não executou
+                            <?php endif; ?>
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small">
+                            Por quantos dias cada tipo de registro é guardado. Passado o prazo, o cron apaga —
+                            <strong>0 significa nunca apagar</strong>. O que ainda está em uso nunca é removido:
+                            notificação não lida, e-mail pendente na fila e o backup mais recente ficam.
+                        </p>
+
+                        <form method="post" action="<?= core_module_url('admin', ['a' => 'cleanup_save']) ?>">
+                            <?= Csrf::field() ?>
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" role="switch" name="enabled" id="clEnabled"
+                                       value="1" <?= Core\Cleanup::habilitado() ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="clEnabled">Executar a limpeza junto com a rotina periódica (cron)</label>
+                            </div>
+
+                            <div class="row g-3">
+                                <?php foreach (Core\Cleanup::ALVOS as $chave => $def): ?>
+                                <div class="col-12 col-md-6 col-xl-4">
+                                    <label class="form-label" for="cl_<?= $chave ?>"><?= core_e($def['label']) ?></label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="cl_<?= $chave ?>" name="<?= $chave ?>"
+                                               min="0" max="3650" value="<?= (int) $limpezaDias[$chave] ?>">
+                                        <span class="input-group-text">dias</span>
+                                    </div>
+                                    <div class="form-text">
+                                        <?= core_e($def['detalhe']) ?>
+                                        <?php if ($def['minimo'] > 0): ?>
+                                            <br>Mínimo <?= (int) $def['minimo'] ?> dias (ou 0 para nunca apagar).
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-3">
+                                <button class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar prazos</button>
+                                <a class="btn btn-outline-secondary" href="<?= core_module_url('admin', ['a' => 'cleanup_run', 'simular' => 1]) ?>">
+                                    <i class="bi bi-search me-1"></i>Simular (só contar)
+                                </a>
+                                <!-- Formulário próprio (fora deste): <form> dentro de <form> é
+                                     HTML inválido e o navegador descarta o de dentro. -->
+                                <button class="btn btn-outline-danger" form="clRunForm"
+                                        onclick="return confirm('Executar a limpeza agora? Os registros fora do prazo serão apagados.')">
+                                    <i class="bi bi-trash3 me-1"></i>Limpar agora
+                                </button>
+                            </div>
+                        </form>
+                        <form method="post" action="<?= core_module_url('admin', ['a' => 'cleanup_run']) ?>" id="clRunForm" class="d-none">
+                            <?= Csrf::field() ?>
+                        </form>
+                        <p class="small text-muted mt-3 mb-0">
+                            A retenção dos <strong>pacotes de backup</strong> (quantos diários, semanais e mensais guardar)
+                            fica em <a href="<?= core_module_url('admin', ['a' => 'backup']) ?>">Administração &rsaquo; Backup</a>,
+                            porque lá ela aparece junto com a lista dos pacotes.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <div class="col-12 col-lg-6">
                 <div class="card mb-3">
                     <div class="card-header">E-mail (SMTP)</div>
@@ -1226,6 +1303,36 @@ switch ($action) {
         </div>
         <?php
         admin_render('Atualizações de banco', (string) ob_get_clean(), 'migrations');
+        break;
+
+    case 'cleanup_save':
+        Csrf::check();
+        Settings::set('cleanup.enabled', !empty($_POST['enabled']) ? '1' : '0');
+        Core\Cleanup::save($_POST);
+        Audit::log('cleanup.save', 'settings', null, null, null, 'admin');
+        Flash::set('success', 'Prazos de limpeza salvos.');
+        core_redirect('index.php?m=admin&a=settings');
+        break;
+
+    case 'cleanup_run':
+        // GET com ?simular=1 apenas conta; a execução de verdade é POST com
+        // CSRF, para que um link não apague nada.
+        $simular = $_SERVER['REQUEST_METHOD'] !== 'POST';
+        if (!$simular) {
+            Csrf::check();
+        }
+        $r = Core\Cleanup::run($simular);
+        $linhas = [];
+        foreach ($r['itens'] as $i) {
+            if (($i['qtd'] ?? 0) > 0) {
+                $linhas[] = $i['label'] . ': ' . $i['qtd'];
+            }
+        }
+        $resumo = $linhas === [] ? 'nada fora do prazo' : implode(' · ', $linhas);
+        Flash::set($r['total'] > 0 ? 'success' : 'info',
+            ($simular ? 'Simulação — seriam removidos ' : 'Limpeza concluída — removidos ')
+            . $r['total'] . ' registro(s). ' . $resumo);
+        core_redirect('index.php?m=admin&a=settings');
         break;
 
     case 'health':

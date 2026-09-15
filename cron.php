@@ -59,6 +59,32 @@ if ($only === '' || $only === 'core') {
         error_log('cron backup: ' . $e->getMessage());
     }
 
+    // Limpeza periódica: apaga o que passou do prazo configurado em
+    // Administração > Configurações. Roda DEPOIS do backup de propósito —
+    // o backup do dia é feito antes de qualquer coisa ser apagada.
+    try {
+        if (Core\Cleanup::habilitado()) {
+            $cl = Core\Cleanup::run();
+            printf("[core] limpeza: %d registro(s) removido(s) em %.0f ms\n", $cl['total'], $cl['ms']);
+            foreach ($cl['itens'] as $chave => $i) {
+                if (!empty($i['erro'])) {
+                    echo "[core] limpeza ERRO em {$chave}: {$i['erro']}\n";
+                }
+            }
+            // Retenção dos pacotes de backup (regra de diários/semanais/mensais).
+            $bkc = Core\Cleanup::backups();
+            if ($bkc['qtd'] > 0) {
+                printf("[core] backups antigos removidos: %d (%s)\n",
+                    $bkc['qtd'], Core\HealthCheck::bytes($bkc['bytes']));
+            }
+        } else {
+            echo "[core] limpeza: desativada nas configurações\n";
+        }
+    } catch (Throwable $e) {
+        echo "[core] ERRO na limpeza: {$e->getMessage()}\n";
+        error_log('cron cleanup: ' . $e->getMessage());
+    }
+
     // Marcador de execução: é o que permite à Administração dizer "o cron não
     // está agendado" em vez de deixar tudo pendente em silêncio.
     try {
