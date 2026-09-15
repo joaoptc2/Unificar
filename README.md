@@ -155,7 +155,7 @@ enfileirados e enviados pelo cron).
 
 ## E-mail (Administração → E-mail)
 
-Uma tela só para o e-mail, com cinco abas:
+Uma tela só para o e-mail, com sete abas:
 
 - **Configuração** — servidor SMTP, porta, segurança (STARTTLS, SSL/TLS ou
   sem criptografia), usuário e senha, endereço e nome do remetente,
@@ -164,11 +164,24 @@ Uma tela só para o e-mail, com cinco abas:
   campo mostra de onde vem o valor em uso (tela, arquivo ou padrão). A senha
   fica cifrada no banco (AES-256-GCM com a `app.key`). Para travar tudo no
   arquivo, acrescente `'lock' => true` ao bloco `mail`.
+- **Layout** — a casca de TODOS os e-mails do portal: cabeçalho com logo e
+  cor, corpo, rodapé com assinatura e aviso, mais fonte, largura e cantos.
+  A pré-visualização ao lado acompanha cada ajuste. A casca é aplicada no
+  momento do envio, num ponto só, então vale inclusive para o que já está na
+  fila — e pode ser desligada para voltar ao comportamento anterior (cada
+  módulo com o seu HTML). O HTML gerado usa tabelas e estilo embutido, que é
+  o que Outlook e Gmail renderizam de forma previsível.
 - **Teste de entrega** — envia uma mensagem de teste, com assunto e corpo
   fixos escritos pelo próprio sistema, por um destes caminhos: direto pelo
   SMTP, pela função `mail()` do PHP ou **pela fila** (este último é o que
   prova que o cron está agendado na hospedagem). Limite de 12 testes por
   hora, para o botão não virar ferramenta de disparo.
+- **Recebimento** — abre a caixa do portal por **IMAP ou POP3** e lista o
+  que chegou. Com "ciclo completo" ela envia uma mensagem com um código no
+  assunto e procura por ele na caixa, respondendo a pergunta inteira: saiu e
+  chegou. Não depende da extensão `imap` do PHP (ausente na maioria das
+  hospedagens) — fala o protocolo direto, como o envio faz com SMTP. A senha
+  da caixa fica cifrada, como a do SMTP.
 - **Fila** — pendentes, retidas, falhas e enviadas, com o motivo de cada
   falha e a via usada (SMTP ou `mail()`). É a antiga tela "Fila de e-mails";
   a rota `?m=admin&a=mailqueue` continua funcionando e cai aqui.
@@ -351,9 +364,16 @@ timbrado — use "Salvar como PDF" do navegador.
 
 ## Módulo Documentos (gestão documental / qualidade)
 
-- **Seletor de setor** no topo de todas as telas ("Todos os setores" ou
-  um setor específico), filtrando documentos, indicadores, planos de ação
-  e dashboard.
+- **Setores independentes**: cada usuário enxerga apenas os documentos,
+  indicadores e planos de ação dos setores em que foi **incluído**
+  (Administração → Documentos → Setores → botão *Usuários*). Não é filtro de
+  tela: a restrição entra no `WHERE` de toda consulta, e abrir um id de outro
+  setor pela URL devolve "não encontrado". Documento **sem setor** é
+  institucional e aparece para todos. Quem tem `sectors.view_all` (ou é
+  administrador da plataforma) vê tudo.
+- **Seletor de setor** no topo de todas as telas, agora limitado aos setores
+  do próprio usuário — "Todos os setores" significa "todos os MEUS setores".
+  Ele apenas estreita a visão, nunca a amplia.
 - **Documentos controlados** (status, validade, revisão periódica,
   aprovação, ciência digital, alertas de vencimento) e **documentos não
   controlados** (apenas armazenados para consulta, sem validade nem
@@ -365,6 +385,17 @@ timbrado — use "Salvar como PDF" do navegador.
 - **Indicadores** em uma única tela (filtros, cartões total / na meta /
   fora da meta / dentro da tolerância, gráficos e tabela), modelos por
   categoria — inclusive **Financeiro** — e planos de ação (PDCA).
+- **Ciência com ciclo**: toda mudança de status (e toda versão nova)
+  **redefine** as confirmações de leitura — quem leu o texto anterior confirma
+  de novo. As confirmações antigas não são apagadas: viram histórico, com o
+  ciclo, a versão e o status em que foram dadas. É a prova que a acreditação
+  pede.
+- **Histórico de modificações** de cada documento: cadastro, edições (com os
+  campos que mudaram, de/para), mudanças de status, versões, revisões,
+  redefinições de ciência e as próprias ciências.
+- **Planos de ação (PDCA)** com o indicador escolhido no próprio formulário,
+  agrupado por setor, e a possibilidade de vincular um plano existente a
+  outro indicador.
 - **Conformidade** integrada ao dashboard.
 
 ## Módulo Comunicação (chat)
@@ -375,6 +406,14 @@ presença. Funções extras do sistema antigo (tarefas, reuniões,
 calendário, equipes, processos, enquetes, painel) foram descontinuadas;
 categorias de canais e emojis personalizados são configurados na
 Administração.
+
+**Exclusão de mensagens**: só dentro de uma janela curta depois do envio (1
+minuto por padrão, de "não permitir" a 24 h em Administração → Comunicação →
+Mensagens). O prazo vale para **todos**, inclusive para quem tem
+`chat.moderate` — há uma exceção que precisa ser ligada de propósito, para os
+casos de conteúdo impróprio. O botão de excluir some da tela quando o tempo
+acaba, sem recarregar a página, e a idade é medida pelo relógio do banco (o
+mesmo que gravou a mensagem).
 
 ## Módulo RH
 
@@ -398,7 +437,13 @@ Administração.
 - **Brindes**: o RH cadastra brindes com custo em pontos e estoque; o
   funcionário resgata pelo portal e o RH aprova/entrega.
 - **Aniversariantes**: exportação em A4 (imprimir/PDF) com layout
-  personalizável (Administração → RH → Aniversariantes).
+  personalizável **sem escrever HTML** (Administração → RH →
+  Aniversariantes): modelo (cartões, lista, tabela ou faixas), número de
+  colunas, cor de destaque, fundo, cor do texto, borda, tamanho do título e
+  do nome, formato e tamanho da foto e quais informações aparecem — tudo com
+  pré-visualização ao lado que acompanha cada ajuste. O modo **avançado**
+  (HTML e CSS na mão) continua disponível, e um botão gera o código a partir
+  do visual para servir de ponto de partida.
 - Departamentos e cargos são configurados na Administração.
 
 ## Módulo Manutenção
@@ -406,8 +451,13 @@ Administração.
 - Todo equipamento recebe um **código de identificação único de 12
   dígitos** (com dígito verificador) que gera **código de barras** e
   **QR code**; equipamentos antigos recebem o código automaticamente.
-- **Etiquetas** (50×30 mm, 70×40 mm ou folha A4) para impressão,
-  individuais ou em lote; **busca por código** (leitor USB ou digitação)
+- **Etiquetas** (50×30 mm, 70×40 mm, 100×50 mm ou folha A4) para impressão,
+  individuais ou em lote, com **cada elemento ocultável** na barra de
+  ferramentas (organização, nome, setor/código interno, QR, código de barras,
+  código em texto) e o **layout se reajustando** ao que sobrou — ocultar o
+  código de barras faz o QR crescer, ocultar o QR devolve a largura inteira
+  ao nome. A escolha vai na URL (sobrevive à impressão) e fica guardada no
+  navegador; **busca por código** (leitor USB ou digitação)
   e página de **histórico** do equipamento (OS, calibrações,
   preventivas, peças, custos, disponibilidade).
 - Setores e categorias de equipamentos são configurados na
@@ -487,10 +537,75 @@ php /caminho/para/cron.php            # CLI
 https://seu-dominio/cron.php?token=<cron_secret do config>   # HTTP
 ```
 
-Executa a fila de e-mails do núcleo e as rotinas de todos os módulos
-(vencimentos de documentos, preventivas de manutenção e códigos de
-equipamentos, aniversários/vencimentos do RH etc.). Use
-`--module=<slug>` (ou `&module=`) para executar só um módulo.
+Executa, nesta ordem: a fila de e-mails, o **backup agendado**, a **limpeza
+automática** (sempre depois do backup — o backup do dia é feito antes de
+qualquer coisa ser apagada) e as rotinas de todos os módulos (vencimentos de
+documentos, preventivas de manutenção e códigos de equipamentos,
+aniversários/vencimentos do RH etc.). Use `--module=<slug>` (ou `&module=`)
+para executar só um módulo.
+
+A Administração usa a marca de execução do cron para avisar quando ele
+parou, em vez de deixar tudo pendente em silêncio — ver o **checkup** abaixo.
+
+## Checkup de saúde do sistema (Administração → Atualizações de banco)
+
+A pergunta que aparece depois de toda atualização — "está tudo certo?" —
+respondida numa página só, agrupada em banco de dados, PHP e extensões,
+pastas e arquivos, segurança, rotinas/e-mail e backup. Cada problema vem com
+**o que fazer a respeito**.
+
+Entre o que ela detecta: migrações pendentes; tabelas que os módulos ativos
+esperam e não existem; tabela fora de InnoDB ou de utf8mb4;
+`max_allowed_packet` pequeno demais para restaurar um backup; extensões
+faltando; `post_max_size` menor que `upload_max_filesize` (que faz o upload
+falhar em silêncio); pasta sem permissão de escrita; disco quase cheio;
+`install.php` esquecido no servidor; `app.key` ainda a do exemplo; `app.debug`
+ligado em produção; cron parado; fila de e-mail travada; e backup velho ou
+inexistente.
+
+A página **só lê** — não altera nada — e é segura de abrir a qualquer
+momento, inclusive em produção.
+
+## Limpeza automática (Administração → Configurações)
+
+Por quantos dias cada tipo de registro é guardado. Passado o prazo, o cron
+apaga; **0 significa nunca apagar**.
+
+| Registro | Padrão | Mínimo |
+| --- | --- | --- |
+| Auditoria | 365 dias | 90 |
+| Notificações já lidas | 90 dias | 7 |
+| Fila de e-mail (enviados/descartados) | 60 dias | 7 |
+| Histórico de testes de e-mail | 30 dias | 1 |
+| Tentativas de login | 30 dias | 7 |
+| Pedidos de redefinição de senha | 7 dias | 1 |
+| Histórico de documentos | nunca | 365 |
+| Arquivos de log | 60 dias | 7 |
+| Temporários de backup | 2 dias | 1 |
+
+Três cuidados que valem a pena conhecer:
+
+- **O que está em uso nunca sai**: notificação não lida, e-mail pendente na
+  fila e o backup mais recente ficam, por mais velhos que sejam.
+- **Cada prazo tem um piso**, então um "30" digitado no lugar errado não
+  apaga um ano de auditoria — o valor é elevado ao mínimo da linha.
+- **A exclusão vai em lotes** de 2 mil linhas: um `DELETE` de milhões trava a
+  tabela e derrubaria o portal justamente durante a rotina noturna.
+
+Há **simulação** ("só contar") antes de apagar, e um botão para executar na
+hora. A retenção dos *pacotes* de backup (quantos diários, semanais e
+mensais) fica em Administração → Backup, junto da lista dos pacotes.
+
+## Notificações
+
+O sino consulta o servidor a cada **5 segundos** com a aba à frente e **20**
+em segundo plano (ambos configuráveis em Administração → Configurações),
+atualiza a lista junto e anuncia a chegada num aviso de canto. Voltar para a
+aba, focar a janela ou abrir o sino consulta na hora.
+
+É **um** poller para o portal inteiro: os contadores dos módulos se penduram
+nele (`window.PortalNotificacoes.aoAtualizar`) em vez de cada um abrir o seu,
+então a atualização ficou muito mais rápida sem multiplicar os pedidos.
 
 ## Segurança
 
