@@ -37,7 +37,7 @@ $coreActions = [
     'users', 'user_form', 'user_save', 'user_delete', 'user_perms', 'user_perms_save',
     'groups', 'group_form', 'group_save', 'group_delete',
     'modules', 'settings', 'appearance', 'appearance_save', 'appearance_export', 'audit',
-    'migrations', 'migrations_apply',
+    'migrations', 'migrations_apply', 'health',
     'backup', 'backup_create', 'backup_download', 'backup_delete', 'backup_verify',
     'backup_schedule_save',
     'mailqueue', 'mailqueue_process', 'mailqueue_retry',
@@ -1184,6 +1184,9 @@ switch ($action) {
         ob_start(); ?>
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
             <h1 class="h4 mb-0"><i class="bi bi-database-up me-2"></i>Atualizações de banco de dados</h1>
+            <a class="btn btn-outline-primary" href="<?= core_module_url('admin', ['a' => 'health']) ?>">
+                <i class="bi bi-heart-pulse me-1"></i>Checkup do sistema
+            </a>
             <?php if ($pending): ?>
                 <form method="post" action="<?= core_module_url('admin', ['a' => 'migrations_apply']) ?>"
                       onsubmit="return confirm('Aplicar <?= count($pending) ?> atualização(ões) pendente(s) no banco de dados agora?')">
@@ -1223,6 +1226,93 @@ switch ($action) {
         </div>
         <?php
         admin_render('Atualizações de banco', (string) ob_get_clean(), 'migrations');
+        break;
+
+    case 'health':
+        $grupos = Core\HealthCheck::all();
+        $resumo = Core\HealthCheck::resumo($grupos);
+        $cores  = ['ok' => 'success', 'aviso' => 'warning', 'erro' => 'danger', 'info' => 'secondary'];
+        $icones = ['ok' => 'bi-check-circle-fill', 'aviso' => 'bi-exclamation-triangle-fill',
+                   'erro' => 'bi-x-octagon-fill', 'info' => 'bi-info-circle-fill'];
+        ob_start(); ?>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h1 class="h4 mb-0"><i class="bi bi-heart-pulse me-2"></i>Checkup de saúde do sistema</h1>
+            <div class="d-flex gap-2">
+                <a class="btn btn-outline-secondary" href="<?= core_module_url('admin', ['a' => 'migrations']) ?>">
+                    <i class="bi bi-database-up me-1"></i>Atualizações de banco
+                </a>
+                <a class="btn btn-outline-primary" href="<?= core_module_url('admin', ['a' => 'health']) ?>">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Verificar de novo
+                </a>
+            </div>
+        </div>
+
+        <div class="alert alert-<?= $resumo['erro'] > 0 ? 'danger' : ($resumo['aviso'] > 0 ? 'warning' : 'success') ?> d-flex flex-wrap align-items-center gap-3">
+            <div class="fs-2">
+                <i class="bi <?= $resumo['erro'] > 0 ? 'bi-x-octagon' : ($resumo['aviso'] > 0 ? 'bi-exclamation-triangle' : 'bi-check-circle') ?>"></i>
+            </div>
+            <div class="flex-grow-1">
+                <h2 class="h5 mb-1">
+                    <?php if ($resumo['erro'] > 0): ?>
+                        <?= (int) $resumo['erro'] ?> item(ns) precisam de atenção
+                    <?php elseif ($resumo['aviso'] > 0): ?>
+                        Nada impede o funcionamento, mas há <?= (int) $resumo['aviso'] ?> recomendação(ões)
+                    <?php else: ?>
+                        Tudo certo
+                    <?php endif; ?>
+                </h2>
+                <div class="small">
+                    <span class="badge text-bg-success"><?= (int) $resumo['ok'] ?> ok</span>
+                    <span class="badge text-bg-warning"><?= (int) $resumo['aviso'] ?> atenção</span>
+                    <span class="badge text-bg-danger"><?= (int) $resumo['erro'] ?> problema</span>
+                    <span class="badge text-bg-secondary"><?= (int) $resumo['info'] ?> informação</span>
+                    <span class="text-muted ms-2">verificado em <?= core_e(date('d/m/Y H:i')) ?></span>
+                </div>
+            </div>
+        </div>
+
+        <p class="text-muted small">
+            Todos os itens são apenas leitura: esta página não altera nada no sistema. O que estiver marcado como
+            problema vem com o que fazer a respeito.
+        </p>
+
+        <?php foreach ($grupos as $chave => $itens):
+            $meta = Core\HealthCheck::GRUPOS[$chave] ?? ['label' => $chave, 'icon' => 'bi-dot'];
+            $piores = ['erro' => 0, 'aviso' => 0];
+            foreach ($itens as $i) { if (isset($piores[$i['nivel']])) { $piores[$i['nivel']]++; } }
+        ?>
+        <div class="card mb-3">
+            <div class="card-header d-flex flex-wrap align-items-center gap-2">
+                <i class="bi <?= core_e($meta['icon']) ?>"></i>
+                <strong><?= core_e($meta['label']) ?></strong>
+                <span class="ms-auto small">
+                    <?php if ($piores['erro']): ?><span class="badge text-bg-danger"><?= $piores['erro'] ?> problema(s)</span><?php endif; ?>
+                    <?php if ($piores['aviso']): ?><span class="badge text-bg-warning"><?= $piores['aviso'] ?> atenção</span><?php endif; ?>
+                    <?php if (!$piores['erro'] && !$piores['aviso']): ?><span class="badge text-bg-success">tudo ok</span><?php endif; ?>
+                </span>
+            </div>
+            <ul class="list-group list-group-flush">
+                <?php foreach ($itens as $i): ?>
+                <li class="list-group-item d-flex gap-3">
+                    <div class="text-<?= $cores[$i['nivel']] ?? 'secondary' ?> pt-1">
+                        <i class="bi <?= $icones[$i['nivel']] ?? 'bi-dot' ?>"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold"><?= core_e($i['titulo']) ?></div>
+                        <div class="small text-body-secondary"><?= core_e($i['detalhe']) ?></div>
+                        <?php if (!empty($i['acao'])): ?>
+                            <div class="small mt-1">
+                                <i class="bi bi-arrow-right-short"></i><strong>O que fazer:</strong> <?= core_e($i['acao']) ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <?php endforeach; ?>
+        <?php
+        admin_render('Checkup do sistema', (string) ob_get_clean(), 'migrations');
         break;
 
     case 'migrations_apply':
