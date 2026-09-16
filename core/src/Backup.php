@@ -2177,6 +2177,16 @@ final class Backup
             $resto = substr($rel, strlen('storage'));
             return rtrim(STORAGE_PATH, '/') . $resto;
         }
+        // O ÚNICO arquivo de configuração que o pacote carrega é
+        // 'config/config.php', e ele tem de voltar para o arquivo REALMENTE
+        // EM USO — que pode nem se chamar config.php, quando o caminho vem da
+        // constante ou da variável de ambiente UNIFICAR_CONFIG. Montar
+        // CONFIG_PATH . '/config.php' criaria um arquivo novo ao lado do
+        // verdadeiro: a restauração diria "pronto" e a instalação continuaria
+        // lendo a configuração antiga.
+        if ($rel === 'config/config.php' && defined('CONFIG_FILE')) {
+            return CONFIG_FILE;
+        }
         if ($rel === 'config' || str_starts_with($rel, 'config/')) {
             $resto = substr($rel, strlen('config'));
             return rtrim(CONFIG_PATH, '/') . $resto;
