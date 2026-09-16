@@ -16,8 +16,10 @@ final class Session
         }
 
         $lifetime = (int) Config::get('security.session_lifetime', 28800);
-        $secure   = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-                 || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+        // Mesma detecção do resto do sistema (Core\Https): antes esta cópia
+        // aceitava X-Forwarded-Proto de qualquer origem, o que deixava um
+        // cliente afirmar "vim por https" — e divergia do que o checkup via.
+        $secure   = Https::requestIsSecure();
 
         session_name((string) Config::get('security.session_name', 'portal_sess'));
         session_set_cookie_params([
