@@ -33,9 +33,24 @@ final class Migrations
         1022, // can't write; duplicate key
     ];
 
+    /**
+     * A raiz do SQL versionado — schema.sql, modules/ e migrations/.
+     *
+     * Existe como UM lugar só porque havia dois: aqui a pasta era
+     * BASE_PATH . '/sql', e no checkup era dirname(CORE_PATH) . '/sql'. As
+     * duas dão no mesmo enquanto core/ for filha da raiz, e passam a
+     * discordar no dia em que o código sair da área pública — uma acha os
+     * arquivos, a outra não, e o checkup diria "faltam tabelas" sobre um
+     * banco correto. Quem for mover as pastas muda este método e mais nada.
+     */
+    public static function raizSql(): string
+    {
+        return BASE_PATH . '/sql';
+    }
+
     public static function dir(): string
     {
-        return BASE_PATH . '/sql/migrations';
+        return self::raizSql() . '/migrations';
     }
 
     public static function ensureTable(): void

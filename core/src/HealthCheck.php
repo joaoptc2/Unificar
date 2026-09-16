@@ -169,9 +169,10 @@ final class HealthCheck
         }
 
         $esperadas = [];
+        $sqlRaiz   = Migrations::raizSql();
         $arquivos  = array_merge(
-            [dirname(CORE_PATH) . '/sql/schema.sql'],
-            glob(dirname(CORE_PATH) . '/sql/modules/*.sql') ?: []
+            [$sqlRaiz . '/schema.sql'],
+            glob($sqlRaiz . '/modules/*.sql') ?: []
         );
         foreach ($arquivos as $f) {
             if (!is_file($f)) {
