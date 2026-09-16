@@ -303,11 +303,21 @@ final class HealthCheck
         }
 
         // Onde config e storage realmente estão — e se isso é bom.
-        $foraConfig  = !str_starts_with(CONFIG_PATH . '/', $raiz . '/');
-        $foraStorage = !str_starts_with(rtrim(STORAGE_PATH, '/') . '/', $raiz . '/');
+        //
+        // A comparação é com a raiz SERVIDA pelo servidor web, não com a
+        // pasta da instalação: um portal numa subpasta do site
+        // (public_html/portal) tem a "pasta irmã" public_html/portal-config
+        // ainda dentro da área pública, e comparar com BASE_PATH diria
+        // "está fora" — uma mentira tranquilizadora.
+        [$raizPublica, $raizConfiavel] = Exposicao::raizPublica();
+        $refere = $raizPublica ?? $raiz;
+        $foraConfig  = !str_starts_with(CONFIG_PATH . '/', $refere . '/');
+        $foraStorage = !str_starts_with(rtrim(STORAGE_PATH, '/') . '/', $refere . '/');
+        $ressalva = $raizConfiavel ? '' : ' (comparado com a pasta da instalação: a raiz do site '
+                  . 'só é conhecida depois de abrir esta página pelo navegador)';
         $out[] = self::item($foraConfig ? 'ok' : 'aviso', 'Onde fica a configuração',
             CONFIG_FILE . ' (' . CONFIG_ORIGEM . ').'
-            . ($foraConfig ? ' Fora da área pública — nenhuma URL alcança.'
+            . ($foraConfig ? ' Fora da área pública — nenhuma URL alcança.' . $ressalva
                            : ' Dentro da área pública: enquanto o PHP executa, o acesso direto devolve '
                              . 'página em branco, mas no dia em que ele parar de processar .php sai o fonte '
                              . 'com a senha do banco.'),
@@ -315,7 +325,7 @@ final class HealthCheck
                              . 'do public_html" no README.');
         $out[] = self::item($foraStorage ? 'ok' : 'aviso', 'Onde ficam os dados',
             STORAGE_PATH . '.'
-            . ($foraStorage ? ' Fora da área pública — nenhuma URL alcança.'
+            . ($foraStorage ? ' Fora da área pública — nenhuma URL alcança.' . $ressalva
                             : ' Dentro da área pública: backup, log e anexo privado não são arquivos .php, '
                               . 'então nenhum interpretador protege — só a configuração do servidor, que '
                               . 'falha em silêncio no Nginx.'),

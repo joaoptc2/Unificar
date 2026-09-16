@@ -848,6 +848,14 @@ porque em hospedagem com *addon domains* o diretório acima é o **home da
 conta, compartilhado**: uma pasta chamada só `config` colidiria entre duas
 instalações, e em silêncio.
 
+**Se o portal fica numa subpasta do site** (`public_html/portal`), a irmã
+`public_html/portal-config` **continua dentro da área pública** — responde
+pela URL `/portal-config/`. O instalador detecta isso e sobe para a irmã da
+raiz do site; o checkup compara com a raiz **servida** (`DOCUMENT_ROOT`), não
+com a pasta da instalação, justamente para não dizer "está fora" quando não
+está. Como o `DOCUMENT_ROOT` só existe em requisição web e o teste roda no
+cron, o valor visto pelo navegador fica guardado para a linha de comando usar.
+
 O instalador de uma instalação nova já grava fora quando consegue criar a
 pasta irmã, com `chmod 0600`, e diz na tela onde gravou.
 

@@ -38,6 +38,15 @@ final class Exposicao
     /** Chave de Settings onde o último resultado é guardado. */
     private const CHAVE = 'seguranca.exposicao';
 
+    /**
+     * Prefixo que identifica um estouro de tempo no texto do erro. Só ESTE
+     * caso alimenta a desistência antecipada: um "não testei" por outro
+     * motivo (sem app.base_url, pasta fora da instalação) não indica servidor
+     * ocupado, e contá-lo fazia as pastas seguintes serem descartadas com uma
+     * justificativa falsa.
+     */
+    private const MARCA_TEMPO = "\u{200B}";
+
     /** Tempo máximo de cada busca, em segundos. Curto de propósito. */
     private const TEMPO_LIMITE = 4;
 
@@ -135,7 +144,7 @@ final class Exposicao
             }
 
             $r = self::testarPasta($rel, $meta) + ['pasta' => $rel];
-            $seguidos = ($r['estado'] === 'indeterminado' && $r['http'] === 0) ? $seguidos + 1 : 0;
+            $seguidos = !empty($r['por_tempo']) ? $seguidos + 1 : 0;
             $itens[] = $r;
         }
 
@@ -202,7 +211,23 @@ final class Exposicao
             ];
         }
 
-        // 3. Sem endereço não há teste — e a checagem vem ANTES de gravar
+        // 3. Dentro da área servida, mas fora da instalação: existe URL que
+        //    chega nela, só que ela não deriva de BASE_URL (que aponta para a
+        //    instalação). Dizer "fora" seria falso; testar com o endereço
+        //    errado daria um 404 que viraria "protegida". Fica indeterminado,
+        //    com o texto explicando o que fazer.
+        $raizApp = realpath(BASE_PATH);
+        if ($raizApp !== false && !str_starts_with($dir . DIRECTORY_SEPARATOR, $raizApp . DIRECTORY_SEPARATOR)) {
+            return [
+                'estado'  => 'indeterminado',
+                'detalhe' => 'A pasta (' . $dir . ') está dentro da área servida pelo servidor web, mas '
+                           . 'fora da instalação — provavelmente o portal fica numa subpasta do site. '
+                           . 'Não dá para montar o endereço dela a partir de app.base_url.',
+                'http'    => 0,
+            ];
+        }
+
+        // 4. Sem endereço não há teste — e a checagem vem ANTES de gravar
         //    qualquer coisa. app.base_url vazia é o PADRÃO do config de
         //    exemplo, e pela linha de comando (o caminho normal deste teste)
         //    não existe cabeçalho Host de onde tirar o endereço: sem isto a
@@ -219,7 +244,7 @@ final class Exposicao
             ];
         }
 
-        // 4. Dentro da área pública: só o teste real responde.
+        // 5. Dentro da instalação: só o teste real responde.
         if (!is_writable($dir)) {
             return [
                 'estado'  => 'indeterminado',
@@ -271,10 +296,12 @@ final class Exposicao
                 ];
             }
             if ($erro !== '') {
+                $porTempo = str_starts_with($erro, self::MARCA_TEMPO);
                 return [
-                    'estado'  => 'indeterminado',
-                    'detalhe' => 'Não consegui testar: ' . $erro,
-                    'http'    => $http,
+                    'estado'   => 'indeterminado',
+                    'detalhe'  => 'Não consegui testar: ' . ltrim($erro, self::MARCA_TEMPO),
+                    'http'     => $http,
+                    'por_tempo' => $porTempo,
                 ];
             }
 
@@ -368,9 +395,9 @@ final class Exposicao
         }
 
         if (in_array($nErro, self::codigos(['CURLE_OPERATION_TIMEDOUT', 'CURLE_OPERATION_TIMEOUTED']), true)) {
-            return [0, null, 'o servidor não respondeu a tempo. Costuma ser hospedagem com um '
-                           . 'processo de PHP só: ele está ocupado montando esta página e não sobra '
-                           . 'quem atenda o pedido. Rode o teste pelo cron.', $verificarTls];
+            return [0, null, self::MARCA_TEMPO . 'o servidor não respondeu a tempo. Costuma ser '
+                           . 'hospedagem com um processo de PHP só: ele está ocupado montando esta página '
+                           . 'e não sobra quem atenda o pedido. Rode o teste pelo cron.', $verificarTls];
         }
         return [0, null, $sErro !== '' ? $sErro : 'falha na requisição.', $verificarTls];
     }
@@ -416,11 +443,50 @@ final class Exposicao
         return realpath(BASE_PATH . '/' . $rel) ?: null;
     }
 
-    /** A pasta está sob a raiz pública da instalação? */
+    /**
+     * A raiz REALMENTE servida pelo servidor web.
+     *
+     * Não é BASE_PATH. Uma instalação pode morar numa SUBPASTA do docroot
+     * (/home/conta/public_html/portal), e nesse caso a "pasta irmã"
+     * public_html/portal-config continua dentro da área pública — servida
+     * pela URL /portal-config/. Comparar com BASE_PATH diria "está fora" e
+     * seria mentira.
+     *
+     * DOCUMENT_ROOT só existe em requisição web. Como o caminho normal desta
+     * sonda é o cron, o valor visto pela web fica guardado para a linha de
+     * comando usar.
+     *
+     * @return array{0:?string, 1:bool} [raiz, veioDoServidor]
+     */
+    public static function raizPublica(): array
+    {
+        $dr = trim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''));
+        if ($dr !== '' && ($real = realpath($dr)) !== false) {
+            // Guarda para o cron. Só grava quando muda, para não escrever a
+            // cada requisição.
+            try {
+                if ((string) Settings::get('seguranca.docroot', '') !== $real) {
+                    Settings::set('seguranca.docroot', $real);
+                }
+            } catch (\Throwable) {
+                // sem banco: o valor em memória já serve para esta execução.
+            }
+            return [$real, true];
+        }
+        $guardado = (string) Settings::get('seguranca.docroot', '');
+        if ($guardado !== '' && ($real = realpath($guardado)) !== false) {
+            return [$real, true];
+        }
+        // Nunca foi visto pela web: BASE_PATH é o melhor palpite disponível.
+        $base = realpath(BASE_PATH);
+        return [$base === false ? null : $base, false];
+    }
+
+    /** A pasta está sob a raiz servida pelo servidor web? */
     private static function dentroDaAreaPublica(string $dir): bool
     {
-        $raiz = realpath(BASE_PATH);
-        if ($raiz === false) {
+        [$raiz] = self::raizPublica();
+        if ($raiz === null) {
             return true;   // na dúvida, testa: um falso teste é melhor que um falso "ok".
         }
         return str_starts_with($dir . DIRECTORY_SEPARATOR, $raiz . DIRECTORY_SEPARATOR);

@@ -64,9 +64,24 @@ if ($configExistente !== null && empty($_GET['force'])) {
 // com outra instalação em hospedagem com addon domains, onde o diretório
 // acima é o home da conta, compartilhado.
 $configIrmao = dirname(__DIR__) . '/' . basename(__DIR__) . '-config';
+
+// Se a instalação está numa SUBPASTA do site (public_html/portal), a pasta
+// irmã continua dentro da área servida — public_html/portal-config responde
+// pela URL /portal-config/. Nesse caso, sobe para a irmã da RAIZ do site.
+$docroot = @realpath((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''));
+if ($docroot !== false && $docroot !== '' && str_starts_with($configIrmao . '/', $docroot . '/')) {
+    $configIrmao = dirname($docroot) . '/' . basename($docroot) . '-config';
+    // Se nem isso escapa (docroot na raiz do sistema, por exemplo), não há
+    // "fora" possível por aqui: o instalador grava dentro e diz a verdade.
+    if (str_starts_with($configIrmao . '/', $docroot . '/')) {
+        $configIrmao = '';
+    }
+}
+
 $configFile  = __DIR__ . '/config/config.php';
 $configFora  = false;
-if (@is_dir($configIrmao) ? @is_writable($configIrmao) : @mkdir($configIrmao, 0750, true)) {
+if ($configIrmao !== ''
+    && (@is_dir($configIrmao) ? @is_writable($configIrmao) : @mkdir($configIrmao, 0750, true))) {
     $configFile = $configIrmao . '/config.php';
     $configFora = true;
 }
@@ -211,7 +226,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         alcança esse arquivo, nem que o servidor web pare de processar PHP.
                     <?php else: ?>
                         — <strong>dentro da área pública</strong>, porque não foi possível criar a pasta
-                        <code><?= htmlspecialchars($configIrmao, ENT_QUOTES) ?></code>. Enquanto o PHP
+                        <code><?= htmlspecialchars($configIrmao !== '' ? $configIrmao : '(fora do site)', ENT_QUOTES) ?></code>. Enquanto o PHP
                         executa, um acesso direto devolve página em branco; mas no dia em que ele parar de
                         processar <code>.php</code>, sai o fonte com a senha do banco. Se puder, crie
                         aquela pasta e mova o arquivo para lá.
