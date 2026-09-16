@@ -85,6 +85,14 @@ return [
                 'responder' => 'Aceitar, recusar e concluir o que recebi',
             ],
         ],
+        'email' => [
+            'label'   => 'Caixa de e-mail pessoal',
+            'actions' => [
+                'view'   => 'Abrir e ler a própria caixa',
+                'manage' => 'Configurar os dados de conexão',
+                'enviar' => 'Responder mensagens',
+            ],
+        ],
         'formularios' => [
             'label'   => 'Formulários de solicitação',
             'actions' => [
@@ -113,6 +121,7 @@ return [
         if ($can('notas.view'))   { $items[] = ['label' => 'Notas',   'url' => $u('notas'),   'icon' => 'bi-journal-text', 'key' => 'notas']; }
         if ($can('solicitacoes.view')) { $items[] = ['label' => 'Solicitações', 'url' => $u('solicitacoes'), 'icon' => 'bi-inbox',      'key' => 'solicitacoes']; }
         if ($can('formularios.view'))  { $items[] = ['label' => 'Formulários',  'url' => $u('formularios'),  'icon' => 'bi-ui-checks',  'key' => 'formularios']; }
+        if ($can('email.view'))        { $items[] = ['label' => 'E-mail',       'url' => $u('email'),        'icon' => 'bi-envelope',   'key' => 'email']; }
 
         return [['heading' => 'Meu espaço', 'items' => $items]];
     },

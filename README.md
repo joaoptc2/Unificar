@@ -567,6 +567,7 @@ conteúdo é inteiramente privado — agenda, notas e tarefas de cada pessoa.
 | **Notas** | Bloco de notas com título, cor, fixação e arquivamento |
 | **Solicitações** | O que me pediram e o que eu pedi; aceitar vira tarefa minha |
 | **Formulários** | Os formulários que publico para receber pedidos, e os que posso preencher |
+| **E-mail** | Caixa Zoho por IMAP: ler e responder sem trocar de aba |
 
 ### Solicitações e formulários
 
@@ -613,6 +614,66 @@ Um efeito colateral disso era grave e foi corrigido junto: a tela de
 permissões listava o módulo, aceitava desmarcar, gravava e dizia "atualizado"
 — **sem revogar nada**, porque o conjunto era devolvido antes de qualquer
 leitura das concessões. Agora a negação explícita vale também aqui.
+
+### Caixa de e-mail pessoal (IMAP)
+
+Ler e responder o e-mail de trabalho sem trocar de aba. Configurado para o
+Zoho por padrão (`imap.zoho.com:993`), serve qualquer servidor IMAP.
+
+#### A senha NÃO é guardada — e isso é a decisão central
+
+Uma análise de risco antes de escrever o código mudou o desenho. Três fatos
+decidiram:
+
+- a **senha de aplicativo do Zoho contorna a verificação em duas etapas** e
+  **nunca expira** — nem quando a senha principal da conta é trocada. Um
+  vazamento não se cura com o tempo nem com "todo mundo troque a senha": só
+  com revogação individual, uma por uma, dentro do Zoho;
+- `MailSecret::hide()` **nunca falha**: sem OpenSSL ela grava base64 e devolve
+  normalmente. Quem confiasse no retorno gravaria texto claro sem perceber;
+- o banco e o `config.php` (de onde sai a chave de cifra) ficam no **mesmo
+  servidor**. "Só vaza se os dois vazarem" é uma leitura de arquivo, não dois
+  incidentes independentes.
+
+Então a tabela `meu_email_contas` **não tem coluna de senha**. A pessoa digita
+a senha de aplicativo uma vez por sessão; ela vive em `$_SESSION` e morre com
+ela. Conferido: um dump completo do banco tem **zero** ocorrências da senha, e
+o pacote de backup também.
+
+**O limite honesto:** enquanto a caixa está aberta, a senha está no arquivo de
+sessão, no disco do servidor (`-rw-------`, em diretório sem leitura para
+outros usuários). Ela não está no banco nem no backup, e some quando a sessão
+expira — mas não é "em lugar nenhum".
+
+**O caminho para não digitar toda vez** é OAuth 2.0 com o Zoho: guarda-se um
+*refresh token* em vez da senha, com escopo só de e-mail, revogável pela
+própria pessoa e sem anular o 2FA. Fica como evolução; exige registrar um
+aplicativo no Zoho Developer Console.
+
+#### O cliente IMAP é próprio
+
+`Core\MailInbox` não serviu: ele é um **diagnóstico de um tiro** — conecta,
+autentica, conta as mensagens, lê alguns cabeçalhos e sai. Não lê corpo, e
+sobretudo **lê sempre linha a linha**. O corpo de uma mensagem chega num
+*literal* (`{4096}` seguido de 4096 bytes crus) que pode conter qualquer
+coisa, inclusive uma linha que começa com a etiqueta do comando — lendo linha
+a linha, o cliente confunde conteúdo com protocolo.
+
+`Core\ImapCliente` é uma instância (não estático), entende literais, busca por
+UID e sabe marcar como lida. `Core\Mime` faz a leitura do que chega:
+`=?UTF-8?B?...?=` no assunto, quoted-printable, base64, multipart aninhado,
+conversão de charset e o preâmbulo que não é conteúdo.
+
+Nada usa a extensão `imap` do PHP: ela foi separada do núcleo e falta na maior
+parte das hospedagens compartilhadas — que é onde este sistema roda.
+
+#### Como isso é testado
+
+`imap.zoho.com` não é alcançável do ambiente de teste, e "funciona em teoria"
+não é teste. `scripts/imap_falso.py` é um servidor IMAP que fala o protocolo
+de verdade e serve três mensagens escolhidas para quebrar implementações
+descuidadas: assunto em RFC2047, corpo quoted-printable, uma mensagem em
+ISO-8859-1 com bytes altos crus, e um multipart com preâmbulo e parte base64.
 
 ### Privacidade: como ela é garantida
 

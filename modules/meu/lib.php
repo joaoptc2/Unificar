@@ -368,3 +368,83 @@ function meu_valida_resposta(array $campo, mixed $bruto): ?array
 
     return null;
 }
+
+// ── Etapa 3: caixa de e-mail pessoal ───────────────────────────────────────
+//
+// A SENHA NUNCA É GRAVADA. Ela vive em $_SESSION e morre com a sessão.
+// O motivo está no comentário da tabela meu_email_contas; o resumo é que a
+// senha de aplicativo do Zoho contorna o 2FA e nunca expira, então guardá-la
+// transformaria o hospital em custodiante da chave da caixa de cada pessoa —
+// com o banco e a chave de cifra morando no mesmo servidor.
+
+/** Chave da senha na sessão, por usuário (uma sessão pode trocar de conta). */
+function meu_email_chave_sessao(): string
+{
+    return '_meu_email_senha_' . meu_uid();
+}
+
+/** Configuração da caixa do usuário, ou null. */
+function meu_email_conta(): ?array
+{
+    return DB::queryOne('SELECT * FROM meu_email_contas WHERE user_id = ?', [meu_uid()]);
+}
+
+/** A senha desta sessão, ou '' se ainda não foi digitada. */
+function meu_email_senha(): string
+{
+    return (string) ($_SESSION[meu_email_chave_sessao()] ?? '');
+}
+
+function meu_email_destrancar(string $senha): void
+{
+    $_SESSION[meu_email_chave_sessao()] = $senha;
+}
+
+function meu_email_trancar(): void
+{
+    unset($_SESSION[meu_email_chave_sessao()]);
+}
+
+/**
+ * Abre a conexão IMAP com a conta do usuário e a senha da sessão.
+ * Quem chamar é responsável por fechar.
+ */
+function meu_email_conectar(array $conta): Core\ImapCliente
+{
+    $senha = meu_email_senha();
+    if ($senha === '') {
+        throw new RuntimeException('A senha desta sessão não foi informada.');
+    }
+    $c = new Core\ImapCliente(
+        (string) $conta['host'], (int) $conta['porta'], (string) $conta['seguranca'], 20
+    );
+    $c->conectar();
+    $c->autenticar((string) $conta['usuario'], $senha);
+    return $c;
+}
+
+/**
+ * Assunto de resposta: "Re:" só uma vez, em qualquer capitalização, e
+ * reconhecendo também o "Res:" que clientes em português usam.
+ */
+function meu_email_assunto_resposta(string $assunto): string
+{
+    $limpo = (string) preg_replace('/^\s*(re|res|rv|enc|fwd?)\s*:\s*/iu', '', $assunto);
+    return 'Re: ' . mb_substr(trim($limpo), 0, 180);
+}
+
+/** Citação do original, no formato que todo cliente de e-mail entende. */
+function meu_email_citar(array $msg): string
+{
+    $quando = $msg['data'] !== '' ? date('d/m/Y \à\s H:i', (int) strtotime($msg['data'])) : '';
+    $quem   = $msg['de']['nome'] !== '' ? $msg['de']['nome'] : $msg['de']['email'];
+    $linhas = preg_split('/\r\n|\n|\r/', trim((string) $msg['texto'])) ?: [];
+    // Corta a citação: responder a uma mensagem que já tem dez respostas
+    // dentro geraria um e-mail de páginas.
+    if (count($linhas) > 40) {
+        $linhas = array_slice($linhas, 0, 40);
+        $linhas[] = '[...]';
+    }
+    return "\n\nEm " . $quando . ', ' . $quem . " escreveu:\n> "
+         . implode("\n> ", $linhas);
+}
