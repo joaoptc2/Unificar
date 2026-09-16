@@ -253,9 +253,18 @@ final class Cleanup
     {
         $limite = time() - $dias * 86400;
         $qtd = 0; $bytes = 0;
-        $raiz = dirname(CORE_PATH);
 
-        $pastas = array_merge([$raiz . '/logs'], glob($raiz . '/modules/*/logs') ?: []);
+        // A pasta de logs do sistema é a de DADOS (pode estar fora da área
+        // pública), e a dos módulos segue o CÓDIGO. Antes as duas eram
+        // deduzidas de dirname(CORE_PATH), o que dava no mesmo só enquanto
+        // tudo morava junto — e, pior, deixava STORAGE_PATH/logs INTEIRA de
+        // fora: o php_errors.log, que é o log que o sistema realmente
+        // escreve, nunca era limpo. A retenção que o administrador configura
+        // não alcançava o único arquivo que cresce sozinho.
+        $pastas = array_merge(
+            [STORAGE_PATH . '/logs', BASE_PATH . '/logs'],
+            glob(MODULES_PATH . '/*/logs') ?: []
+        );
         foreach ($pastas as $pasta) {
             if (!is_dir($pasta)) {
                 continue;
@@ -268,7 +277,11 @@ final class Cleanup
                 // O log em uso não é apagado, só esvaziado: apagar o arquivo
                 // aberto deixa o PHP escrevendo num descritor órfão e o
                 // registro some sem ninguém perceber.
-                $emUso = basename($arq) === 'app_errors.log';
+                // O log em uso é o que o bootstrap abriu com ini_set('error_log').
+                // Antes a comparação era com 'app_errors.log', que é o log de um
+                // MÓDULO — ou seja, protegia o arquivo errado e deixava o
+                // descritor aberto do php_errors.log ser apagado debaixo do PHP.
+                $emUso = realpath($arq) === realpath((string) ini_get('error_log'));
                 if (!$simular) {
                     if ($emUso) {
                         @file_put_contents($arq, '');

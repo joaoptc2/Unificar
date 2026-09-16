@@ -375,13 +375,43 @@ final class HealthCheck
         }
 
         // Log de erros crescendo sem parar.
-        $log = $raiz . '/logs/app_errors.log';
-        if (is_file($log)) {
-            $tam = (int) filesize($log);
-            $out[] = $tam > 50 * 1024 * 1024
-                ? self::item('aviso', 'Log de erros', 'app_errors.log com ' . self::bytes($tam) . '.',
-                    'Verifique os erros recorrentes e configure a limpeza automática nas configurações.')
-                : self::item('ok', 'Log de erros', 'app_errors.log com ' . self::bytes($tam) . '.');
+        //
+        // Este item vigiava "<raiz>/logs/app_errors.log" — um arquivo que
+        // NÃO EXISTE em instalação nenhuma. O log do PHP é definido em
+        // core/bootstrap.php como STORAGE_PATH/logs/php_errors.log, e
+        // app_errors.log é de um módulo (documentos), dentro da pasta dele.
+        // Como o is_file() dava falso, o item simplesmente NÃO APARECIA na
+        // tela: o checkup parecia cobrir o assunto e não cobria nada,
+        // enquanto o log de verdade crescia sem ninguém olhar. Numa conta com
+        // cota, o primeiro sintoma seria upload parando de funcionar.
+        $logs = array_merge(
+            [STORAGE_PATH . '/logs/php_errors.log'],
+            glob(MODULES_PATH . '/*/logs/*.log') ?: []
+        );
+        $maior = null;
+        $total = 0;
+        foreach ($logs as $log) {
+            if (!@is_file($log)) {
+                continue;
+            }
+            $tam    = (int) @filesize($log);
+            $total += $tam;
+            if ($maior === null || $tam > $maior[1]) {
+                $maior = [$log, $tam];
+            }
+        }
+        if ($maior === null) {
+            $out[] = self::item('ok', 'Log de erros', 'Nenhum arquivo de log com conteúdo ainda.');
+        } else {
+            $out[] = $total > 50 * 1024 * 1024
+                ? self::item('aviso', 'Log de erros',
+                    self::bytes($total) . ' em log(s); o maior é ' . basename($maior[0])
+                    . ' (' . self::bytes($maior[1]) . ') em ' . dirname($maior[0]) . '.',
+                    'Veja os erros recorrentes — um log que cresce assim costuma ser o MESMO erro '
+                    . 'repetindo — e ligue a limpeza automática nas configurações.')
+                : self::item('ok', 'Log de erros',
+                    self::bytes($total) . ' em log(s); o maior é ' . basename($maior[0])
+                    . ' (' . self::bytes($maior[1]) . ').');
         }
 
         return $out;
