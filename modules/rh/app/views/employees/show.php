@@ -78,6 +78,12 @@
                         <i class="bi bi-file-medical me-1"></i> Novo Atestado
                     </a>
                 <?php endif; ?>
+                <?php if (core_can('onboarding.view')): ?>
+                    <a href="index.php?m=rh&page=onboarding&action=progress&employee_id=<?= $employee['id'] ?>"
+                       class="btn btn-outline-primary btn-sm w-100 mb-2">
+                        <i class="bi bi-list-check me-1"></i> Checklist de admissão/desligamento
+                    </a>
+                <?php endif; ?>
                 <?php if (core_can('employees.delete')): ?>
                     <form method="POST" action="index.php?m=rh&page=employees&action=delete" class="mt-3">
                         <?= Csrf::field() ?>

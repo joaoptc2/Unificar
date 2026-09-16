@@ -8,8 +8,26 @@ class OnboardingController
     {
         core_require('onboarding.view');
         $templates = OnboardingTemplate::all(['order' => 'type, name']);
+
+        // Checklists em andamento. Sem esta lista o módulo ficava cego: a
+        // tela de progresso só era alcançável pelo redirecionamento logo
+        // depois de atribuir, e nenhum link levava de volta. Na prática,
+        // um checklist atribuído sumia.
+        $andamento = $this->db->query(
+            'SELECT e.id, e.full_name, e.status, t.type,
+                    COUNT(*)            AS total,
+                    SUM(p.completed)    AS feitos,
+                    MAX(p.completed_at) AS ultima
+               FROM rh_onboarding_progress p
+               JOIN rh_employees e          ON e.id = p.employee_id
+               JOIN rh_onboarding_templates t ON t.id = p.template_id
+              GROUP BY e.id, e.full_name, e.status, t.type
+              ORDER BY (SUM(p.completed) = COUNT(*)), t.type, e.full_name'
+        )->fetchAll();
+
         View::render('onboarding/index', [
-            'pageTitle' => 'Onboarding / Offboarding', 'page' => 'onboarding', 'templates' => $templates,
+            'pageTitle' => 'Onboarding / Offboarding', 'page' => 'onboarding',
+            'templates' => $templates, 'andamento' => $andamento,
         ]);
     }
 
