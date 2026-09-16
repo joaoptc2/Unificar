@@ -528,7 +528,7 @@ final class HealthCheck
         $ultimo = (string) Settings::get('cron.last_run_at', '');
         if ($ultimo === '') {
             $out[] = self::item('aviso', 'Rotina periódica (cron)', 'Nunca executou.',
-                'Agende "php cron.php" (ou a URL cron.php?key=…) para rodar de hora em hora: é o que envia avisos de vencimento, processa a fila de e-mail e faz o backup agendado.');
+                'Agende "php cron.php" (ou a URL cron.php?token=… com o cron_secret do config) para rodar de hora em hora: é o que envia avisos de vencimento, processa a fila de e-mail e faz o backup agendado.');
         } else {
             $idade = time() - (strtotime($ultimo) ?: 0);
             $nivel = $idade > 86400 ? 'erro' : ($idade > 7200 ? 'aviso' : 'ok');
