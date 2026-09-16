@@ -24,6 +24,15 @@ final class Modules
 {
     private static ?array $manifests = null;
 
+    /**
+     * Slugs cujo nome foi escolhido pelo hospital em Administração > Módulos
+     * (coluna modules.label). Um rótulo próprio vence o nome dinâmico de
+     * forUser(): quem renomeou o módulo quer ver o nome que escolheu.
+     *
+     * @var array<string,bool>
+     */
+    private static array $rotuloProprio = [];
+
     /** @return array<string, array> slug => manifesto (ordenado) */
     public static function all(): array
     {
@@ -54,6 +63,7 @@ final class Modules
                 $m['show_in_topbar'] = (bool) ($meta[$slug]['show_in_topbar'] ?? true);
                 if (!empty($meta[$slug]['label'])) {
                     $m['name'] = (string) $meta[$slug]['label'];
+                    self::$rotuloProprio[$slug] = true;
                 }
                 if (!empty($meta[$slug]['custom_icon'])) {
                     $m['icon'] = (string) $meta[$slug]['custom_icon'];
@@ -82,14 +92,28 @@ final class Modules
     /** Módulos visíveis no menu superior para o usuário logado. */
     public static function forUser(int $userId): array
     {
+        $user   = Auth::user();
         $result = [];
         foreach (self::all() as $slug => $manifest) {
             if (!($manifest['active'] ?? true)) {
                 continue;
             }
-            if (Perms::hasAny($userId, $slug)) {
-                $result[$slug] = $manifest;
+            if (!Perms::hasAny($userId, $slug)) {
+                continue;
             }
+            // Nome de exibição por pessoa (o módulo "Meu espaço" mostra o
+            // primeiro nome de quem está logado). Só vale aqui, nas telas do
+            // usuário: Administração > Módulos continua vendo o nome
+            // canônico do manifesto, e é esse que vai para o banco.
+            // Um rótulo escolhido pelo hospital manda mais que os dois.
+            if (isset($manifest['display_name']) && is_callable($manifest['display_name'])
+                && empty(self::$rotuloProprio[$slug]) && $user !== null) {
+                $nome = ($manifest['display_name'])($user);
+                if (is_string($nome) && trim($nome) !== '') {
+                    $manifest['name'] = trim($nome);
+                }
+            }
+            $result[$slug] = $manifest;
         }
         return $result;
     }

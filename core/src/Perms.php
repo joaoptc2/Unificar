@@ -106,6 +106,24 @@ final class Perms
             return self::$effective[$userId][$module] = $set;
         }
 
+        // Módulo de uso pessoal ('todos' => true no manifesto): toda pessoa
+        // logada recebe o conjunto inteiro, sem concessão nenhuma no banco.
+        //
+        // Isto só é seguro porque um módulo assim não expõe dado de outra
+        // pessoa: todas as suas tabelas têm user_id e todas as suas consultas
+        // filtram por ele. Conceder "tudo" ali é conceder acesso ao próprio
+        // espaço — o contrário de um furo. A alternativa, semear concessões
+        // para cada usuário, quebraria no primeiro funcionário admitido
+        // depois da instalação.
+        $manifest = Modules::manifest($module);
+        if ($manifest !== null && !empty($manifest['todos'])) {
+            $set = [];
+            foreach (self::allKeys($module) as $key) {
+                $set[$key] = true;
+            }
+            return self::$effective[$userId][$module] = $set;
+        }
+
         // As concessões de TODOS os módulos são lidas de uma vez (duas
         // consultas por request): o menu superior, a administração e os
         // gates do módulo ativo consultam vários módulos em sequência.

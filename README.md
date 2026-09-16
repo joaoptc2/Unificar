@@ -553,6 +553,46 @@ Editor de texto com os layouts do hospital (página, capa, fontes),
 versionamento das edições (visualizar/restaurar qualquer versão), cópia
 pública opcional por link e exportação em PDF.
 
+## Módulo Meu espaço (organização pessoal)
+
+O módulo que **leva o nome de quem está usando**: quem entra como João vê
+"João" no portal e no menu, não um rótulo genérico. É o único módulo cujo
+conteúdo é inteiramente privado — agenda, notas e tarefas de cada pessoa.
+
+| Tela | O que faz |
+| --- | --- |
+| **Hoje** | Abre por padrão: compromissos do dia (com selo *agora* no que está em curso), próximas tarefas, notas recentes e um aviso quando há prazo vencido |
+| **Agenda** | Semana de segunda a domingo, com cor por compromisso, local, observação e lembrete |
+| **Tarefas** | Prazo, prioridade e situação; as de prazo mais apertado primeiro, concluídas separadas |
+| **Notas** | Bloco de notas com título, cor, fixação e arquivamento |
+
+### Privacidade: como ela é garantida
+
+Toda tabela do módulo tem `user_id` e **toda** consulta filtra por ele —
+inclusive `UPDATE` e `DELETE`, que levam `user_id` no `WHERE`. Adivinhar o
+id de um registro alheio não adianta: a instrução não casa nenhuma linha.
+Nem o administrador global vê a agenda de outra pessoa por estas telas.
+Conferido com dois usuários reais: nas três telas e no acesso direto por
+id, nada do outro aparece.
+
+Por isso o módulo é marcado `'todos' => true` no manifesto e toda pessoa
+logada o recebe sem o administrador conceder nada. Conceder "tudo" num
+módulo que só mostra o próprio espaço é conceder acesso a si mesmo; semear
+permissões por usuário quebraria no primeiro funcionário admitido depois
+da instalação.
+
+### Dois detalhes que custam caro quando faltam
+
+- **Plantão que vira a noite.** Fim antes do início vira o dia seguinte, e
+  a consulta da semana busca por **interseção** (`inicio <= fim_periodo AND
+  fim >= inicio_periodo`), não por "começa dentro do dia". Sem isso o
+  plantão das 19h às 7h sumiria do segundo dia — que é justamente quando
+  ele termina. Na tela, o dia seguinte mostra o mesmo compromisso com um
+  marcador `+1`.
+- **Nota colada de fora.** O conteúdo passa pelo `HtmlSanitizer` dos
+  comunicados: o dono da nota é quem escreve, mas colar de um e-mail traz
+  junto o que veio.
+
 ## Módulo Planejamento (planejamento e gestão de processos)
 
 - **Planos de trabalho e planejamento organizacional**: objetivos → metas
