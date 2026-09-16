@@ -105,6 +105,14 @@ final class Exposicao
                 'porque' => 'O código do núcleo. Serve como mapa para quem procura falha.',
                 'nivel'  => 'aviso',
             ],
+            'scripts' => [
+                'rotulo' => 'scripts',
+                'porque' => 'Utilitários de linha de comando — backup, restauração e o aplicador '
+                          . 'de migrações. É a pasta mais perigosa da lista porque ela não só '
+                          . 'vaza: ela EXECUTA. Um GET anônimo em scripts/migrate.php já aplicou '
+                          . 'migração de esquema no banco, e foi assim que esta entrada nasceu.',
+                'nivel'  => 'erro',
+            ],
             'docs' => [
                 'rotulo' => 'docs',
                 'porque' => 'Documentação interna da instalação.',

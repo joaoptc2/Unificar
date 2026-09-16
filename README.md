@@ -953,9 +953,37 @@ então a atualização ficou muito mais rápida sem multiplicar os pedidos.
   `AllowOverride`), negue explicitamente os diretórios internos:
 
   ```nginx
-  location ~ ^/(core|config|sql|storage|docs)/ { deny all; }
+  location ~ ^/(core|config|sql|storage|docs|scripts)/ { deny all; }
   location ~ ^/uploads/.*\.(php|phar|phtml)$ { deny all; }
   ```
+
+### `scripts/` executava por URL — e a tranca não podia ser o `.htaccess`
+
+Uma varredura desta pasta achou o pior caso possível de "protegido por
+configuração": `scripts/` **não estava** na lista do `.htaccess` da raiz nem
+no trecho de Nginx aqui acima, e `migrate.php`, `migrate_role_grants.php` e
+`test_contraste.php` não tinham nenhuma guarda de linha de comando.
+
+Reproduzido, não deduzido: com um arquivo pendente em `sql/migrations/`, um
+**GET anônimo** em `/scripts/migrate.php` — sem login, sem token, sem nada —
+aplicou a migração e criou a tabela no banco. O `migrate_role_grants.php`
+também rodava, e devolvia o resultado da conversão na tela.
+
+A correção **não é** a linha nova no `.htaccess`. Essa linha entrou, e o
+trecho de Nginx acima também, mas as duas são a segunda tranca. A que vale é
+`scripts/_cli.php`: o primeiro `require` de todo script da pasta, **antes do
+bootstrap**, que recusa qualquer coisa que não seja `PHP_SAPI === 'cli'`.
+Carregar o núcleo primeiro abriria sessão e mandaria cabeçalho antes da
+recusa sair — trabalho e rastro para uma requisição que não deveria existir.
+
+O motivo de a guarda ficar no PHP é o mesmo que vale para o resto deste
+sistema: `.htaccess` falha em silêncio. Nginx o ignora, Apache com
+`AllowOverride None` o ignora, e uma cópia por FTP que perde arquivos ocultos
+o deixa para trás — nos três casos sem um aviso sequer. Um script que só é
+seguro quando o servidor colabora não é seguro.
+
+`scripts/` também entrou na sonda de exposição do checkup, com nível de
+**erro** — é a única pasta da lista que não apenas vaza, mas executa.
 
   Arquivos privados (anexos de comunicados, por exemplo) ficam em
   `storage/uploads/` e só são entregues pelo download autenticado do módulo;

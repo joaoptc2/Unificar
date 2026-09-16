@@ -6,7 +6,11 @@ Options -Indexes
 
 # Bloqueia acesso direto a diretórios internos
 RewriteEngine On
-RewriteRule ^(core|config|sql|storage|docs)(/|$) - [F,L]
+# `scripts` entrou nesta lista depois de um GET anônimo em
+# /scripts/migrate.php aplicar migração de esquema no banco. A recusa que
+# vale está dentro do próprio PHP (scripts/_cli.php); esta linha é a
+# segunda tranca, para o dia em que alguém puser um .php novo lá sem ela.
+RewriteRule ^(core|config|sql|storage|docs|scripts)(/|$) - [F,L]
 RewriteRule ^modules/.*\.(php|sql|md)$ - [F,L]
 
 # PHP nunca executa dentro de uploads
