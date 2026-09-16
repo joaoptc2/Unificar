@@ -545,7 +545,7 @@ final class Backup
                 if ($comArquivos) {
                     $raizes = $opts['roots'] ?? ['uploads', 'storage/uploads'];
                     foreach ($raizes as $raiz) {
-                        self::empacotaRaiz($escreve, (string) $raiz, $anota, $arqStats, $grupos);
+                        self::empacotaRaiz($escreve, (string) $raiz, $anota, $arqStats, $grupos, $avisos);
                     }
                 }
                 if ($comConfig) {
@@ -767,16 +767,27 @@ final class Backup
      * @param callable(?array):void $anota grava a entrada na lista (NDJSON)
      * @param array{total:int, bytes:int, diretorios:int} $stats
      * @param array<string, array{n:int, exemplos:string[]}> $grupos
+     * @param string[] $avisos
      */
     private static function empacotaRaiz(
         callable $escreve,
         string $raiz,
         callable $anota,
         array &$stats,
-        array &$grupos
+        array &$grupos,
+        array &$avisos
     ): void {
         $base = self::caminhoFisico(trim($raiz, '/'));
         if (!is_dir($base)) {
+            // Antes isto era um `return` mudo, e era a falha mais perigosa
+            // que um backup pode ter: o pacote sai COMPLETO aos olhos de
+            // quem olha — banco inteiro, manifesto, hash — só que sem um
+            // único anexo. Ninguém percebe até a hora de restaurar, que é a
+            // pior hora possível. A configuração ausente já avisava (mais
+            // acima, no mesmo método que chama este); a pasta de anexos não.
+            $avisos[] = 'A pasta "' . trim($raiz, '/') . '" NÃO entrou no pacote: '
+                      . $base . ' não existe ou não é um diretório. '
+                      . 'Se ela deveria ter anexos, este backup está incompleto.';
             return;
         }
         $backupReal = realpath(self::dir()) ?: self::dir();
