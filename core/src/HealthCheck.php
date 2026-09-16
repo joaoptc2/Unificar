@@ -280,7 +280,11 @@ final class HealthCheck
 
     private static function arquivos(): array
     {
-        $raiz = dirname(CORE_PATH);
+        // Tudo o que este método olha — uploads/ e o .htaccess dela — vive na
+        // área SERVIDA, não junto do código. Com as duas raízes separadas,
+        // dirname(CORE_PATH) apontaria para a pasta irmã e o checkup diria
+        // "pasta uploads não existe" sobre uma instalação sadia.
+        $raiz = BASE_PATH;
         $out  = [];
 
         // As pastas que o sistema precisa ESCREVER. config saiu desta lista:
@@ -450,7 +454,12 @@ final class HealthCheck
 
     private static function seguranca(): array
     {
-        $raiz = dirname(CORE_PATH);
+        // A raiz SERVIDA, não a do código. O install.php é um artefato da
+        // área pública: quando o código vai para a pasta irmã, procurá-lo por
+        // dirname(CORE_PATH) faz o checkup anunciar em verde "install.php já
+        // foi removido" com o install.php vivo e servido — o único aviso que
+        // existe sobre isso passaria a mentir, com selo de verificado.
+        $raiz = BASE_PATH;
         $out  = [];
 
         // Pastas internas realmente fechadas? Resultado do teste de exposição
@@ -460,6 +469,37 @@ final class HealthCheck
         // PHP só ela trava a própria página até estourar o tempo.
         foreach (self::exposicao() as $item) {
             $out[] = $item;
+        }
+
+        // ── Mudança pela metade ────────────────────────────────────────
+        // Mover pasta por FTP é COPIAR e depois APAGAR, e é o apagar que
+        // falha: o cliente perde a conexão, o servidor recusa uma pasta não
+        // vazia, ou a pessoa é interrompida. O resultado é o pior dos dois
+        // mundos — o portal roda do lugar novo (o localizador prefere a pasta
+        // irmã) e a cópia VELHA continua servida pela web, com o mesmo código
+        // e o mesmo estrago de antes.
+        //
+        // A sonda de exposição NÃO pega isso: depois da mudança ela procura
+        // essas pastas sob APP_PATH, que é justamente onde está a cópia boa.
+        // A perigosa é a que ela deixou de olhar, e por isso a conferência
+        // mora aqui.
+        if (APP_PATH !== BASE_PATH) {
+            $sobras = [];
+            foreach (['core', 'modules', 'sql', 'docs', 'scripts'] as $pasta) {
+                if (@is_dir($raiz . '/' . $pasta)) {
+                    $sobras[] = $pasta . '/';
+                }
+            }
+            $out[] = $sobras === []
+                ? self::item('ok', 'Separação do código',
+                    'O código está em ' . APP_PATH . ' e não sobrou cópia na área pública.')
+                : self::item('erro', 'Separação do código',
+                    'O código foi movido para ' . APP_PATH . ', mas sobrou cópia na área '
+                    . 'pública: ' . implode(', ', $sobras),
+                    'Apague essas pastas de ' . $raiz . '. Enquanto elas existirem, a mudança '
+                    . 'não protegeu nada: o servidor continua entregando o código por URL, e o '
+                    . 'portal roda a cópia de fora — ou seja, uma correção aplicada numa delas '
+                    . 'não tem efeito nenhum.');
         }
 
         $out[] = is_file($raiz . '/install.php')

@@ -36,6 +36,17 @@ namespace Core;
 final class Exposicao
 {
     /** Chave de Settings onde o último resultado é guardado. */
+    /**
+     * As pastas que viajam com o CÓDIGO (APP_PATH), e não com a área
+     * pública (BASE_PATH). Enquanto as duas raízes coincidem não faz
+     * diferença; quando o código vai para a pasta irmã, é o que separa
+     * "está fora, a salvo" de "sumiu". Procurá-las sob BASE_PATH fazia a
+     * sonda dizer "a pasta não existe nesta instalação" justamente sobre a
+     * pasta que acabou de ser posta a salvo — e ler "ausente" no lugar de
+     * "fora" faz o administrador desfazer a única coisa que deu certo.
+     */
+    private const PASTAS_DE_CODIGO = ['core', 'modules', 'sql', 'docs', 'scripts'];
+
     private const CHAVE = 'seguranca.exposicao';
 
     /**
@@ -220,6 +231,26 @@ final class Exposicao
         //    chegue nela, e o teste é desnecessário — é o melhor resultado
         //    possível, e o único que independe de configuração do servidor.
         if (!self::dentroDaAreaPublica($dir)) {
+            // "Fora" só é um FATO quando se sabe onde a área pública começa.
+            // Se o DOCUMENT_ROOT nunca foi visto (instalação que só roda pelo
+            // cron, por exemplo), raizPublica() devolve a raiz da instalação
+            // como PALPITE — e aí qualquer pasta irmã parece estar fora, mesmo
+            // quando a instalação mora numa subpasta do site e a irmã é
+            // servida por uma URL. Dizer "nenhuma URL alcança" nesse caso
+            // seria um "tudo certo" com selo de teste, que é o pior resultado
+            // possível para uma ferramenta que existe para ser acreditada.
+            [, $veioDoServidor] = self::raizPublica();
+            if (!$veioDoServidor) {
+                return [
+                    'estado'  => 'indeterminado',
+                    'detalhe' => 'A pasta (' . $dir . ') está fora da raiz da instalação, o que em '
+                               . 'geral significa que nenhuma URL chega nela — mas o sistema ainda '
+                               . 'não sabe onde o servidor web começa a servir, e sem isso não dá '
+                               . 'para afirmar. Abra esta tela pelo navegador uma vez: é o que '
+                               . 'ensina o DOCUMENT_ROOT ao sistema.',
+                    'http'    => 0,
+                ];
+            }
             return [
                 'estado'  => 'fora',
                 'detalhe' => 'Fica fora da pasta pública (' . $dir . '). Nenhuma URL alcança.',
@@ -455,6 +486,10 @@ final class Exposicao
         }
         if ($rel === 'config' && defined('CONFIG_PATH')) {
             return realpath(CONFIG_PATH) ?: null;
+        }
+        // Pasta de código segue APP_PATH; o resto segue a raiz pública.
+        if (in_array($rel, self::PASTAS_DE_CODIGO, true) && defined('APP_PATH')) {
+            return realpath(APP_PATH . '/' . $rel) ?: null;
         }
         return realpath(BASE_PATH . '/' . $rel) ?: null;
     }

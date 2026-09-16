@@ -45,7 +45,7 @@ final class Migrations
      */
     public static function raizSql(): string
     {
-        return BASE_PATH . '/sql';
+        return APP_PATH . '/sql';
     }
 
     public static function dir(): string

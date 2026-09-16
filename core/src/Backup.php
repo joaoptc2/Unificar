@@ -124,6 +124,14 @@ final class Backup
         }
 
         $storage = STORAGE_PATH . '/backups';
+        // dirname(BASE_PATH) é o VIZINHO da área pública — o mesmo lugar onde
+        // moram "<nome>-config" e "<nome>-codigo". É deliberadamente a raiz
+        // PÚBLICA, e não a do código: é ela que identifica a instalação, e é
+        // dela que todas as pastas irmãs derivam o nome. Derivar daqui a
+        // pasta do código faria o destino dos backups mudar sozinho no dia em
+        // que o código se mudasse — e o histórico inteiro do hospital ficaria
+        // invisível, sem um erro sequer, com o cron gravando o pacote de
+        // amanhã na pasta nova e vazia.
         $irmao   = dirname(BASE_PATH) . '/backups';
 
         if ($cfg !== '') {

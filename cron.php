@@ -10,7 +10,8 @@
 
 declare(strict_types=1);
 
-require __DIR__ . '/core/bootstrap.php';
+require __DIR__ . '/localizar.php';
+require UNIFICAR_APP_DIR . '/core/bootstrap.php';
 
 use Core\Config;
 use Core\Modules;

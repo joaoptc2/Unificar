@@ -15,7 +15,25 @@ declare(strict_types=1);
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
 
-require_once __DIR__ . '/core/src/Migrations.php'; // apenas o parser de SQL
+/**
+ * O instalador é o único .php público que precisa enxergar o CÓDIGO, e ele
+ * roda antes de existir configuração — então não pode carregar o bootstrap.
+ * Usa o mesmo localizador dos outros pontos de entrada: assim ele e o
+ * bootstrap NUNCA divergem sobre onde as coisas estão.
+ *
+ * Isto não é zelo: as duas cascatas de config (a daqui e a do bootstrap) já
+ * eram cópias uma da outra, ancoradas em variáveis DIFERENTES (__DIR__ aqui,
+ * BASE_PATH lá) que só coincidiam porque tudo morava junto. Separadas, o
+ * instalador procuraria o config num lugar e o portal em outro — e o
+ * instalador, não achando nada, ofereceria instalar POR CIMA de uma
+ * instalação viva, com app.key nova e toda senha cifrada ilegível.
+ */
+require __DIR__ . '/localizar.php';
+
+/** Onde mora o código: core/, sql/, config/config.example.php. */
+define('APP_DIR', UNIFICAR_APP_DIR);
+
+require_once APP_DIR . '/core/src/Migrations.php'; // apenas o parser de SQL
 
 /**
  * Onde o config PODE estar. A mesma cascata do core/bootstrap.php — repetida
@@ -30,8 +48,8 @@ require_once __DIR__ . '/core/src/Migrations.php'; // apenas o parser de SQL
  */
 $configCandidatos = array_filter([
     getenv('UNIFICAR_CONFIG') ?: null,
-    dirname(__DIR__) . '/' . basename(__DIR__) . '-config/config.php',
-    __DIR__ . '/config/config.php',
+    dirname(BASE_PATH) . '/' . basename(BASE_PATH) . '-config/config.php',
+    BASE_PATH . '/config/config.php',
 ]);
 $configExistente = null;
 $configIlegivel  = false;
@@ -63,7 +81,7 @@ if ($configExistente !== null && empty($_GET['force'])) {
 // quando não der. A pasta irmã leva o nome da pasta pública para não colidir
 // com outra instalação em hospedagem com addon domains, onde o diretório
 // acima é o home da conta, compartilhado.
-$configIrmao = dirname(__DIR__) . '/' . basename(__DIR__) . '-config';
+$configIrmao = dirname(BASE_PATH) . '/' . basename(BASE_PATH) . '-config';
 
 // Se a instalação está numa SUBPASTA do site (public_html/portal), a pasta
 // irmã continua dentro da área servida — public_html/portal-config responde
@@ -78,7 +96,7 @@ if ($docroot !== false && $docroot !== '' && str_starts_with($configIrmao . '/',
     }
 }
 
-$configFile  = __DIR__ . '/config/config.php';
+$configFile  = BASE_PATH . '/config/config.php';
 $configFora  = false;
 if ($configIrmao !== ''
     && (@is_dir($configIrmao) ? @is_writable($configIrmao) : @mkdir($configIrmao, 0750, true))) {
@@ -116,8 +134,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Executa os schemas (núcleo primeiro, depois módulos)
             $files = array_merge(
-                [__DIR__ . '/sql/schema.sql'],
-                glob(__DIR__ . '/sql/modules/*.sql') ?: []
+                [APP_DIR . '/sql/schema.sql'],
+                glob(APP_DIR . '/sql/modules/*.sql') ?: []
             );
             foreach ($files as $file) {
                 $sql = file_get_contents($file);
@@ -138,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 notes TEXT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
             $mark = $pdo->prepare("INSERT IGNORE INTO schema_migrations (filename, notes) VALUES (?, 'instalação')");
-            foreach (glob(__DIR__ . '/sql/migrations/*.sql') ?: [] as $mf) {
+            foreach (glob(APP_DIR . '/sql/migrations/*.sql') ?: [] as $mf) {
                 $mark->execute([basename($mf)]);
             }
 
@@ -162,7 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([$orgName]);
 
             // Gera config/config.php a partir do exemplo
-            $template = require __DIR__ . '/config/config.example.php';
+            $template = require APP_DIR . '/config/config.example.php';
             $template['app']['name'] = $orgName;
             $template['app']['key']  = bin2hex(random_bytes(24));
             $template['db'] = [

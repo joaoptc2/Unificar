@@ -14,9 +14,74 @@ if (defined('CORE_BOOTSTRAPPED')) {
 }
 define('CORE_BOOTSTRAPPED', true);
 
-define('BASE_PATH', dirname(__DIR__));
+/**
+ * A raiz servida pela web, quando quem chamou não soube dizer.
+ *
+ * Só é usada fora do front controller — pela linha de comando, onde não
+ * existe requisição nenhuma de onde deduzir. Os degraus vão do mais
+ * explícito ao mais antigo, e o primeiro que servir vence.
+ *
+ * O degrau da pasta irmã é o INVERSO do que o localizar.php faz: lá se vai
+ * de "Unificar" para "Unificar-codigo"; aqui se volta. A convenção do
+ * sufixo é a mesma que o config já usa há tempos ("-config"), para o
+ * administrador não ter de aprender duas.
+ */
+function unificar_raiz_publica(string $app): string
+{
+    // 1. Dito explicitamente. É o degrau de quem tem um arranjo próprio.
+    $env = getenv('UNIFICAR_PUBLIC');
+    if ($env !== false && $env !== '' && @is_dir($env)) {
+        return rtrim($env, '/');
+    }
+
+    // 2. Convenção: o código está em "<raiz>-codigo", a raiz é "<raiz>".
+    //    Só vale se o lugar de volta realmente parecer uma instalação — um
+    //    index.php lá dentro. Sem essa conferência, uma pasta chamada
+    //    "backup-codigo" apontaria para "backup" e o sistema passaria a
+    //    gravar upload dentro dela.
+    if (str_ends_with($app, '-codigo')) {
+        $publico = substr($app, 0, -strlen('-codigo'));
+        if (@is_file($publico . '/index.php')) {
+            return $publico;
+        }
+    }
+
+    // 3. Arrumação de sempre: o código E a área pública são a mesma pasta.
+    return $app;
+}
+
+/**
+ * DUAS RAÍZES, e é preciso saber qual é qual.
+ *
+ * APP_PATH  — onde o CÓDIGO mora: core/, modules/, sql/, docs/, scripts/.
+ * BASE_PATH — a raiz da instalação SERVIDA PELA WEB: index.php, assets/,
+ *             uploads/. É dela que saem as URLs, e é dela que derivam a
+ *             pasta irmã do config e a pasta irmã dos backups.
+ *
+ * Enquanto tudo mora junto, as duas são a MESMA STRING, e é por isso que
+ * dava para viver com uma constante só. Quando o código vai para uma pasta
+ * irmã, elas se separam — e todo uso de BASE_PATH que na verdade queria
+ * dizer "onde está o código" passaria a apontar para o lugar errado. São
+ * exatamente quatro, e estão marcados com APP_PATH abaixo.
+ *
+ * BASE_PATH NÃO é mais derivada daqui. Ela é derivada de onde está o
+ * index.php — que é a definição de "raiz servida" — e o front controller a
+ * define antes de nos chamar (ver localizar.php). Esta ordem importa: se
+ * BASE_PATH continuasse sendo dirname(__DIR__), mover core/ mudaria o valor
+ * dela SEM ninguém editar uma linha, e junto mudariam a pasta do config, a
+ * pasta dos backups e o destino dos uploads. Nenhuma dessas mudanças daria
+ * erro; todas dariam resultado errado em silêncio.
+ */
 define('CORE_PATH', __DIR__);
-define('MODULES_PATH', BASE_PATH . '/modules');
+define('APP_PATH', dirname(__DIR__));
+
+if (!defined('BASE_PATH')) {
+    // Chegamos aqui sem passar pelo front controller: linha de comando
+    // (cron, scripts/) ou um include direto. Descobrir a raiz servida.
+    define('BASE_PATH', unificar_raiz_publica(APP_PATH));
+}
+
+define('MODULES_PATH', APP_PATH . '/modules');
 define('UPLOADS_PATH', BASE_PATH . '/uploads');
 // STORAGE_PATH é definida DEPOIS da configuração (ela pode apontar a pasta
 // para fora do public_html). Ver "Onde ficam config e storage", abaixo.
@@ -106,7 +171,7 @@ if ($configFile === null) {
     // instalador precisa dele), mas não em silêncio: sem este aviso, um cron
     // da hospedagem passaria a rodar contra o banco de exemplo e a falhar por
     // um motivo que ninguém liga ao arquivo que sumiu.
-    $configFile   = BASE_PATH . '/config/config.example.php';
+    $configFile   = APP_PATH . '/config/config.example.php';
     $configOrigem = 'EXEMPLO (nenhuma configuração encontrada)';
     if (PHP_SAPI === 'cli' && basename($_SERVER['SCRIPT_NAME'] ?? '') !== 'install.php') {
         fwrite(STDERR, "AVISO: nenhum config.php encontrado; usando config.example.php. "

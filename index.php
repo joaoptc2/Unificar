@@ -15,7 +15,8 @@
  * ============================================================
  */
 
-require __DIR__ . '/core/bootstrap.php';
+require __DIR__ . '/localizar.php';
+require UNIFICAR_APP_DIR . '/core/bootstrap.php';
 
 use Core\Access;
 use Core\Auth;
