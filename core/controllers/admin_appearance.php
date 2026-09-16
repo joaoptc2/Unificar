@@ -646,6 +646,85 @@ function core_admin_appearance(): string
                 </div>
 
                 <div class="card mb-3">
+                    <div class="card-header">Página inicial</div>
+                    <div class="card-body row g-3">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-semibold">Formato dos módulos</label>
+                            <select class="form-select form-select-sm" name="home_layout" id="f_home_layout">
+                                <?php foreach (Branding::HOME_LAYOUTS as $k => $lbl): ?>
+                                    <option value="<?= core_e($k) ?>" <?= $b['home_layout'] === $k ? 'selected' : '' ?>><?= core_e($lbl) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-semibold">Colunas em tela grande</label>
+                            <select class="form-select form-select-sm" name="home_columns" id="f_home_columns">
+                                <?php // (string) obrigatório: o PHP converte chave numérica de array
+                                      // em int, e o === contra o valor salvo (string) nunca casaria —
+                                      // o campo reabriria sempre na primeira opção.
+                                      foreach (Branding::HOME_COLUMNS as $k => $lbl): ?>
+                                    <option value="<?= core_e((string) $k) ?>" <?= $b['home_columns'] === (string) $k ? 'selected' : '' ?>><?= core_e($lbl) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text small">No formato de lista cada módulo ocupa a linha inteira e este ajuste não se aplica.</div>
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <input type="hidden" name="home_greeting" value="0">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" name="home_greeting"
+                                       id="f_home_greeting" value="1" <?= $b['home_greeting'] === '1' ? 'checked' : '' ?>>
+                                <label class="form-check-label small" for="f_home_greeting">Mostrar saudação</label>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <input type="hidden" name="home_show_icons" value="0">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" name="home_show_icons"
+                                       id="f_home_show_icons" value="1" <?= $b['home_show_icons'] === '1' ? 'checked' : '' ?>>
+                                <label class="form-check-label small" for="f_home_show_icons">Mostrar ícones</label>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <input type="hidden" name="home_show_desc" value="0">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" name="home_show_desc"
+                                       id="f_home_show_desc" value="1" <?= $b['home_show_desc'] === '1' ? 'checked' : '' ?>>
+                                <label class="form-check-label small" for="f_home_show_desc">Mostrar descrição</label>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-semibold">Saudação</label>
+                            <input class="form-control form-control-sm" name="home_title" id="f_home_title" maxlength="120"
+                                   value="<?= core_e($b['home_title']) ?>" placeholder="Olá, {nome} 👋">
+                            <div class="form-text small"><code>{nome}</code> vira o primeiro nome de quem entrou. Em branco usa o padrão.</div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-semibold">Linha de apoio</label>
+                            <input class="form-control form-control-sm" name="home_subtitle" id="f_home_subtitle" maxlength="200"
+                                   value="<?= core_e($b['home_subtitle']) ?>" placeholder="Escolha um módulo para começar.">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold">Mural (aviso no topo da página inicial)</label>
+                            <textarea class="form-control form-control-sm" name="home_message" id="f_home_message" rows="3"
+                                      placeholder="&lt;strong&gt;Campanha de vacinação&lt;/strong&gt; até sexta, no ambulatório."><?= core_e($b['home_message']) ?></textarea>
+                            <div class="form-text small">Aceita negrito, itálico, listas e links; o HTML passa pelo mesmo
+                            filtro dos comunicados. Até 4 KB. Em branco, o mural não aparece.</div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-semibold">Tom do mural</label>
+                            <select class="form-select form-select-sm" name="home_message_tone" id="f_home_message_tone">
+                                <?php foreach (Branding::HOME_TONES as $k => $lbl): ?>
+                                    <option value="<?= core_e($k) ?>" <?= $b['home_message_tone'] === $k ? 'selected' : '' ?>><?= core_e($lbl) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
                     <div class="card-header">Tela de entrada</div>
                     <div class="card-body row g-3">
                         <div class="col-12 col-md-6">

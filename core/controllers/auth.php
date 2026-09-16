@@ -420,41 +420,96 @@ function core_auth_render_portal(): void
 {
     $user    = Auth::user();
     $modules = Modules::forUser((int) $user['id']);
+    $b       = Core\Branding::all();
+
+    $primeiro = explode(' ', trim((string) $user['name']))[0];
+    // {nome} no texto do administrador. O padrão continua sendo o de antes,
+    // para quem nunca abrir a tela de Aparência.
+    $titulo = $b['home_title'] !== ''
+        ? str_replace(['{nome}', '{primeiro_nome}'], [$user['name'], $primeiro], $b['home_title'])
+        : 'Olá, ' . $primeiro . ' 👋';
+    $subtitulo = $b['home_subtitle'] !== '' ? $b['home_subtitle'] : 'Escolha um módulo para começar.';
+
+    $layout   = $b['home_layout'];
+    $colunas  = (int) $b['home_columns'];
+    $comDesc  = $b['home_show_desc'] === '1';
+    $comIcone = $b['home_show_icons'] === '1';
+    // 12 / colunas fecha certo porque HOME_COLUMNS só aceita divisores de 12.
+    $colClass = $layout === 'lista'
+        ? 'col-12'
+        : 'col-12 col-sm-6 col-lg-' . (int) (12 / max(1, $colunas));
+
+    $tons = [
+        'info'    => 'alert-info',    'primary' => 'alert-primary',
+        'success' => 'alert-success', 'warning' => 'alert-warning',
+        'neutro'  => 'alert-secondary',
+    ];
+
+    // Um item do portal (módulo ou link externo) nos três formatos.
+    $cartao = static function (string $href, string $icone, string $nome, string $desc,
+                               bool $externo = false) use ($layout, $comDesc, $comIcone): string {
+        $alvo = $externo ? ' target="_blank" rel="noopener"' : '';
+        $ico  = $comIcone
+            ? '<div class="module-icon"><i class="bi ' . core_e($icone) . '"></i></div>' : '';
+        $fora = $externo ? ' <i class="bi bi-box-arrow-up-right small"></i>' : '';
+
+        if ($layout === 'mosaico') {
+            return '<a class="card portal-module-card portal-home-mosaico h-100" href="' . $href . '"' . $alvo . '>'
+                 . '<div class="card-body text-center d-flex flex-column gap-2 align-items-center justify-content-center">'
+                 . $ico . '<div class="fw-semibold text-body small">' . core_e($nome) . $fora . '</div>'
+                 . '</div></a>';
+        }
+        if ($layout === 'lista') {
+            return '<a class="card portal-module-card portal-home-lista" href="' . $href . '"' . $alvo . '>'
+                 . '<div class="card-body d-flex align-items-center gap-3 py-2">'
+                 . $ico
+                 . '<div class="flex-grow-1 min-w-0">'
+                 . '<div class="fw-semibold text-body">' . core_e($nome) . $fora . '</div>'
+                 . ($comDesc && $desc !== '' ? '<div class="small text-muted text-truncate">' . core_e($desc) . '</div>' : '')
+                 . '</div><i class="bi bi-chevron-right text-muted small"></i>'
+                 . '</div></a>';
+        }
+        return '<a class="card portal-module-card h-100" href="' . $href . '"' . $alvo . '>'
+             . '<div class="card-body d-flex flex-column gap-3">'
+             . $ico
+             . '<div><div class="fw-semibold text-body">' . core_e($nome) . $fora . '</div>'
+             . ($comDesc && $desc !== '' ? '<div class="small text-muted">' . core_e($desc) . '</div>' : '')
+             . '</div></div></a>';
+    };
+
     ob_start(); ?>
-    <div class="mb-4">
-        <h1 class="h4 mb-1">Olá, <?= core_e(explode(' ', (string) $user['name'])[0]) ?> 👋</h1>
-        <p class="text-muted mb-0">Escolha um módulo para começar.</p>
-    </div>
+    <?php if ($b['home_greeting'] === '1'): ?>
+        <div class="mb-4">
+            <h1 class="h4 mb-1"><?= core_e($titulo) ?></h1>
+            <p class="text-muted mb-0"><?= core_e($subtitulo) ?></p>
+        </div>
+    <?php endif; ?>
+
+    <?php if (trim($b['home_message']) !== ''): ?>
+        <?php /* Já sanitizado na gravação (Branding::normalizeField). */ ?>
+        <div class="alert <?= $tons[$b['home_message_tone']] ?? 'alert-info' ?> portal-home-mural">
+            <?= $b['home_message'] ?>
+        </div>
+    <?php endif; ?>
+
     <?php if (!$modules): ?>
         <div class="alert alert-warning">
             Você ainda não tem acesso a nenhum módulo. Solicite a liberação ao administrador da plataforma.
         </div>
     <?php endif; ?>
-    <div class="row g-3">
+
+    <div class="row g-3 portal-home portal-home-<?= core_e($layout) ?>">
         <?php foreach ($modules as $slug => $m): ?>
-            <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
-                <a class="card portal-module-card h-100" href="<?= core_module_url($slug) ?>">
-                    <div class="card-body d-flex flex-column gap-3">
-                        <div class="module-icon"><i class="bi <?= core_e($m['icon'] ?? 'bi-app') ?>"></i></div>
-                        <div>
-                            <div class="fw-semibold text-body"><?= core_e($m['name']) ?></div>
-                            <div class="small text-muted"><?= core_e($m['description'] ?? '') ?></div>
-                        </div>
-                    </div>
-                </a>
+            <div class="<?= $colClass ?>">
+                <?= $cartao(core_module_url($slug), (string) ($m['icon'] ?? 'bi-app'),
+                            (string) $m['name'], (string) ($m['description'] ?? '')) ?>
             </div>
         <?php endforeach; ?>
         <?php if (core_config('moodle.enabled')): ?>
-            <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
-                <a class="card portal-module-card h-100" href="<?= core_e(core_config('moodle.url')) ?>" target="_blank" rel="noopener">
-                    <div class="card-body d-flex flex-column gap-3">
-                        <div class="module-icon"><i class="bi bi-mortarboard"></i></div>
-                        <div>
-                            <div class="fw-semibold text-body"><?= core_e(core_config('moodle.link_label', 'Moodle')) ?> <i class="bi bi-box-arrow-up-right small"></i></div>
-                            <div class="small text-muted">Plataforma de ensino a distância.</div>
-                        </div>
-                    </div>
-                </a>
+            <div class="<?= $colClass ?>">
+                <?= $cartao(core_e((string) core_config('moodle.url')), 'bi-mortarboard',
+                            (string) core_config('moodle.link_label', 'Moodle'),
+                            'Plataforma de ensino a distância.', true) ?>
             </div>
         <?php endif; ?>
     </div>

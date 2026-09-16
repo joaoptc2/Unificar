@@ -391,6 +391,25 @@ favicon e cores próprios; o que ficar em branco herda do portal. São poucas
 chaves de propósito: quem circula entre as unidades precisa reconhecer o
 mesmo sistema. Em instalação de unidade única a sobreposição é inerte.
 
+### Página inicial
+
+A tela que abre depois do login era a única sem nenhum ajuste: uma saudação
+fixa e uma grade de cartões fixa, igual para a instalação de três módulos e
+para a de quinze. *Administração › Aparência › Página inicial* abriu:
+
+| Ajuste | Para quê |
+| --- | --- |
+| **Formato**: cartões, lista compacta ou mosaico de ícones | Com muitos módulos a grade de cartões obriga a rolar; a lista cabe numa tela só, e o mosaico funciona melhor em tela tocável |
+| **Colunas** (2, 3, 4 ou 6) | Só divisores de 12, para a grade fechar certo |
+| **Saudação** e **linha de apoio** | `{nome}` vira o primeiro nome de quem entrou; em branco, o texto padrão |
+| **Mostrar ícones / descrição / saudação** | Cada um desligável |
+| **Mural** | Aviso no topo, em HTML (negrito, listas, links), com o tom escolhido |
+
+O mural aceita HTML porque um aviso de campanha de vacinação sem negrito
+nem link não é um aviso — mas passa pelo mesmo filtro dos comunicados do
+RH (`HtmlSanitizer`), que remove `<script>` e atributos de evento. Em
+branco, o mural não aparece.
+
 ### Galeria de superfícies e CSS livre
 
 *Administração › Aparência › Galeria de superfícies* mostra todas as peças

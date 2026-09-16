@@ -59,6 +59,19 @@ final class Branding
         'dark_sidebar_bg' => '#111827',
         'dark_primary'    => '',            // vazio → clareia a primária o quanto faltar
         // Tela de login
+        // Página inicial: o portal de módulos que abre depois do login. Era a
+        // única tela do sistema sem nenhum ajuste — texto fixo e uma grade de
+        // cartões fixa, para instalações de 3 e de 15 módulos igualmente.
+        'home_greeting'     => '1',            // mostrar a saudação
+        'home_title'        => '',             // vazio → "Olá, {nome} 👋"
+        'home_subtitle'     => '',             // vazio → "Escolha um módulo para começar."
+        'home_layout'       => 'cartoes',      // cartoes | lista | mosaico
+        'home_columns'      => '4',            // 2 | 3 | 4 | 6 por linha
+        'home_show_desc'    => '1',
+        'home_show_icons'   => '1',
+        'home_message'      => '',             // mural em HTML (sanitizado)
+        'home_message_tone' => 'info',         // ver HOME_TONES
+
         'login_layout'    => 'centralizado', // centralizado | lado_a_lado
         'login_card_width' => '420',        // px
         'login_footer'    => '',
@@ -102,6 +115,28 @@ final class Branding
         'claro'  => 'Sempre claro',
         'escuro' => 'Sempre escuro',
         'auto'   => 'Seguir o aparelho de cada pessoa',
+    ];
+
+    /** Formatos da página inicial. */
+    public const HOME_LAYOUTS = [
+        'cartoes' => 'Cartões com descrição',
+        'lista'   => 'Lista compacta (uma linha por módulo)',
+        'mosaico' => 'Mosaico de ícones grandes',
+    ];
+
+    /** Colunas possíveis: só divisores de 12, para a grade fechar certo. */
+    public const HOME_COLUMNS = [
+        '2' => '2 por linha', '3' => '3 por linha',
+        '4' => '4 por linha', '6' => '6 por linha',
+    ];
+
+    /** Tom do mural da página inicial. */
+    public const HOME_TONES = [
+        'info'    => 'Informação (azul claro)',
+        'primary' => 'Cor da marca',
+        'success' => 'Positivo (verde)',
+        'warning' => 'Atenção (amarelo)',
+        'neutro'  => 'Neutro (cinza)',
     ];
 
     public const LOGIN_LAYOUTS = [
@@ -845,10 +880,14 @@ final class Branding
             'sidebar_mode'     => isset(self::SIDEBAR_MODES[$raw]) ? $raw : $atual,
             'theme_mode'       => isset(self::THEME_MODES[$raw]) ? $raw : $atual,
             'login_layout'     => isset(self::LOGIN_LAYOUTS[$raw]) ? $raw : $atual,
+            'home_layout'      => isset(self::HOME_LAYOUTS[$raw]) ? $raw : $atual,
+            'home_columns'     => isset(self::HOME_COLUMNS[$raw]) ? $raw : $atual,
+            'home_message_tone' => isset(self::HOME_TONES[$raw]) ? $raw : $atual,
             // Booleanos gravam sempre '0' ou '1': um checkbox desmarcado não é
             // enviado pelo navegador, então o formulário manda um campo oculto
             // antes dele e a chave sempre chega.
             'theme_toggle'     => $raw === '1' ? '1' : '0',
+            'home_greeting', 'home_show_desc', 'home_show_icons' => $raw === '1' ? '1' : '0',
             'radius'           => (string) max(0, min(24, (int) $raw)),
             'sidebar_width'    => (string) max(180, min(360, (int) $raw)),
             'topbar_height'    => (string) max(44, min(88, (int) $raw)),
@@ -857,6 +896,12 @@ final class Branding
             'name', 'short_name' => mb_substr($raw, 0, 120),
             'login_message'    => mb_substr($raw, 0, 300),
             'login_footer'     => mb_substr($raw, 0, 400),
+            'home_title'       => mb_substr($raw, 0, 120),
+            'home_subtitle'    => mb_substr($raw, 0, 200),
+            // Mural: HTML de verdade (negrito, link, lista), passado pelo mesmo
+            // filtro dos comunicados — quem escreve aqui é administrador, mas
+            // administrador também cola conteúdo de fora.
+            'home_message'     => HtmlSanitizer::clean(mb_substr($raw, 0, 4000)),
             // O corte é avisado pela tela (core_admin_appearance_save compara o
             // tamanho recebido) e cai na última chave de fechamento, para não
             // deixar um seletor pela metade — que faz o navegador descartar
