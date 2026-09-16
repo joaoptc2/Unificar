@@ -67,8 +67,14 @@ aplicadas: `php scripts/migrate.php --mark-all` (ou execute
 
 ## Estrutura
 
+A árvore abaixo é a arrumação de origem, com tudo junto. `config/`, a pasta de
+dados e o CÓDIGO podem sair do `public_html` — cada um por vez, sem obrigação
+e sem pressa; ver *Tirar config e dados do public_html* e *Tirar o CÓDIGO do
+public_html*.
+
 ```
 index.php                  Front controller (?m=<módulo>&...)
+localizar.php              Acha o código (só faz diferença quando ele sai do público)
 install.php                Instalador (remover após instalar)
 cron.php                   Cron unificado (chama o cron de cada módulo)
 config/config.php          Configuração (gerada pelo instalador)
@@ -1080,6 +1086,121 @@ Detalhes que decidem se o teste vale:
 Isto protege contra **erro de configuração do servidor web**. Não protege
 contra falha de leitura de arquivo no próprio PHP nem contra conta invadida:
 ali o código já tem o caminho e lê do mesmo jeito.
+
+## Tirar o CÓDIGO do public_html
+
+Depois do config e dos dados, sobra o código: `core/`, `modules/`, `sql/`,
+`docs/` e `scripts/`. Ele também pode sair, para uma pasta irmã chamada
+`<nome>-codigo` — a mesma convenção do `-config`, para o administrador não ter
+de aprender duas. A área servida fica com seis itens:
+
+```
+/home/conta/public_html/          ← DocumentRoot
+├── index.php        front controller
+├── localizar.php    acha o código (é o único que os outros precisam conhecer)
+├── install.php      instalador (apague depois de instalar)
+├── cron.php         rotina periódica — precisa ficar aqui, ver abaixo
+├── assets/          CSS, JS, imagens do sistema
+└── uploads/         o que é público por natureza (logo, avatar, anexo de mural)
+
+/home/conta/public_html-codigo/   ← fora da web
+├── core/  modules/  sql/  docs/  scripts/  config/config.example.php
+/home/conta/public_html-config/   ← já era assim
+/home/conta/public_html-dados/    ← já era assim
+```
+
+### O que este ganho é, medido — e o que ele não é
+
+A varredura que precedeu a mudança procurou segredo embutido em fonte nas
+50.877 linhas de `core/` e `modules/`, mais `sql/`, `docs/` e `scripts/`:
+atribuição literal, DSN, hash, alta entropia, padrões de chave conhecidos.
+Achou **zero**, fora o admin semente `admin`/`admin123` do `schema.sql`. Todo
+segredo de verdade já estava no `config.php` ou cifrado no banco.
+
+Então **este passo rende muito menos que os dois anteriores**, e é honesto
+dizer isso: ele esconde código que não tem senha nenhuma. O que ele entrega,
+medido nas duas arrumações rodando lado a lado em servidores de verdade:
+
+| pasta | código junto | código na irmã |
+| --- | --- | --- |
+| `sql/` | **exposta** | fora |
+| `modules/` | **exposta** | fora |
+| `core/` | **exposta** | fora |
+| `scripts/` | **exposta** | fora |
+| `docs/` | **exposta** | fora |
+
+"Exposta" ali não é teoria: é a sonda gravando um arquivo-isca e o servidor
+devolvendo o conteúdo pela URL. O servidor de teste ignora `.htaccess` — como
+o Nginx, e como o Apache com `AllowOverride None`.
+
+### A decisão que faz a mudança ser segura
+
+`BASE_PATH` **não mudou de significado nem de valor**. Ela continua sendo a
+raiz servida pela web, e é dela que derivam as URLs, a pasta irmã do config, a
+pasta irmã dos backups e o destino dos uploads. Quem nasceu foi `APP_PATH`,
+para as quatro coisas que na verdade queriam dizer "onde está o código".
+
+Isso não é preciosismo de nomenclatura. `BASE_PATH` era `dirname(core/)`:
+mover `core/` mudaria o valor dela **sem ninguém editar uma linha**, e junto
+mudariam o config procurado, a pasta dos backups e o destino dos uploads.
+Nenhuma dessas mudanças daria erro. Todas dariam resultado errado em silêncio
+— o histórico de backup do hospital ficaria invisível e o cron gravaria o
+pacote de amanhã numa pasta nova e vazia, enquanto a tela mostraria "1 backup,
+hoje" e o administrador concluiria que está tudo funcionando.
+
+Por isso `BASE_PATH` passou a vir de onde está o `index.php`, que é a
+definição de "raiz servida", e é definida **antes** do bootstrap.
+
+### `cron.php` fica no público, de propósito
+
+Em hospedagem compartilhada, agendar por URL costuma ser a **única** opção. A
+rota `cron.php?token=<cron_secret>` está documentada e continua valendo. O
+arquivo é minúsculo e a autorização é conferida nele; as rotinas de verdade
+moram em `modules/<slug>/cron/`, fora do público, e **recusam** ser chamadas
+sem a constante que o `cron.php` define depois de conferir o token.
+
+### Como mover, com o portal no ar
+
+O ensaio abaixo foi executado, passo a passo, contra uma instalação servida:
+
+1. **Suba** `core/`, `modules/`, `sql/`, `docs/`, `scripts/` e
+   `config/config.example.php` para `<nome>-codigo`. **Não apague nada
+   ainda.** O portal continua respondendo, e já passa a rodar o código de lá:
+   o localizador prefere a pasta irmã justamente para você poder conferir de
+   verdade antes de apagar. O checkup fica **vermelho** e nomeia as pastas que
+   sobraram.
+2. **Confira** o portal e o checkup. Se algo estiver errado, **apague a pasta
+   irmã** — e tudo volta exatamente ao que era, sem tocar em configuração nem
+   em banco.
+3. **Apague** as pastas de código do `public_html`. O checkup fica verde:
+   *"O código está em … e não sobrou cópia na área pública."*
+
+Não há janela de indisponibilidade em nenhum passo, nem edição de
+configuração, nem mudança no banco.
+
+**A armadilha é o passo 3**, e o checkup existe por causa dela: mover por FTP
+é copiar-e-apagar, e é o apagar que falha — conexão caindo, servidor recusando
+pasta não vazia, pessoa interrompida. Uma cópia esquecida de `core/` continua
+sendo servida, e a sonda **não a vê** (depois da mudança ela procura essas
+pastas em `APP_PATH`, que é onde está a cópia boa). A pasta perigosa é
+justamente a que a sonda deixou de olhar — por isso a conferência de sobras é
+um item separado do checkup, em vermelho, com os nomes.
+
+### Se a convenção não servir
+
+`UNIFICAR_APP` (variável de ambiente) aponta a pasta do código, e
+`UNIFICAR_PUBLIC` aponta a pasta servida — esta última só é consultada pela
+linha de comando, onde não existe requisição de onde deduzir. É a mesma saída
+que `UNIFICAR_CONFIG` já oferecia para o arquivo de configuração.
+
+### O limite honesto, de novo
+
+Vale o mesmo de antes, e vale mais aqui: isto protege contra **erro de
+configuração do servidor web**. Não protege contra falha de leitura de arquivo
+no próprio PHP, nem contra conta de FTP invadida — ali o código já tem o
+caminho e lê do mesmo jeito. E, como a varredura mostrou, o que está sendo
+escondido não contém segredo: o ganho real é não entregar de graça o mapa da
+instalação a quem for procurar por onde atacar.
 
 ## HTTPS (diagnóstico e reforço)
 
