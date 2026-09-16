@@ -118,6 +118,32 @@ return [
         'trust_proxy' => false,
     ],
 
+    /**
+     * Onde ficam os dados de runtime: logs, cache, pacotes de backup e os
+     * anexos privados (atestados, anexos de comunicados).
+     *
+     * Vazio = a pasta storage/ da própria instalação, como sempre foi.
+     *
+     * POR QUE MOVER PARA FORA DO public_html: nada aqui é .php, então nenhum
+     * interpretador se mete no caminho — um pacote de backup é um .tar.gz que
+     * o servidor simplesmente entrega. Entre a internet e um dump completo do
+     * banco (senhas, CPF, prontuários de RH) existe só a configuração do
+     * servidor web, que falha em SILÊNCIO: o Nginx ignora .htaccess sem um
+     * aviso sequer, e o mesmo vale para Apache com AllowOverride None ou para
+     * uma cópia por FTP que escondeu arquivos ocultos.
+     *
+     * Caminho relativo conta a partir da raiz da instalação; absoluto vale
+     * como está. Exemplo em hospedagem compartilhada:
+     *
+     *     'storage' => '/home/suaconta/portal-dados',
+     *
+     * Se o caminho configurado não existir, o sistema volta para storage/ e o
+     * checkup avisa — melhor que gravar backup num lugar que ninguém procura.
+     */
+    'paths' => [
+        'storage' => '',
+    ],
+
     // Segredo do cron unificado (cron.php?token=...)
     'cron_secret' => 'troque-este-token',
 ];

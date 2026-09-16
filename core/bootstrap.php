@@ -17,8 +17,9 @@ define('CORE_BOOTSTRAPPED', true);
 define('BASE_PATH', dirname(__DIR__));
 define('CORE_PATH', __DIR__);
 define('MODULES_PATH', BASE_PATH . '/modules');
-define('STORAGE_PATH', BASE_PATH . '/storage');
 define('UPLOADS_PATH', BASE_PATH . '/uploads');
+// STORAGE_PATH é definida DEPOIS da configuração (ela pode apontar a pasta
+// para fora do public_html). Ver "Onde ficam config e storage", abaixo.
 
 // ---- Autoloader das classes Core\* ------------------------------------
 spl_autoload_register(static function (string $class): void {
@@ -30,17 +31,133 @@ spl_autoload_register(static function (string $class): void {
     }
 });
 
-// ---- Configuração ------------------------------------------------------
-$configFile = BASE_PATH . '/config/config.php';
-if (!is_file($configFile)) {
+// ---- Onde ficam config e storage ---------------------------------------
+/**
+ * O arquivo de configuração pode morar FORA da área pública. Motivo: ele
+ * guarda a senha do banco, a app.key, o segredo do cron e a senha do SMTP.
+ * Enquanto o PHP executa, um acesso direto a config.php devolve página em
+ * branco (o arquivo só faz `return [...]`); no dia em que o PHP parar de
+ * processar .php — troca de versão, vhost novo mal configurado, handler
+ * perdido numa migração de hospedagem — sai o fonte inteiro em texto puro.
+ *
+ * A busca vai do mais explícito ao mais antigo, e o PRIMEIRO que existir
+ * vence. Cada degrau é protegido por @is_readable: em hospedagem com
+ * open_basedir, subir um nível pode simplesmente não ser permitido, e um
+ * warning aqui viraria página em branco — o tratador de exceções ainda nem
+ * foi instalado neste ponto do arquivo.
+ */
+$candidatosConfig = [];
+
+// 1. Constante definida antes deste require. É o degrau de teste e de
+//    front-controllers alternativos; não depende de ambiente nenhum.
+if (defined('UNIFICAR_CONFIG')) {
+    $candidatosConfig[] = ['constante UNIFICAR_CONFIG', (string) UNIFICAR_CONFIG];
+}
+// 2. Variável de ambiente (SetEnv no Apache, env do PHP-FPM, systemd).
+if (($env = getenv('UNIFICAR_CONFIG')) !== false && $env !== '') {
+    $candidatosConfig[] = ['variável de ambiente UNIFICAR_CONFIG', $env];
+}
+// 3. Pasta irmã da instalação, com o nome DERIVADO da pasta pública.
+//    Não é "../config": em hospedagem com addon domains, dirname(BASE_PATH)
+//    é o home da conta, compartilhado por vários sites — uma pasta chamada
+//    só "config" colidiria entre duas instalações, e em silêncio.
+$candidatosConfig[] = [
+    'pasta irmã',
+    dirname(BASE_PATH) . '/' . basename(BASE_PATH) . '-config/config.php',
+];
+// 4. O lugar de sempre, dentro da área pública.
+$candidatosConfig[] = ['pasta config/ da instalação', BASE_PATH . '/config/config.php'];
+
+$configFile = null;
+$configOrigem = '';
+$configIlegivel = null;
+foreach ($candidatosConfig as [$rotulo, $caminho]) {
+    // EXISTIR é is_file(); is_readable() só decide se dá para LER. Tratar
+    // "existe mas não consigo ler" como "não existe" mandava o site para o
+    // instalador — oferecendo reinstalação por cima de uma instalação viva
+    // por causa de uma permissão errada.
+    if ($caminho !== '' && @is_file($caminho)) {
+        if (@is_readable($caminho)) {
+            $configFile   = $caminho;
+            $configOrigem = $rotulo;
+        } else {
+            $configIlegivel = $caminho;
+        }
+        break;
+    }
+}
+
+if ($configFile === null && $configIlegivel !== null) {
+    // Morrer com a causa é melhor que redirecionar para o instalador.
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    exit("A configuração existe em {$configIlegivel}, mas o servidor web não consegue lê-la.\n"
+       . "Corrija o dono ou a permissão desse arquivo. O instalador NÃO será oferecido: "
+       . "reinstalar por cima apagaria a instalação atual.\n");
+}
+
+if ($configFile === null) {
     // Sem configuração: manda para o instalador (quando em contexto web)
     if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_NAME'] ?? '') !== 'install.php') {
         header('Location: install.php');
         exit;
     }
-    $configFile = BASE_PATH . '/config/config.example.php';
+    // Pela linha de comando o fallback para o exemplo CONTINUA existindo (o
+    // instalador precisa dele), mas não em silêncio: sem este aviso, um cron
+    // da hospedagem passaria a rodar contra o banco de exemplo e a falhar por
+    // um motivo que ninguém liga ao arquivo que sumiu.
+    $configFile   = BASE_PATH . '/config/config.example.php';
+    $configOrigem = 'EXEMPLO (nenhuma configuração encontrada)';
+    if (PHP_SAPI === 'cli' && basename($_SERVER['SCRIPT_NAME'] ?? '') !== 'install.php') {
+        fwrite(STDERR, "AVISO: nenhum config.php encontrado; usando config.example.php. "
+                     . "As rotinas vão rodar contra o banco de exemplo.\n");
+    }
 }
+
+define('CONFIG_FILE', $configFile);
+define('CONFIG_PATH', dirname($configFile));
+define('CONFIG_ORIGEM', $configOrigem);
+
 Core\Config::load(require $configFile);
+
+/**
+ * A pasta de dados (logs, cache, backups, anexos privados) também pode ficar
+ * fora da área pública — e o ganho aqui é MAIOR que o do config: backup, log
+ * e anexo não são arquivos .php, então nenhum interpretador se mete no
+ * caminho. Entre a internet e um dump completo do banco existe só a
+ * configuração do servidor web, que falha em silêncio (o Nginx ignora
+ * .htaccess sem um aviso sequer).
+ *
+ * O caminho relativo é resolvido a partir de BASE_PATH; o absoluto vale como
+ * está. Um caminho configurado que não existe NÃO é inventado aqui: cair
+ * de volta no padrão é melhor que gravar backup num lugar que ninguém
+ * procura. O checkup avisa quando isso acontece.
+ */
+$storageCfg = trim((string) Core\Config::get('paths.storage', ''));
+if ($storageCfg !== '') {
+    $abs = (str_starts_with($storageCfg, '/') || preg_match('#^[A-Za-z]:[\\\\/]#', $storageCfg))
+        ? $storageCfg
+        : BASE_PATH . '/' . ltrim($storageCfg, '/');
+    $abs = rtrim($abs, '/');
+    if (!@is_dir($abs)) {
+        // NÃO voltar para BASE_PATH/storage. Cair para dentro da área pública
+        // é exatamente o estado que esta configuração existe para evitar: o
+        // administrador apontou os dados para fora, o disco não respondeu, e
+        // o sistema passaria a espalhar atestado e backup no public_html sem
+        // ninguém notar. Falhar a gravação é visível; vazar não é.
+        //
+        // Este error_log sai ANTES do ini_set('error_log') abaixo, então vai
+        // para o log do servidor (Apache/FPM) — que é onde uma falha de boot
+        // deve aparecer, e não dentro da pasta que está fora do ar.
+        error_log('CRÍTICO: paths.storage = ' . $abs . ' não existe ou não está acessível. '
+                . 'As gravações de dados vão falhar até o caminho voltar.');
+    }
+    define('STORAGE_PATH', $abs);
+    define('STORAGE_CONFIGURADO', $storageCfg);
+} else {
+    define('STORAGE_PATH', BASE_PATH . '/storage');
+    define('STORAGE_CONFIGURADO', '');
+}
 
 date_default_timezone_set(Core\Config::get('app.timezone', 'America/Sao_Paulo'));
 
@@ -53,6 +170,19 @@ if (Core\Config::get('app.debug', false)) {
     error_reporting(E_ALL & ~E_DEPRECATED);
 }
 ini_set('log_errors', '1');
+// A pasta de logs é criada se faltar. Antes nada a criava: com a pasta de
+// dados apontada para um lugar novo (ou numa instalação em que ela nunca
+// existiu), o PHP simplesmente PARAVA DE REGISTRAR erros, em silêncio — e o
+// primeiro sintoma seria um problema de produção sem nenhum rastro para
+// investigar. O @ é deliberado: falhar ao criar não pode derrubar o boot.
+// Só cria a SUBPASTA de logs, e só quando a pasta de dados já existe. Um
+// mkdir recursivo aqui criaria a própria pasta de dados — inclusive quando o
+// caminho configurado tem um erro de digitação, que é justamente o caso em
+// que o sistema precisa reclamar em vez de inventar um diretório novo e
+// gravar lá dentro em silêncio.
+if (@is_dir(STORAGE_PATH) && !@is_dir(STORAGE_PATH . '/logs')) {
+    @mkdir(STORAGE_PATH . '/logs', 0770);
+}
 ini_set('error_log', STORAGE_PATH . '/logs/php_errors.log');
 
 /**

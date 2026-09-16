@@ -121,6 +121,20 @@ final class Perms
             foreach (self::allKeys($module) as $key) {
                 $set[$key] = true;
             }
+            // A NEGAÇÃO EXPLÍCITA continua valendo. Sem isto a tela
+            // Administração > Permissões mentiria: ela lista o módulo,
+            // aceita desmarcar, grava allowed = 0 e diz "atualizado" — e o
+            // usuário continuaria com tudo, porque o conjunto era devolvido
+            // antes de qualquer leitura de permission_grants. Uma revogação
+            // que não revoga é pior que não oferecer revogação nenhuma.
+            $negados = DB::query(
+                "SELECT perm_key FROM permission_grants
+                  WHERE subject_type = 'user' AND subject_id = ? AND module_slug = ? AND allowed = 0",
+                [$userId, $module]
+            );
+            foreach ($negados as $n) {
+                unset($set[$n['perm_key']]);
+            }
             return self::$effective[$userId][$module] = $set;
         }
 

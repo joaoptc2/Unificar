@@ -753,6 +753,86 @@ então a atualização ficou muito mais rápida sem multiplicar os pedidos.
   tipo do conteúdo, não pelo nome do arquivo;
 - Auditoria unificada (Administração → Auditoria).
 
+## Tirar config e dados do public_html
+
+Backup, log e anexo privado **não são arquivos `.php`**: nenhum interpretador
+se mete no caminho, o servidor simplesmente entrega. Entre a internet e um
+dump completo do banco existe só a configuração do servidor web — que falha
+em silêncio (o Nginx ignora `.htaccess` sem um aviso sequer, e o mesmo vale
+para Apache com `AllowOverride None` ou para uma cópia por FTP que escondeu
+arquivos ocultos).
+
+Nada abaixo é obrigatório: quem não mexer em nada continua funcionando igual.
+
+### A pasta de dados
+
+Em `config.php`:
+
+```php
+'paths' => [
+    'storage' => '/home/suaconta/portal-dados',
+],
+```
+
+Copie o conteúdo de `storage/` para lá e pronto — logs, cache, backups e
+anexos privados passam a morar fora. O caminho relativo conta a partir da
+raiz da instalação; o absoluto vale como está.
+
+**Se o caminho não existir, o sistema NÃO volta para `storage/`.** Ele
+registra um erro crítico no log do servidor, o checkup acusa, e as gravações
+falham — de propósito. Cair de volta para dentro da área pública espalharia
+atestado e backup no `public_html` sem ninguém notar, que é exatamente o que
+esta configuração existe para evitar.
+
+### O arquivo de configuração
+
+O sistema procura `config.php` nesta ordem, e o **primeiro que existir vence**:
+
+| Ordem | Onde | Para quê |
+| --- | --- | --- |
+| 1 | constante `UNIFICAR_CONFIG` definida antes do bootstrap | testes, front controller próprio |
+| 2 | variável de ambiente `UNIFICAR_CONFIG` | `SetEnv` no Apache, env do PHP-FPM, systemd |
+| 3 | pasta irmã `<nome-da-pasta-pública>-config/config.php` | o caminho recomendado |
+| 4 | `config/config.php` | o lugar de sempre |
+
+A pasta irmã leva o nome da pasta pública (`public_html` → `public_html-config`)
+porque em hospedagem com *addon domains* o diretório acima é o **home da
+conta, compartilhado**: uma pasta chamada só `config` colidiria entre duas
+instalações, e em silêncio.
+
+O instalador de uma instalação nova já grava fora quando consegue criar a
+pasta irmã, com `chmod 0600`, e diz na tela onde gravou.
+
+### O teste que prova (Administração › Checkup)
+
+Verificar se existe um `.htaccess` não prova nada — é o mesmo erro de conferir
+o artefato em vez do efeito. O sistema grava um **arquivo-isca com um segredo
+aleatório** em cada pasta sensível e tenta baixá-lo pela própria URL. Se o
+segredo voltar pela web, a pasta está aberta.
+
+Detalhes que decidem se o teste vale:
+
+- **O veredito é o segredo voltar, não o código 200.** Servidor que responde a
+  tela de login com 200 para qualquer caminho daria falso positivo. E um 200
+  que *não* traz o segredo vira **"não consegui testar"**, nunca "protegida":
+  pode ser login, proxy ou regra que responde qualquer endereço.
+- **O endereço vem de `app.base_url`**, nunca do cabeçalho `Host` — senão quem
+  faz a requisição escolheria o alvo do teste.
+- **Roda no cron, não na tela.** Uma requisição web que busca o próprio
+  servidor precisa de um segundo processo: em hospedagem com **um** worker de
+  PHP — justamente a barata, que é quem mais precisa deste aviso — a página
+  espera uma resposta que só ela poderia dar. Medido: 1 worker estoura o tempo
+  com 0 bytes; 4 workers respondem em 1 ms. O botão *Testar agora* existe,
+  desiste em 8 s e relata **"não consegui testar"**.
+- **Um teste inconclusivo não apaga um resultado conclusivo** guardado antes.
+- A isca sai sempre, inclusive se a busca falhar no meio.
+
+### O limite honesto
+
+Isto protege contra **erro de configuração do servidor web**. Não protege
+contra falha de leitura de arquivo no próprio PHP nem contra conta invadida:
+ali o código já tem o caminho e lê do mesmo jeito.
+
 ## HTTPS (diagnóstico e reforço)
 
 O checkup não pergunta só se `app.base_url` começa com `https://` — essa

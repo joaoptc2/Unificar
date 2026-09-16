@@ -17,9 +17,58 @@ ini_set('display_errors', '1');
 
 require_once __DIR__ . '/core/src/Migrations.php'; // apenas o parser de SQL
 
-$configFile = __DIR__ . '/config/config.php';
-if (is_file($configFile) && empty($_GET['force'])) {
-    exit('A plataforma já está instalada. Remova o arquivo install.php. Para reinstalar, apague config/config.php.');
+/**
+ * Onde o config PODE estar. A mesma cascata do core/bootstrap.php — repetida
+ * aqui porque o instalador roda ANTES de existir configuração e por isso não
+ * carrega o bootstrap.
+ *
+ * Verificar só __DIR__.'/config/config.php' era um perigo real: com o arquivo
+ * movido para fora da área pública, o instalador diria "não instalado" e,
+ * se alguém confirmasse, rodaria o schema por cima, recriaria o admin e
+ * geraria uma app.key nova — que torna ilegível toda senha de SMTP já
+ * cifrada.
+ */
+$configCandidatos = array_filter([
+    getenv('UNIFICAR_CONFIG') ?: null,
+    dirname(__DIR__) . '/' . basename(__DIR__) . '-config/config.php',
+    __DIR__ . '/config/config.php',
+]);
+$configExistente = null;
+$configIlegivel  = false;
+foreach ($configCandidatos as $c) {
+    // EXISTIR é is_file(). Usar is_readable() como critério de existência
+    // fazia um config sem permissão de leitura parecer "não instalado" — e o
+    // instalador então oferecia reinstalar por cima de uma instalação viva,
+    // recriando o admin e gerando uma app.key nova, que torna ilegível toda
+    // senha de SMTP já cifrada.
+    if (@is_file($c)) {
+        $configExistente = $c;
+        $configIlegivel  = !@is_readable($c);
+        break;
+    }
+}
+// Ilegível é recusado inclusive com ?force=1: quem não consegue LER o arquivo
+// também não consegue conferir o que estaria sobrescrevendo.
+if ($configExistente !== null && $configIlegivel) {
+    exit('Existe configuração em ' . htmlspecialchars($configExistente, ENT_QUOTES)
+       . ', mas não consigo lê-la (dono ou permissão do arquivo). Corrija as permissões — '
+       . 'não vou oferecer reinstalação sem saber o que já está instalado.');
+}
+if ($configExistente !== null && empty($_GET['force'])) {
+    exit('A plataforma já está instalada (configuração em ' . htmlspecialchars($configExistente, ENT_QUOTES)
+       . '). Remova o arquivo install.php. Para reinstalar, apague esse arquivo de configuração.');
+}
+
+// Destino de uma instalação NOVA: fora da área pública quando der, dentro
+// quando não der. A pasta irmã leva o nome da pasta pública para não colidir
+// com outra instalação em hospedagem com addon domains, onde o diretório
+// acima é o home da conta, compartilhado.
+$configIrmao = dirname(__DIR__) . '/' . basename(__DIR__) . '-config';
+$configFile  = __DIR__ . '/config/config.php';
+$configFora  = false;
+if (@is_dir($configIrmao) ? @is_writable($configIrmao) : @mkdir($configIrmao, 0750, true)) {
+    $configFile = $configIrmao . '/config.php';
+    $configFora = true;
 }
 
 $errors  = [];
@@ -108,10 +157,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $template['cron_secret'] = bin2hex(random_bytes(16));
 
             $export = "<?php\n\n// Gerado pelo instalador em " . date('Y-m-d H:i:s') . "\n\nreturn " . var_export($template, true) . ";\n";
-            if (!is_dir(__DIR__ . '/config')) {
-                mkdir(__DIR__ . '/config', 0755, true);
+            if (!is_dir(dirname($configFile))) {
+                mkdir(dirname($configFile), 0750, true);
             }
-            file_put_contents($configFile, $export);
+            // O retorno é conferido: escrever fora da área pública falha muito
+            // mais (pasta inexistente, dono diferente, open_basedir), e dizer
+            // "instalado com sucesso" sem ter gravado a configuração deixa o
+            // administrador com um banco pronto e um site que só redireciona
+            // para o instalador.
+            if (file_put_contents($configFile, $export) === false) {
+                throw new RuntimeException('O banco foi preparado, mas não foi possível gravar a '
+                    . 'configuração em ' . $configFile . '. Dê permissão de escrita nessa pasta e '
+                    . 'rode o instalador de novo com ?force=1.');
+            }
+            // A senha do banco está aqui dentro: ninguém além do dono precisa ler.
+            @chmod($configFile, 0600);
 
             $success = true;
         } catch (Throwable $e) {
@@ -143,10 +203,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php if ($success): ?>
             <div class="alert alert-success">
                 <strong>Instalação concluída!</strong>
+                <p class="mb-2 mt-2">
+                    A configuração foi gravada em
+                    <code><?= htmlspecialchars($configFile, ENT_QUOTES) ?></code>
+                    <?php if ($configFora): ?>
+                        — <strong>fora da área pública</strong>, que é onde ela deve ficar: nenhuma URL
+                        alcança esse arquivo, nem que o servidor web pare de processar PHP.
+                    <?php else: ?>
+                        — <strong>dentro da área pública</strong>, porque não foi possível criar a pasta
+                        <code><?= htmlspecialchars($configIrmao, ENT_QUOTES) ?></code>. Enquanto o PHP
+                        executa, um acesso direto devolve página em branco; mas no dia em que ele parar de
+                        processar <code>.php</code>, sai o fonte com a senha do banco. Se puder, crie
+                        aquela pasta e mova o arquivo para lá.
+                    <?php endif; ?>
+                </p>
                 <ol class="mb-0 mt-2">
                     <li>Apague o arquivo <code>install.php</code> do servidor.</li>
                     <li><a href="index.php">Acesse a plataforma</a> com o usuário administrador criado.</li>
-                    <li>Configure a integração Moodle e o e-mail em <code>config/config.php</code>, se desejar.</li>
+                    <li>Configure a integração Moodle e o e-mail no arquivo de configuração, se desejar.</li>
+                    <li>Em <em>Administração › Checkup</em>, use <strong>Testar exposição das pastas</strong>
+                        para confirmar que nada sensível é entregue pela web.</li>
                 </ol>
             </div>
         <?php else: ?>

@@ -17,7 +17,17 @@ class FileCache
     private static function dir(): string
     {
         if (self::$dir === null) {
-            self::$dir = dirname(__DIR__, 2) . '/storage/cache/';
+            // Cache do módulo debaixo da MESMA pasta de dados do portal. Antes
+            // ficava em modules/rh/storage/cache, uma segunda pasta de dados
+            // escondida dentro da área pública, protegida só pelo .htaccess do
+            // próprio módulo. Com STORAGE_PATH movido para fora, ela era a
+            // única que continuaria exposta.
+            //
+            // O que ficou para trás no lugar antigo é cache — regenerável e
+            // sem dado sensível —, então não há migração a fazer.
+            self::$dir = defined('STORAGE_PATH')
+                ? rtrim(STORAGE_PATH, '/') . '/cache/rh/'
+                : dirname(__DIR__, 2) . '/storage/cache/';
             if (!is_dir(self::$dir)) @mkdir(self::$dir, 0755, true);
         }
         return self::$dir;

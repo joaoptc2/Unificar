@@ -1670,18 +1670,49 @@ PHP;
             return null;
         }
 
-        $destino = $raizReal . '/' . rtrim($rel, '/');
+        // "storage/" e "config/" no pacote são TOKENS, não endereços: as
+        // pastas podem ter sido movidas para fora da área pública, e a
+        // tradução mora em Backup::caminhoFisico(), um lugar só.
+        //
+        // MAS ela só vale quando a raiz pedida É a instalação. A restauração
+        // de teste (e o --files-dir) aponta a raiz para um diretório
+        // descartável, e ali o pacote precisa cair INTEIRO lá dentro: traduzir
+        // 'storage/...' para o STORAGE_PATH real faria o ensaio escrever na
+        // instalação de produção, que é o oposto de um ensaio.
+        $base = realpath(BASE_PATH);
+        if ($base !== false && $raizReal === $base) {
+            $destino    = Backup::caminhoFisico(rtrim($rel, '/'));
+            $candidatas = [BASE_PATH, defined('STORAGE_PATH') ? STORAGE_PATH : null,
+                           defined('CONFIG_PATH') ? CONFIG_PATH : null];
+        } else {
+            $destino    = $raizReal . '/' . rtrim($rel, '/');
+            $candidatas = [$raizReal];
+        }
+
         // Segunda barreira: se algum diretório do caminho for um link
-        // simbólico para fora da raiz, o realpath do que já existe entrega.
+        // simbólico para fora das raízes conhecidas, o realpath do que já
+        // existe entrega.
+        $raizes = [];
+        foreach ($candidatas as $r) {
+            if ($r !== null && ($rr = realpath($r)) !== false) {
+                $raizes[$rr] = true;
+            }
+        }
+
         $existente = $destino;
         while (!file_exists($existente) && dirname($existente) !== $existente) {
             $existente = dirname($existente);
         }
         $real = realpath($existente);
-        if ($real === false || ($real !== $raizReal && !str_starts_with($real, $raizReal . '/'))) {
+        if ($real === false) {
             return null;
         }
-        return $destino;
+        foreach (array_keys($raizes) as $raiz) {
+            if ($real === $raiz || str_starts_with($real, $raiz . '/')) {
+                return $destino;
+            }
+        }
+        return null;
     }
 
     /** Identificador citado (o nome vem de configuração/manifesto, nunca cru). */

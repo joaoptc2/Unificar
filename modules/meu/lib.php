@@ -121,3 +121,250 @@ function meu_data_extenso(int $ts): string
     return $dias[(int) date('w', $ts)] . ', ' . (int) date('j', $ts)
          . ' de ' . $meses[(int) date('n', $ts) - 1] . ' de ' . date('Y', $ts);
 }
+
+// ── Etapa 2: solicitações e formulários ────────────────────────────────────
+//
+// A regra de escopo MUDA aqui, e é a mudança mais importante do módulo. Nas
+// três primeiras telas valia "toda consulta filtra por meu_uid()", porque
+// cada linha tinha um dono só. Uma solicitação tem DUAS pontas — quem pediu e
+// quem recebeu —, e um formulário tem dono e respondentes. Então o predicado
+// passa a ser "eu sou uma das pontas", e ele vai no WHERE de toda leitura e
+// de toda escrita.
+//
+// Por isso estas funções NÃO reaproveitam meu_registro()/meu_excluir(): a
+// allowlist de lá casa por user_id, que não descreve nenhuma das duas
+// relações. Reusar aquilo daria ou uma solicitação recebida que o
+// destinatário não consegue abrir, ou — pior — uma que ele consegue e não
+// deveria.
+
+/** Situações possíveis de uma solicitação, com rótulo e cor do selo. */
+function meu_situacoes(): array
+{
+    return [
+        'pendente'  => ['Pendente',  'text-bg-warning'],
+        'aceita'    => ['Aceita',    'text-bg-info'],
+        'recusada'  => ['Recusada',  'text-bg-secondary'],
+        'concluida' => ['Concluída', 'text-bg-success'],
+        'cancelada' => ['Cancelada', 'text-bg-light border'],
+    ];
+}
+
+/**
+ * Carrega uma solicitação SOMENTE se o usuário for uma das duas pontas.
+ *
+ * Carregar pelo id e decidir depois o que mostrar é o erro clássico: basta
+ * um campo escapar do if para vazar. Aqui o pertencimento está no WHERE, de
+ * modo que um id alheio simplesmente não devolve linha.
+ */
+function meu_solicitacao(int $id): ?array
+{
+    $uid = meu_uid();
+    return DB::queryOne(
+        'SELECT s.*, r.name AS remetente_nome, d.name AS destinatario_nome, f.titulo AS formulario_titulo
+           FROM meu_solicitacoes s
+           JOIN users r ON r.id = s.remetente_id
+           JOIN users d ON d.id = s.destinatario_id
+           LEFT JOIN meu_formularios f ON f.id = s.formulario_id
+          WHERE s.id = ? AND (s.remetente_id = ? OR s.destinatario_id = ?)',
+        [$id, $uid, $uid]
+    );
+}
+
+/** Solicitações recebidas ($papel='recebidas') ou enviadas ($papel='enviadas'). */
+function meu_solicitacoes(string $papel = 'recebidas', bool $incluirFechadas = false): array
+{
+    $uid   = meu_uid();
+    $campo = $papel === 'enviadas' ? 's.remetente_id' : 's.destinatario_id';
+    $outro = $papel === 'enviadas' ? 'd.name' : 'r.name';
+    $filtro = $incluirFechadas ? '' : " AND s.situacao IN ('pendente','aceita')";
+
+    return DB::query(
+        "SELECT s.*, {$outro} AS contraparte, f.titulo AS formulario_titulo
+           FROM meu_solicitacoes s
+           JOIN users r ON r.id = s.remetente_id
+           JOIN users d ON d.id = s.destinatario_id
+           LEFT JOIN meu_formularios f ON f.id = s.formulario_id
+          WHERE {$campo} = ?{$filtro}
+          ORDER BY FIELD(s.situacao,'pendente','aceita','concluida','recusada','cancelada'),
+                   (s.prazo IS NULL), s.prazo, s.created_at DESC",
+        [$uid]
+    );
+}
+
+/** Quantas solicitações recebidas estão esperando resposta. */
+function meu_solicitacoes_pendentes(): int
+{
+    $r = DB::queryOne(
+        "SELECT COUNT(*) c FROM meu_solicitacoes WHERE destinatario_id = ? AND situacao = 'pendente'",
+        [meu_uid()]
+    );
+    return (int) ($r['c'] ?? 0);
+}
+
+/**
+ * Busca pessoas para escolher como destinatário.
+ *
+ * Duas travas que não são detalhe: só usuários ATIVOS (a tabela guarda
+ * desligados, e um pedido para quem saiu do hospital nunca seria lido), e
+ * escape dos curingas do LIKE — sem ele, digitar "%" lista a empresa inteira.
+ */
+function meu_pessoas(string $busca = '', int $limite = 20): array
+{
+    $uid = meu_uid();
+    if (trim($busca) === '') {
+        return DB::query(
+            'SELECT id, name, job_title, sector FROM users WHERE active = 1 AND id <> ? ORDER BY name LIMIT ' . (int) $limite,
+            [$uid]
+        );
+    }
+    $t = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], trim($busca)) . '%';
+    return DB::query(
+        'SELECT id, name, job_title, sector FROM users
+          WHERE active = 1 AND id <> ? AND (name LIKE ? OR username LIKE ? OR sector LIKE ?)
+          ORDER BY name LIMIT ' . (int) $limite,
+        [$uid, $t, $t, $t]
+    );
+}
+
+/** O id de usuário veio do POST: confirme que existe e está ativo. */
+function meu_usuario_valido(int $id): ?array
+{
+    if ($id <= 0) {
+        return null;
+    }
+    return DB::queryOne('SELECT id, name FROM users WHERE id = ? AND active = 1', [$id]);
+}
+
+/** Tipos de campo de formulário — os mesmos das pesquisas do RH. */
+function meu_tipos_campo(): array
+{
+    return [
+        'text'     => 'Texto curto',
+        'textarea' => 'Texto longo',
+        'choice'   => 'Escolha única',
+        'multiple' => 'Múltipla escolha',
+        'yes_no'   => 'Sim / Não',
+        'number'   => 'Número',
+        'date'     => 'Data',
+        'rating'   => 'Nota de 1 a 5',
+    ];
+}
+
+/** Formulário do usuário, com os campos. Só o DONO carrega por esta função. */
+function meu_formulario(int $id, bool $doDono = true): ?array
+{
+    $sql = 'SELECT f.*, u.name AS dono_nome FROM meu_formularios f JOIN users u ON u.id = f.user_id WHERE f.id = ?';
+    $p   = [$id];
+    if ($doDono) {
+        $sql .= ' AND f.user_id = ?';
+        $p[]  = meu_uid();
+    }
+    $f = DB::queryOne($sql, $p);
+    if ($f === null) {
+        return null;
+    }
+    $f['campos'] = DB::query('SELECT * FROM meu_formulario_campos WHERE formulario_id = ? ORDER BY ordem, id', [$id]);
+    // Quantas solicitações já nasceram dele: é o que decide se os campos
+    // ainda podem ser editados (ver meu_formulario_congelado).
+    $r = DB::queryOne('SELECT COUNT(*) c FROM meu_solicitacoes WHERE formulario_id = ?', [$id]);
+    $f['usos'] = (int) ($r['c'] ?? 0);
+    return $f;
+}
+
+/**
+ * Já houve resposta? Então os campos congelam.
+ *
+ * Sem esta trava, editar um formulário já respondido apaga campos cujos ids
+ * estão referenciados nas respostas: o que sobra passa a responder perguntas
+ * que não existem mais, e não há como saber o que a pessoa quis dizer.
+ */
+function meu_formulario_congelado(array $formulario): bool
+{
+    return (int) ($formulario['usos'] ?? 0) > 0;
+}
+
+/** Monta os campos a partir do POST do construtor. */
+function meu_campos_do_post(array $post): array
+{
+    $tipos = meu_tipos_campo();
+    $out   = [];
+    $ordem = 0;
+    foreach ($post['campos'] ?? [] as $c) {
+        $rotulo = trim((string) ($c['rotulo'] ?? ''));
+        if ($rotulo === '') {
+            continue;   // linha em branco do construtor: ignorada, não é erro
+        }
+        $tipo = isset($tipos[$c['tipo'] ?? '']) ? (string) $c['tipo'] : 'text';
+        $ops  = [];
+        if (in_array($tipo, ['choice', 'multiple'], true)) {
+            foreach (explode("\n", (string) ($c['opcoes'] ?? '')) as $o) {
+                $o = trim($o);
+                if ($o !== '') {
+                    $ops[] = mb_substr($o, 0, 200);
+                }
+            }
+            if ($ops === []) {
+                // Escolha sem opção nenhuma vira texto: um <select> vazio é
+                // um campo que o usuário não consegue preencher.
+                $tipo = 'text';
+            }
+        }
+        $out[] = [
+            'rotulo'      => mb_substr($rotulo, 0, 500),
+            'tipo'        => $tipo,
+            'opcoes'      => $ops ? json_encode($ops, JSON_UNESCAPED_UNICODE) : null,
+            'obrigatorio' => !empty($c['obrigatorio']) ? 1 : 0,
+            'ajuda'       => mb_substr(trim((string) ($c['ajuda'] ?? '')), 0, 255) ?: null,
+            'ordem'       => $ordem++,
+        ];
+    }
+    return $out;
+}
+
+/**
+ * Valida uma resposta contra o campo. Devolve [nota, texto] ou null se o
+ * campo obrigatório ficou vazio.
+ */
+function meu_valida_resposta(array $campo, mixed $bruto): ?array
+{
+    $ops = $campo['opcoes'] ? (json_decode((string) $campo['opcoes'], true) ?: []) : [];
+
+    switch ($campo['tipo']) {
+        case 'rating':
+        case 'number':
+            $v = is_scalar($bruto) ? trim((string) $bruto) : '';
+            if ($v === '') { break; }
+            $n = (int) $v;
+            if ($campo['tipo'] === 'rating') {
+                $n = max(1, min(5, $n));
+            }
+            return [$n, (string) $n];
+
+        case 'multiple':
+            $sel = array_values(array_intersect(is_array($bruto) ? $bruto : [], $ops));
+            if ($sel === []) { break; }
+            return [null, implode(' · ', $sel)];
+
+        case 'choice':
+            $v = is_scalar($bruto) ? (string) $bruto : '';
+            if ($v === '' || !in_array($v, $ops, true)) { break; }
+            return [null, $v];
+
+        case 'yes_no':
+            $v = is_scalar($bruto) ? (string) $bruto : '';
+            if ($v !== 'sim' && $v !== 'nao') { break; }
+            return [$v === 'sim' ? 1 : 0, $v === 'sim' ? 'Sim' : 'Não'];
+
+        case 'date':
+            $v = is_scalar($bruto) ? trim((string) $bruto) : '';
+            if ($v === '' || !strtotime($v)) { break; }
+            return [null, date('Y-m-d', (int) strtotime($v))];
+
+        default:
+            $v = is_scalar($bruto) ? trim((string) $bruto) : '';
+            if ($v === '') { break; }
+            return [null, mb_substr($v, 0, 5000)];
+    }
+
+    return null;
+}

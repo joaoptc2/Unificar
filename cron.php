@@ -85,6 +85,40 @@ if ($only === '' || $only === 'core') {
         error_log('cron cleanup: ' . $e->getMessage());
     }
 
+    // Teste de exposição das pastas internas. Roda AQUI, e não na tela do
+    // checkup, porque é uma requisição do servidor para ele mesmo: em
+    // hospedagem com um worker de PHP só, feita de dentro de uma requisição
+    // web ela trava a própria página até estourar o tempo. Pela linha de
+    // comando não há essa disputa.
+    //
+    // Uma vez por dia basta: o que muda o resultado é um deploy ou uma troca
+    // de servidor, não o movimento do dia.
+    try {
+        $ultimo = Core\Exposicao::ultimo();
+        $idade  = $ultimo ? time() - (int) strtotime((string) $ultimo['em']) : PHP_INT_MAX;
+        if ($idade > 20 * 3600) {
+            $ex = Core\Exposicao::testar(false);
+            $abertas = array_filter($ex['itens'], fn ($i) => $i['estado'] === 'exposta');
+            $duvida  = array_filter($ex['itens'], fn ($i) => $i['estado'] === 'indeterminado');
+            if ($abertas) {
+                echo '[core] exposição: ' . count($abertas) . ' pasta(s) ABERTA(S) na web: '
+                   . implode(', ', array_column($abertas, 'pasta')) . "\n";
+            } elseif ($duvida) {
+                // "Não consegui testar" NÃO é "está tudo bem". Sem este ramo,
+                // um teste que falhou inteiro imprimia a linha verde.
+                echo '[core] exposição: NÃO foi possível testar ' . count($duvida) . ' pasta(s): '
+                   . implode(', ', array_column($duvida, 'pasta')) . "\n";
+            } else {
+                echo "[core] exposição: nenhuma pasta sensível é entregue pela web\n";
+            }
+        } else {
+            printf("[core] exposição: testado há %.0f h, pulando\n", $idade / 3600);
+        }
+    } catch (Throwable $e) {
+        echo "[core] ERRO no teste de exposição: {$e->getMessage()}\n";
+        error_log('cron exposicao: ' . $e->getMessage());
+    }
+
     // Marcador de execução: é o que permite à Administração dizer "o cron não
     // está agendado" em vez de deixar tudo pendente em silêncio.
     try {

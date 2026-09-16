@@ -282,22 +282,55 @@ final class HealthCheck
         $raiz = dirname(CORE_PATH);
         $out  = [];
 
+        // As pastas que o sistema precisa ESCREVER. config saiu desta lista:
+        // nada em runtime grava lá (só o instalador, uma vez), e exigir
+        // escrita virava aviso permanente para quem mudou o arquivo de lugar
+        // ou tirou a permissão — que é justamente a configuração mais segura.
         $pastas = [
-            'uploads'          => 'arquivos de documentos, fotos e anexos',
-            'logs'             => 'registro de erros',
-            'config'           => 'configuração',
+            'uploads'      => ['arquivos de documentos, fotos e anexos', $raiz . '/uploads'],
+            'dados'        => ['logs, cache, backups e anexos privados', STORAGE_PATH],
         ];
-        foreach ($pastas as $rel => $para) {
-            $caminho = $raiz . '/' . $rel;
+        foreach ($pastas as $rel => [$para, $caminho]) {
             if (!is_dir($caminho)) {
-                $out[] = self::item('aviso', 'Pasta ' . $rel, 'Não existe — ' . $para . '.',
-                    'Crie a pasta ' . $rel . ' com permissão de escrita para o usuário do servidor web.');
+                $out[] = self::item('erro', 'Pasta ' . $rel, 'Não existe: ' . $caminho . ' — ' . $para . '.',
+                    'Crie a pasta com permissão de escrita para o usuário do servidor web.');
                 continue;
             }
             $out[] = is_writable($caminho)
-                ? self::item('ok', 'Pasta ' . $rel, 'Existe e pode ser escrita (' . $para . ').')
-                : self::item('erro', 'Pasta ' . $rel, 'Existe mas NÃO pode ser escrita — ' . $para . ' falha.',
+                ? self::item('ok', 'Pasta ' . $rel, 'Existe e pode ser escrita (' . $para . ') — ' . $caminho . '.')
+                : self::item('erro', 'Pasta ' . $rel, 'Existe mas NÃO pode ser escrita: ' . $caminho . ' — ' . $para . ' falha.',
                     'Dê permissão de escrita ao usuário do servidor web (geralmente www-data).');
+        }
+
+        // Onde config e storage realmente estão — e se isso é bom.
+        $foraConfig  = !str_starts_with(CONFIG_PATH . '/', $raiz . '/');
+        $foraStorage = !str_starts_with(rtrim(STORAGE_PATH, '/') . '/', $raiz . '/');
+        $out[] = self::item($foraConfig ? 'ok' : 'aviso', 'Onde fica a configuração',
+            CONFIG_FILE . ' (' . CONFIG_ORIGEM . ').'
+            . ($foraConfig ? ' Fora da área pública — nenhuma URL alcança.'
+                           : ' Dentro da área pública: enquanto o PHP executa, o acesso direto devolve '
+                             . 'página em branco, mas no dia em que ele parar de processar .php sai o fonte '
+                             . 'com a senha do banco.'),
+            $foraConfig ? '' : 'Mova config.php para uma pasta irmã da instalação — veja "Tirar config e dados '
+                             . 'do public_html" no README.');
+        $out[] = self::item($foraStorage ? 'ok' : 'aviso', 'Onde ficam os dados',
+            STORAGE_PATH . '.'
+            . ($foraStorage ? ' Fora da área pública — nenhuma URL alcança.'
+                            : ' Dentro da área pública: backup, log e anexo privado não são arquivos .php, '
+                              . 'então nenhum interpretador protege — só a configuração do servidor, que '
+                              . 'falha em silêncio no Nginx.'),
+            $foraStorage ? '' : "Aponte 'paths' => ['storage' => '/caminho/fora/do/public_html'] em config.php.");
+
+        // Caminho configurado que não existe: o boot volta para o padrão, e
+        // sem este aviso o backup passaria a ser gravado num lugar que o
+        // administrador não procura.
+        if (STORAGE_CONFIGURADO !== '' && !is_dir(STORAGE_PATH)) {
+            $out[] = self::item('erro', 'Pasta de dados configurada não existe',
+                "config.php pede paths.storage = '" . STORAGE_CONFIGURADO . "', que não existe ou não "
+                . 'está acessível. Toda gravação de log, cache, backup e anexo privado vai falhar.',
+                'Crie a pasta (ou corrija o caminho em config.php). O sistema NÃO volta sozinho para '
+                . 'a pasta pública: fazer isso espalharia atestado e backup dentro do public_html sem '
+                . 'ninguém notar.');
         }
 
         // Espaço em disco: é o que faz o backup falhar no meio sem aviso.
@@ -312,11 +345,15 @@ final class HealthCheck
                 $nivel === 'ok' ? '' : 'Libere espaço: backups antigos e logs são os primeiros candidatos (ver a limpeza automática nas configurações).');
         }
 
-        // uploads acessível direto pela web é vazamento de documento.
+        // A presença do .htaccess continua valendo como pista — mas só como
+        // pista. Quem responde de verdade se as pastas estão fechadas é o
+        // teste de exposição, na seção de segurança.
         $ht = $raiz . '/uploads/.htaccess';
         if (is_dir($raiz . '/uploads')) {
             $out[] = is_file($ht)
-                ? self::item('ok', 'Proteção da pasta uploads', 'Há um .htaccess restringindo o acesso direto.')
+                ? self::item('ok', 'Proteção da pasta uploads',
+                    'Há um .htaccess restringindo o acesso direto. Em Nginx ele é ignorado — '
+                    . 'veja o teste de exposição das pastas, na seção de segurança.')
                 : self::item('aviso', 'Proteção da pasta uploads',
                     'Sem .htaccess: em servidores Apache os arquivos podem ser baixados direto pela URL.',
                     'Em Nginx, bloqueie /uploads na configuração do site; em Apache, adicione um .htaccess.');
@@ -335,12 +372,84 @@ final class HealthCheck
         return $out;
     }
 
+    /**
+     * Itens do checkup vindos do último teste de exposição das pastas.
+     *
+     * Um item por pasta seria ruído: seis linhas quase iguais empurram o
+     * resto da página para baixo. Então: uma linha de resumo quando está
+     * tudo bem, e uma linha POR PASTA apenas quando há algo a fazer.
+     *
+     * @return array<int, array<string,mixed>>
+     */
+    private static function exposicao(): array
+    {
+        $r = Exposicao::ultimo();
+        if ($r === null) {
+            return [self::item('info', 'Exposição das pastas internas',
+                'Ainda não foi testado. O teste grava um arquivo temporário em cada pasta '
+                . 'sensível e tenta baixá-lo pela web — é a única forma de saber se a proteção '
+                . 'realmente funciona neste servidor (um .htaccess não vale nada em Nginx).',
+                'Use o botão "Testar agora" nesta página, ou espere o cron rodar.')];
+        }
+
+        $quando = 'testado em ' . date('d/m/Y H:i', (int) strtotime((string) $r['em']))
+                . ' (' . ($r['origem'] === 'cron' ? 'pelo cron' : 'pela tela') . ')';
+
+        $expostas = $duvidosas = [];
+        $meta = Exposicao::pastas();
+        foreach ($r['itens'] as $i) {
+            if (($i['estado'] ?? '') === 'exposta')       { $expostas[]  = $i; }
+            elseif (($i['estado'] ?? '') === 'indeterminado') { $duvidosas[] = $i; }
+        }
+
+        // "A pasta não existe nesta instalação" não é prova de nada: sem este
+        // ramo, uma instalação em que a sonda não achou nada para testar
+        // recebia a mesma linha verde de quem testou tudo e passou.
+        $testadas = array_filter($r['itens'], fn ($i) => in_array($i['estado'] ?? '', ['exposta', 'protegida', 'fora'], true));
+
+        $out = [];
+        if ($expostas === [] && $duvidosas === []) {
+            $out[] = $testadas === []
+                ? self::item('aviso', 'Exposição das pastas internas',
+                    'O teste rodou (' . $quando . ') mas não encontrou nenhuma pasta para verificar — '
+                    . 'o resultado não diz nada sobre a segurança desta instalação.',
+                    'Confira se os caminhos de config e dados estão corretos no checkup acima.')
+                : self::item('ok', 'Exposição das pastas internas',
+                    count($testadas) . ' pasta(s) verificada(s), nenhuma é entregue pela web — ' . $quando . '.');
+            return $out;
+        }
+
+        foreach ($expostas as $i) {
+            $pasta = (string) $i['pasta'];
+            $out[] = self::item($meta[$pasta]['nivel'] ?? 'erro',
+                'Pasta ABERTA na web: ' . $pasta,
+                ($meta[$pasta]['porque'] ?? '') . ' Confirmado por teste: o arquivo-isca foi baixado pela URL (' . $quando . ').',
+                'Mova a pasta para fora do public_html (ver o README) ou bloqueie o caminho na '
+                . 'configuração do servidor. Em Nginx o .htaccess não é lido.');
+        }
+        foreach ($duvidosas as $i) {
+            $out[] = self::item('aviso', 'Não foi possível testar: ' . (string) $i['pasta'],
+                (string) $i['detalhe'] . ' (' . $quando . ')',
+                'Rode o teste pelo cron — sem a disputa por processo do servidor web, ele costuma concluir.');
+        }
+        return $out;
+    }
+
     // ── Segurança ──────────────────────────────────────────────────────────
 
     private static function seguranca(): array
     {
         $raiz = dirname(CORE_PATH);
         $out  = [];
+
+        // Pastas internas realmente fechadas? Resultado do teste de exposição
+        // (Core\Exposicao), que grava um arquivo-isca e tenta baixá-lo pela
+        // web. Aqui só LEMOS o último resultado: o checkup não pode disparar
+        // a auto-requisição sozinho, porque em hospedagem com um worker de
+        // PHP só ela trava a própria página até estourar o tempo.
+        foreach (self::exposicao() as $item) {
+            $out[] = $item;
+        }
 
         $out[] = is_file($raiz . '/install.php')
             ? self::item('erro', 'Instalador', 'O arquivo install.php ainda está no servidor.',
