@@ -130,6 +130,14 @@ if ($only === '' || $only === 'core') {
     }
 }
 
+// A partir daqui a execução está autorizada — por CLI ou pelo token conferido
+// acima. Os crons dos módulos exigem esta constante e recusam qualquer outra
+// forma de chegar até eles: eles dizem no próprio cabeçalho que "a
+// autenticação é feita pelo cron da raiz", e essa frase só era verdade
+// enquanto o servidor web recusasse o acesso direto ao arquivo — o que
+// nenhum .htaccess garante.
+define('CRON_AUTORIZADO', true);
+
 // ---- Execução -------------------------------------------------------------
 // Cada módulo carrega seu próprio código legado (helpers globais como e(),
 // url(), redirect()...). Para que dois módulos nunca colidam no mesmo

@@ -14,6 +14,19 @@
  * dessas tabelas deixou de ser responsabilidade do módulo.
  */
 
+
+// Este arquivo só existe para ser chamado pelo cron da raiz (cron.php), que é
+// quem confere CLI ou token. Sem esta guarda a frase acima era uma suposição:
+// um GET direto no arquivo executava a rotina inteira, sem autenticação
+// nenhuma — reproduzido em modules/manutencao/cron/run.php, que respondeu
+// HTTP 200 e rodou as cinco tarefas. O .htaccess não salva: o Nginx o ignora,
+// o Apache com AllowOverride None também, e o do próprio módulo manutenção
+// bloqueava o arquivo `cron.php` e não a PASTA `cron/`.
+// 404, e não 403: quem pediu não precisa saber que o arquivo existe.
+if (!defined('CRON_AUTORIZADO')) {
+    http_response_code(404);
+    exit;
+}
 /**
  * Remove arquivos em {storage/uploads/rh | uploads/rh}/{sub}/ que não são
  * referenciados no banco. Arquivos com menos de 24h são preservados (margem

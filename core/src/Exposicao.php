@@ -100,6 +100,14 @@ final class Exposicao
                           . 'por onde atacar.',
                 'nivel'  => 'aviso',
             ],
+            'modules' => [
+                'rotulo' => 'modules',
+                'porque' => 'O código dos módulos — e, dentro dele, as rotinas de cron, que '
+                          . 'escrevem no banco. Elas conferem a constante do cron da raiz e '
+                          . 'recusam acesso direto, mas a pasta continua não devendo ser '
+                          . 'entregue: quem lê o fonte descobre a estrutura inteira.',
+                'nivel'  => 'aviso',
+            ],
             'core' => [
                 'rotulo' => 'core',
                 'porque' => 'O código do núcleo. Serve como mapa para quem procura falha.',
