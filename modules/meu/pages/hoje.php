@@ -20,6 +20,8 @@ $eventosHoje = core_can('agenda.view')  ? meu_eventos($de, $ate)     : [];
 $tarefas     = core_can('tarefas.view') ? meu_tarefas_abertas(8)     : [];
 $notas       = core_can('notas.view')   ? meu_notas(false, 4)        : [];
 
+$pedidos   = core_can('solicitacoes.view') ? meu_solicitacoes('recebidas', false) : [];
+$pendentes = array_filter($pedidos, fn ($s) => $s['situacao'] === 'pendente');
 $atrasadas = array_filter($tarefas, fn ($t) => meu_prazo_estado($t['prazo']) === 'vencida');
 $agora     = date('H:i:s');
 
@@ -33,6 +35,16 @@ ob_start(); ?>
     <h1 class="h4 mb-1"><?= $saudacao ?><?= $primeiro !== '' ? ', ' . core_e($primeiro) : '' ?>.</h1>
     <p class="text-muted mb-0"><?= core_e(ucfirst(meu_data_extenso(time()))) ?></p>
 </div>
+
+<?php if ($pendentes): ?>
+<div class="alert alert-info d-flex align-items-center gap-2">
+    <i class="bi bi-inbox-fill"></i>
+    <div>
+        <strong><?= count($pendentes) ?></strong> pessoa(s) estão esperando sua resposta.
+        <a href="<?= core_module_url('meu', ['page' => 'solicitacoes']) ?>" class="alert-link">Ver</a>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php if ($atrasadas): ?>
 <div class="alert alert-warning d-flex align-items-center gap-2">

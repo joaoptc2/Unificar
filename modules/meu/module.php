@@ -68,6 +68,30 @@ return [
                 'manage' => 'Criar, editar, concluir e excluir tarefas',
             ],
         ],
+        /**
+         * Solicitações e formulários envolvem DUAS pessoas — e o módulo é
+         * 'todos' => true, o que concede toda chave a todo mundo. Por isso
+         * cada chave aqui descreve um poder SOBRE O PRÓPRIO ENVOLVIMENTO
+         * ("as que me envolvem", "as que recebi"), nunca sobre o de
+         * terceiros: o escopo real vem do WHERE das consultas, não da
+         * permissão. Uma chave do tipo "ver as solicitações de qualquer
+         * pessoa" seria concedida a toda a organização automaticamente.
+         */
+        'solicitacoes' => [
+            'label'   => 'Solicitações',
+            'actions' => [
+                'view'      => 'Ver as solicitações que me envolvem',
+                'enviar'    => 'Pedir algo a outra pessoa',
+                'responder' => 'Aceitar, recusar e concluir o que recebi',
+            ],
+        ],
+        'formularios' => [
+            'label'   => 'Formulários de solicitação',
+            'actions' => [
+                'view'   => 'Ver e preencher formulários',
+                'manage' => 'Criar e editar os meus formulários',
+            ],
+        ],
     ],
 
     /**
@@ -87,6 +111,8 @@ return [
         if ($can('agenda.view'))  { $items[] = ['label' => 'Agenda',  'url' => $u('agenda'),  'icon' => 'bi-calendar3',   'key' => 'agenda']; }
         if ($can('tarefas.view')) { $items[] = ['label' => 'Tarefas', 'url' => $u('tarefas'), 'icon' => 'bi-check2-square', 'key' => 'tarefas']; }
         if ($can('notas.view'))   { $items[] = ['label' => 'Notas',   'url' => $u('notas'),   'icon' => 'bi-journal-text', 'key' => 'notas']; }
+        if ($can('solicitacoes.view')) { $items[] = ['label' => 'Solicitações', 'url' => $u('solicitacoes'), 'icon' => 'bi-inbox',      'key' => 'solicitacoes']; }
+        if ($can('formularios.view'))  { $items[] = ['label' => 'Formulários',  'url' => $u('formularios'),  'icon' => 'bi-ui-checks',  'key' => 'formularios']; }
 
         return [['heading' => 'Meu espaço', 'items' => $items]];
     },

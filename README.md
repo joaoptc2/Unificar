@@ -565,6 +565,54 @@ conteúdo é inteiramente privado — agenda, notas e tarefas de cada pessoa.
 | **Agenda** | Semana de segunda a domingo, com cor por compromisso, local, observação e lembrete |
 | **Tarefas** | Prazo, prioridade e situação; as de prazo mais apertado primeiro, concluídas separadas |
 | **Notas** | Bloco de notas com título, cor, fixação e arquivamento |
+| **Solicitações** | O que me pediram e o que eu pedi; aceitar vira tarefa minha |
+| **Formulários** | Os formulários que publico para receber pedidos, e os que posso preencher |
+
+### Solicitações e formulários
+
+As três primeiras telas são privadas. **Solicitações** e **Formulários** são o
+contrário: existem para ligar duas pessoas.
+
+- **Solicitações** — peça algo a um colega, com prazo e prioridade. Quem
+  recebe aceita, recusa ou conclui. **Aceitar cria a tarefa** de quem aceitou,
+  com o vínculo guardado: sem isso o "aceito" não vira trabalho em lugar
+  nenhum e o pedido some da vista.
+- **Formulários** — cada pessoa cria os seus ("Pedido de material",
+  "Liberação de acesso"), com os mesmos oito tipos de campo das pesquisas do
+  RH. Quem preenche gera uma solicitação para o dono, com as respostas
+  anexadas. Não existe tabela de "envio": **o preenchimento É a solicitação**,
+  o que elimina a possibilidade de resposta órfã.
+
+#### O que muda no escopo
+
+Com duas pontas, "toda consulta filtra por `user_id`" deixa de bastar. O
+predicado passa a ser **"eu sou uma das pontas"**, e vai no `WHERE` de toda
+leitura e de toda escrita — nunca se carrega pelo id para decidir depois o que
+mostrar. Conferido com três usuários: o remetente e o destinatário veem; um
+terceiro, com sessão válida e token CSRF válido, não vê nada e não consegue
+responder nem cancelar.
+
+Por isso estas telas **não** reutilizam as funções da etapa 1: a allowlist de
+lá casa por `user_id`, que não descreve nenhuma das duas relações.
+
+#### Perguntas congelam depois da primeira resposta
+
+Editar um formulário já respondido apagaria campos cujos ids estão nas
+respostas — o que sobrasse responderia a perguntas que não existem mais. A
+tela avisa e o servidor recusa a regravação: conferido com um POST forjado
+tentando trocar as perguntas de um formulário já usado.
+
+#### Permissões num módulo universal
+
+O módulo é `'todos' => true`, o que concede **toda** chave a **todo mundo**.
+Logo, cada chave descreve um poder sobre o próprio envolvimento ("ver as que
+me envolvem", "responder as que recebi") — nunca sobre o de terceiros, que
+seria concedido à organização inteira. O escopo real vem do `WHERE`.
+
+Um efeito colateral disso era grave e foi corrigido junto: a tela de
+permissões listava o módulo, aceitava desmarcar, gravava e dizia "atualizado"
+— **sem revogar nada**, porque o conjunto era devolvido antes de qualquer
+leitura das concessões. Agora a negação explícita vale também aqui.
 
 ### Privacidade: como ela é garantida
 

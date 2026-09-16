@@ -15,7 +15,10 @@ $routes = [
     'hoje'    => 'pages/hoje.php',
     'agenda'  => 'pages/agenda.php',
     'tarefas' => 'pages/tarefas.php',
-    'notas'   => 'pages/notas.php',
+    'notas'        => 'pages/notas.php',
+    'solicitacoes' => 'pages/solicitacoes.php',
+    'formularios'  => 'pages/formularios.php',
+    'formulario'   => 'pages/formulario.php',
 ];
 
 $file = $routes[$page] ?? null;
