@@ -111,9 +111,13 @@ final class Assistente
     /** Gasto do mês corrente, em milésimos de centavo. */
     public static function gastoDoMes(): int
     {
+        // SEM filtrar por ok = 1. Uma chamada que estourou o tempo DEPOIS de
+        // o prompt sair, ou que morreu no meio da resposta, foi cobrada pela
+        // Anthropic do mesmo jeito — contar só o que deu certo faria o teto
+        // ficar sempre abaixo do gasto real, que é o erro que ele existe para
+        // evitar.
         $r = DB::queryOne(
-            "SELECT COALESCE(SUM(milicentavos),0) t FROM ia_uso
-              WHERE created_at >= ? AND ok = 1",
+            'SELECT COALESCE(SUM(milicentavos),0) t FROM ia_uso WHERE created_at >= ?',
             [date('Y-m-01 00:00:00')]
         );
         return (int) ($r['t'] ?? 0);
@@ -183,10 +187,18 @@ final class Assistente
         $uid = Auth::check() ? (int) Auth::id() : null;
         $res = ['ok' => false, 'texto' => '', 'erro' => '', 'tokens_in' => 0, 'tokens_out' => 0, 'ms' => 0];
 
-        $falhar = function (string $erro) use (&$res, $t0, $funcao, $uid, $usuario): array {
+        // $enviou diz se o prompt chegou a sair. Quando saiu, a falha ainda
+        // custa: a estimativa entra no teto, para ele não ficar abaixo do
+        // gasto real.
+        $enviou = false;
+        $falhar = function (string $erro) use (&$res, &$enviou, $t0, $funcao, $uid, $usuario): array {
             $res['erro'] = $erro;
             $res['ms']   = (int) round((microtime(true) - $t0) * 1000);
-            self::registrar($uid, $funcao, self::modelo(), 0, 0, 0, mb_strlen($usuario), false, $erro, $res['ms']);
+            // 4 caracteres por token é a regra de bolso; serve para o teto,
+            // não para a contabilidade.
+            $estimado = $enviou ? self::custo(self::modelo(), (int) ceil(mb_strlen($usuario) / 4), 0) : 0;
+            self::registrar($uid, $funcao, self::modelo(), 0, 0, $estimado,
+                mb_strlen($usuario), false, $erro, $res['ms']);
             return $res;
         };
 
@@ -201,6 +213,14 @@ final class Assistente
         if (self::saldo() <= 0) {
             return $falhar('O teto de gasto do mês foi atingido. Ele volta no dia 1º, '
                 . 'ou pode ser aumentado em Administração › Assistente.');
+        }
+
+        // Sem curl não há chamada. Exposicao e MoodleAuth já guardam assim;
+        // aqui faltava, e numa hospedagem sem a extensão isto era Error fatal
+        // — página branca em vez de mensagem.
+        if (!function_exists('curl_init')) {
+            return $falhar('A extensão curl não está disponível neste servidor, '
+                . 'e sem ela não é possível falar com a API.');
         }
 
         $usuario = mb_substr($usuario, 0, self::TAMANHO_MAX);
@@ -236,7 +256,8 @@ final class Assistente
                 'anthropic-version: ' . self::VERSAO,
             ],
         ]);
-        $bruto = curl_exec($ch);
+        $enviou = true;
+        $bruto  = curl_exec($ch);
         $http  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $erroC = (string) curl_error($ch);
         curl_close($ch);

@@ -219,13 +219,32 @@ class Sessao(socketserver.BaseRequestHandler):
 
             if "BODY.PEEK[HEADER" in itens or "BODY[HEADER" in itens:
                 cabecalho = bruto.split(b"\r\n\r\n", 1)[0] + b"\r\n\r\n"
-                self._envia(f"* {n} FETCH (UID {n} FLAGS (\\Seen) BODY[HEADER] ".encode())
-                self._literal("", cabecalho)
+                # Metade com UID/FLAGS DEPOIS do literal: a RFC permite, e é
+                # onde um cliente que só lê a primeira linha do item perde o
+                # UID — deixando a lista inteira com links quebrados.
+                if n % 2 == 0:
+                    self._envia(f"* {n} FETCH (BODY[HEADER] ".encode())
+                    self._envia(f"{{{len(cabecalho)}}}\r\n".encode())
+                    self._envia(cabecalho)
+                    self._envia(f" UID {n} FLAGS (\\Seen))\r\n".encode())
+                else:
+                    self._envia(f"* {n} FETCH (UID {n} FLAGS (\\Seen) BODY[HEADER] ".encode())
+                    self._literal("", cabecalho)
             elif "RFC822.SIZE" in itens and "BODY" not in itens:
                 self._envia(f"* {n} FETCH (UID {n} RFC822.SIZE {len(bruto)})\r\n".encode())
             else:
-                self._envia(f"* {n} FETCH (UID {n} FLAGS (\\Seen) BODY[] ".encode())
-                self._literal("", bruto)
+                # A RFC 3501 permite os data items em QUALQUER ordem. Metade
+                # das mensagens vem com UID/FLAGS DEPOIS do literal — que é
+                # como servidores reais costumam responder e como um cliente
+                # que só lê a primeira linha do item quebra.
+                if n % 2 == 0:
+                    self._envia(f"* {n} FETCH (BODY[] ".encode())
+                    self._envia(f"{{{len(bruto)}}}\r\n".encode())
+                    self._envia(bruto)
+                    self._envia(f" UID {n} FLAGS (\\Seen))\r\n".encode())
+                else:
+                    self._envia(f"* {n} FETCH (UID {n} FLAGS (\\Seen) BODY[] ".encode())
+                    self._literal("", bruto)
 
         self._envia(f"{tag} OK FETCH concluído\r\n")
 

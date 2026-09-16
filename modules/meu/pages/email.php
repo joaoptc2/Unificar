@@ -60,6 +60,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($op === 'destrancar') {
+        // Campo desabilitado na tela não protege nada: um POST direto passa.
+        // A recusa que vale é esta.
+        if (!Core\Https::requestIsSecure() && !Core\Https::baseUrlIsLocal()) {
+            Flash::set('error', 'A senha não foi aceita: esta requisição chegou por http, e a senha '
+                . 'trafegaria em texto claro. Acesse o portal por https.');
+            core_redirect($url());
+        }
         $senha = (string) ($_POST['senha'] ?? '');
         if ($senha === '' || $conta === null) {
             Flash::set('error', 'Informe a senha de aplicativo.');
@@ -74,6 +81,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $c->fechar();
             DB::execute('UPDATE meu_email_contas SET ultimo_ok = ? WHERE user_id = ?',
                 [date('Y-m-d H:i:s'), $uid]);
+            // Abrir uma caixa de e-mail é evento que precisa de rastro: é o
+            // momento em que credencial de e-mail entra no sistema.
+            Core\Audit::log('meu.email.abrir', 'meu_email_contas', (string) $uid,
+                ['conta' => (string) $conta['usuario'], 'host' => (string) $conta['host']], $uid, 'meu');
             Flash::set('success', 'Caixa aberta. A senha vale até você sair do sistema.');
         } catch (\Throwable $e) {
             meu_email_trancar();
@@ -118,11 +129,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'from_name'  => (string) $eu['name'],
             ],
         ]);
+        // Enviar e-mail COMO o usuário é a ação de maior consequência desta
+        // tela: sai da caixa dele, com o nome dele, para fora do hospital.
+        Core\Audit::log('meu.email.responder', 'meu_email_contas', (string) $uid,
+            ['de' => (string) $conta['usuario'], 'para' => $para, 'ok' => !empty($r['ok'])], $uid, 'meu');
+
         if (!empty($r['ok'])) {
             Flash::set('success', 'Resposta enviada para ' . $para . '.');
             core_redirect($url());
         }
-        Flash::set('error', 'Não consegui enviar: ' . ($r['error'] ?: 'falha no servidor de envio.'));
+        // A senha da sessão NUNCA pode aparecer aqui: o diagnóstico do Mailer
+        // ecoa o diálogo SMTP, e MailConfig::redact() só conhece a senha
+        // global do portal — a do usuário passaria inteira para a tela.
+        $msg = (string) ($r['error'] ?: 'falha no servidor de envio.');
+        $msg = str_replace(meu_email_senha(), '(senha omitida)', $msg);
+        Flash::set('error', 'Não consegui enviar: ' . $msg);
         core_redirect($url(['ver' => $uidMsg]));
     }
     core_redirect($url());
@@ -145,7 +166,9 @@ if ($destrancada && !$configurar) {
         }
         $c->fechar();
     } catch (\Throwable $e) {
-        $erro = $e->getMessage();
+        // Mesma razão do envio: a mensagem do servidor pode devolver o que
+        // foi enviado, e o LOGIN levou a senha.
+        $erro = str_replace(meu_email_senha(), '(senha omitida)', $e->getMessage());
         // Senha que deixou de valer (trocada no Zoho, por exemplo): tranca de
         // novo para a pessoa poder digitar a nova em vez de ver erro sempre.
         if (stripos($erro, 'recusad') !== false) {
@@ -241,9 +264,20 @@ ob_start(); ?>
 </div>
 
 <?php elseif (!$destrancada): ?>
+<?php // Mesma exceção que Https::enforce() já faz: em instalação local não
+      // existe rede no caminho para interceptar, e bloquear ali seria travar
+      // o desenvolvimento por causa de uma regra de produção.
+      $seguro = Core\Https::requestIsSecure() || Core\Https::baseUrlIsLocal(); ?>
 <div class="card mb-3" style="max-width:520px">
     <div class="card-header"><i class="bi bi-lock me-2"></i>Abrir a caixa</div>
     <div class="card-body">
+        <?php if (!$seguro): ?>
+            <div class="alert alert-danger">
+                <strong>Esta página chegou por http.</strong> Digitar aqui mandaria a senha da sua
+                caixa de e-mail em texto claro pela rede — quem estiver no caminho consegue ler.
+                Acesse o portal por <code>https://</code> e volte.
+            </div>
+        <?php endif; ?>
         <p class="small text-muted">
             <?= core_e((string) $conta['usuario']) ?> · <?= core_e((string) $conta['host']) ?>
         </p>
@@ -253,12 +287,14 @@ ob_start(); ?>
             <div class="mb-3">
                 <label class="form-label small fw-semibold" for="e_senha">Senha de aplicativo</label>
                 <input type="password" class="form-control" id="e_senha" name="senha" required autofocus
-                       autocomplete="off">
+                       autocomplete="off" <?= $seguro ? '' : 'disabled' ?>>
                 <div class="form-text small">
                     Ela <strong>não é guardada</strong>: vale só nesta sessão e some quando você sair.
                 </div>
             </div>
-            <button class="btn btn-primary"><i class="bi bi-unlock me-1"></i>Abrir</button>
+            <button class="btn btn-primary" <?= $seguro ? '' : 'disabled' ?>>
+                <i class="bi bi-unlock me-1"></i>Abrir
+            </button>
         </form>
     </div>
 </div>
@@ -313,6 +349,13 @@ ob_start(); ?>
                     <div class="meu-email-corpo"><?= HtmlSanitizer::clean($vendo['html']) ?></div>
                 <?php else: ?>
                     <div style="white-space:pre-wrap"><?= core_e($vendo['texto']) ?></div>
+                <?php endif; ?>
+
+                <?php if (!empty($vendo['truncada'])): ?>
+                    <div class="alert alert-warning small mt-2 mb-0">
+                        Esta mensagem é grande demais para abrir inteira aqui — o corpo foi cortado.
+                        Veja pelo webmail.
+                    </div>
                 <?php endif; ?>
 
                 <?php if ($vendo['anexos']): ?>

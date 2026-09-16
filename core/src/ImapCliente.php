@@ -174,19 +174,35 @@ final class ImapCliente
      */
     public function mensagem(int $uid, bool $marcarLida = false): ?array
     {
-        $res  = $this->comando("UID FETCH {$uid} (BODY.PEEK[])");
-        $itens = $this->agrupar($res);
+        $truncada = false;
+        try {
+            $itens = $this->agrupar($this->comando("UID FETCH {$uid} (BODY.PEEK[])"));
+        } catch (\RuntimeException $e) {
+            // Mensagem grande demais (anexo de dezenas de MB). Antes isto era
+            // um erro seco e a mensagem simplesmente NÃO ABRIA. Agora busca só
+            // o cabeçalho: a pessoa vê de quem é, o assunto e a data, com um
+            // aviso de que o corpo ficou de fora.
+            if (!str_contains($e->getMessage(), 'grande demais')) {
+                throw $e;
+            }
+            $itens    = $this->agrupar($this->comando(
+                "UID FETCH {$uid} (BODY.PEEK[HEADER])"
+            ));
+            $truncada = true;
+        }
         if ($itens === []) {
             return null;
         }
         $bruto = $itens[0]['dados'];
         if (strlen($bruto) > self::TAMANHO_MAX) {
-            // Não é erro: é recusa consciente. Uma mensagem de 40 MB com um
-            // anexo dentro derrubaria a página por falta de memória.
-            $bruto = substr($bruto, 0, self::TAMANHO_MAX);
+            // Recusa consciente: uma mensagem de 40 MB com um anexo dentro
+            // derrubaria a página por falta de memória.
+            $bruto    = substr($bruto, 0, self::TAMANHO_MAX);
+            $truncada = true;
         }
         $m = Mime::mensagem($bruto);
-        $m['uid'] = $uid;
+        $m['uid']      = $uid;
+        $m['truncada'] = $truncada;
 
         if ($marcarLida) {
             try {
@@ -210,6 +226,13 @@ final class ImapCliente
      */
     private function comando(string $cmd, bool $sigiloso = false): array
     {
+        // O prazo é renovado A CADA COMANDO. Antes era um orçamento único,
+        // definido em conectar(): conectar + LOGIN + SELECT + a lista + o
+        // corpo de uma mensagem de até 2 MB tinham de caber nos mesmos 20
+        // segundos, e a última etapa morria de "tempo esgotado" num servidor
+        // que estava respondendo normalmente.
+        $this->limite = microtime(true) + $this->timeout;
+
         $tag = 'P' . str_pad((string) ++$this->tag, 4, '0', STR_PAD_LEFT);
         $this->escrever($tag . ' ' . $cmd, $sigiloso);
 
@@ -265,21 +288,43 @@ final class ImapCliente
                 if ($atual !== null) {
                     $itens[] = $atual;
                 }
-                $cabecalho = $m[2];
-                preg_match('/UID\s+(\d+)/i', $cabecalho, $mu);
-                preg_match('/FLAGS\s*\(([^)]*)\)/i', $cabecalho, $mf);
-                $atual = [
-                    'uid'   => (int) ($mu[1] ?? 0),
-                    'seq'   => (int) $m[1],
-                    'flags' => $mf[1] ?? '',
-                    'dados' => '',
-                ];
+                $atual = ['uid' => 0, 'seq' => (int) $m[1], 'flags' => '', 'dados' => ''];
+                self::colher($atual, $m[2]);
+                continue;
+            }
+
+            // Linha do item que NÃO abre um FETCH novo: é a continuação, e é
+            // aqui que costuma vir o resto dos campos.
+            //
+            // A RFC 3501 permite os data items em QUALQUER ordem, e servidores
+            // reais mandam com frequência "* 2 FETCH (BODY[] {123}" seguido do
+            // literal e só então " UID 2 FLAGS (\Seen))". Lendo apenas a
+            // primeira linha do item, o UID saía ZERO — e a lista inteira
+            // ficava com links quebrados, sem erro nenhum. Reproduzido com o
+            // servidor de teste antes de consertar.
+            if ($atual !== null) {
+                self::colher($atual, $l);
             }
         }
         if ($atual !== null) {
             $itens[] = $atual;
         }
         return $itens;
+    }
+
+    /**
+     * Colhe UID e FLAGS de um trecho, sem sobrescrever o que já foi achado.
+     *
+     * @param array{uid:int, seq:int, flags:string, dados:string} $item
+     */
+    private static function colher(array &$item, string $trecho): void
+    {
+        if ($item['uid'] === 0 && preg_match('/\bUID\s+(\d+)/i', $trecho, $m)) {
+            $item['uid'] = (int) $m[1];
+        }
+        if ($item['flags'] === '' && preg_match('/\bFLAGS\s*\(([^)]*)\)/i', $trecho, $m)) {
+            $item['flags'] = $m[1];
+        }
     }
 
     private function escrever(string $linha, bool $sigiloso = false): void

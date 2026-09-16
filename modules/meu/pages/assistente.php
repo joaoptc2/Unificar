@@ -75,9 +75,14 @@ $montar = function (string $tipo) use ($uid): string {
     }
     $linhas = [];
     foreach (meu_solicitacoes('recebidas', false) as $s) {
+        // O NOME DE QUEM PEDIU NÃO VAI. Ele é dado pessoal de um TERCEIRO —
+        // alguém que não escolheu ter o próprio nome enviado para fora do
+        // hospital, e que nem sabe que o colega usou o assistente. Para
+        // priorizar, o nome não acrescenta nada: o que decide é prazo,
+        // prioridade e situação.
         $linhas[] = sprintf(
-            '- %s (de %s, prioridade %s%s, situação %s)',
-            $s['titulo'], $s['contraparte'], $s['prioridade'],
+            '- %s (pedido por um colega, prioridade %s%s, situação %s)',
+            $s['titulo'], $s['prioridade'],
             $s['prazo'] ? ', prazo ' . date('d/m/Y', (int) strtotime($s['prazo'])) : '',
             $s['situacao']
         );

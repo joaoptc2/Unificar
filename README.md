@@ -676,15 +676,57 @@ de verdade e serve três mensagens escolhidas para quebrar implementações
 descuidadas: assunto em RFC2047, corpo quoted-printable, uma mensagem em
 ISO-8859-1 com bytes altos crus, e um multipart com preâmbulo e parte base64.
 
+Metade das mensagens vem com `UID` e `FLAGS` **depois** do literal — a RFC
+3501 permite os *data items* em qualquer ordem, e servidores reais usam essa
+ordem com frequência. Foi esse caso que revelou um defeito de verdade: o
+cliente lia UID e FLAGS só da primeira linha do item, e nessas mensagens o UID
+saía **zero** — a lista aparecia inteira e certa, com todos os links quebrados,
+sem erro nenhum na tela. Reproduzido no servidor de teste antes de consertar.
+
+#### O que ainda não faz
+
+- **Anexo não baixa pelo portal.** A tela lista o nome e o tamanho; para abrir,
+  é o webmail. Baixar exigiria uma rota de download com o conteúdo vindo do
+  IMAP a cada clique, e ela seria o caminho mais curto para servir qualquer
+  arquivo com qualquer tipo — fica para quando tiver revisão própria.
+- **Cada carregamento de página abre uma conexão nova.** Sem cache: a lista é
+  buscada de novo a cada visita. Numa caixa grande isso é lento. O caminho é
+  guardar a lista na sessão por alguns minutos, com botão de atualizar.
+- **A resposta não é encadeada.** Sai como mensagem nova com `Re:` no assunto,
+  sem `In-Reply-To`/`References`, então o cliente de quem recebe não a coloca
+  na mesma conversa.
+- **Mensagem grande demais abre só o cabeçalho.** Acima de 2 MB o corpo é
+  cortado e acima de 8 MB nem é pedido — a tela mostra remetente, assunto e
+  data com um aviso. Antes disso, a mensagem simplesmente não abria.
+
+#### Duas exigências da tela da senha
+
+Como a senha digitada é a senha de aplicativo do Zoho — que contorna o 2FA e
+nunca expira —, o formulário **se recusa a funcionar fora de https**: o campo
+vem desabilitado com o motivo à vista, e o `POST` é recusado no servidor,
+porque campo desabilitado na tela não impede requisição direta. A exceção é a
+instalação local (`localhost`), a mesma que `Https::enforce()` já abre.
+
+E a senha **não aparece em mensagem de erro**: o diagnóstico do envio ecoa o
+diálogo SMTP, onde o `LOGIN` passou. `MailConfig::redact()` só conhece a senha
+global do portal, então a do usuário passaria inteira para a tela — ela é
+apagada explicitamente antes de virar mensagem.
+
+Abrir a caixa e responder por ela ficam na **auditoria** (`meu.email.abrir`,
+`meu.email.responder`): é quando credencial de e-mail entra no sistema e
+quando sai mensagem com o nome da pessoa para fora do hospital.
+
 ### Assistente (IA)
 
 Desligado por padrão. Ligado em *Administração › Assistente*, com chave da
 API da Anthropic (guardada cifrada, nunca exibida de volta), modelo e **teto
 mensal de gasto**.
 
-Três funções, todas sobre o que é **do próprio usuário**: transformar uma
-anotação solta em lista de tarefas, resumir as solicitações que ele recebeu e
-estão abertas, e rascunhar uma resposta.
+Três funções, sobre o que está **no espaço do próprio usuário**: transformar
+uma anotação solta em lista de tarefas, resumir as solicitações que ele
+recebeu e estão abertas, e rascunhar uma resposta. O resumo é o único que
+toca em algo escrito por outra pessoa — o título da solicitação; o nome de
+quem pediu não vai (ver abaixo).
 
 #### O que o sistema faz, e o que ele não faz
 
@@ -694,6 +736,21 @@ estão abertas, e rascunhar uma resposta.
 | Registra **que** houve a chamada, de quem, para quê e de que tamanho | Guardar o conteúdo enviado — seria criar uma segunda cópia do que se quer proteger |
 | Recusa texto com marca de CPF, cartão do SUS ou palavras de contexto assistencial | Prometer que isso é suficiente |
 | Impede o gasto acima do teto, conferido **antes** de cada chamada | Substituir a fatura real do painel da Anthropic |
+
+#### O que sai de verdade no resumo de solicitações
+
+"Todas sobre o que é do próprio usuário" era **impreciso**, e a revisão pegou:
+o resumo das solicitações recebidas montava a lista com o **nome de quem
+pediu** — um terceiro, que não escolheu ter o próprio nome enviado para fora
+do hospital e nem sabe que o colega usou o assistente. Para priorizar, o nome
+não acrescenta nada: o que decide é prazo, prioridade e situação. Hoje sai
+`- <título> (pedido por um colega, prioridade alta, prazo 20/09/2026,
+situação aberta)`.
+
+Continua saindo o **título que o colega escreveu**, porque sem ele não há o
+que resumir. Quem escreve um título de solicitação está escrevendo para uma
+pessoa, não para um modelo — e por isso o texto exato aparece na tela antes
+de enviar, para quem clica poder ver e desistir.
 
 A trava é uma **rede, não uma garantia**: ela reconhece formato, e dado
 clínico escrito em português corrido não tem formato. Quando ela pega algo, o
@@ -709,8 +766,12 @@ por FTP a hospedagem compartilhada, e um `vendor/` é um problema maior que a
 comodidade que traz.
 
 O teto é do portal, em centavos de dólar por mês, conferido antes de gastar.
-A estimativa usa a tabela pública de preços; a cobrança real é a do painel da
-Anthropic, e a tela diz isso. Preços por milhão de tokens (entrada/saída):
+Ele conta **também as chamadas que falharam depois de o prompt sair** — tempo
+esgotado no meio da resposta, conexão cortada: a Anthropic cobra do mesmo
+jeito, e somar só o que deu certo deixaria o teto sempre abaixo do gasto real,
+que é exatamente o erro que ele existe para evitar. A estimativa usa a tabela
+pública de preços; a cobrança real é a do painel da Anthropic, e a tela diz
+isso. Preços por milhão de tokens (entrada/saída):
 Opus 5 US$ 5/25, Sonnet 5 US$ 2/10, Haiku 4.5 US$ 1/5. Uma anotação de meia
 página custa frações de centavo.
 
