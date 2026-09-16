@@ -152,6 +152,16 @@ final class Exposicao
         $conclusivo = array_filter($itens, fn ($i) => $i['estado'] !== 'indeterminado');
         if ($conclusivo === [] && self::ultimo() !== null) {
             $resultado['nao_guardado'] = true;
+            // O resultado antigo continua valendo, MAS a tentativa precisa
+            // ficar marcada: o portão de 20 h do cron olha essa marca, e sem
+            // ela um site que o servidor não consegue alcançar (NAT sem
+            // hairpin, firewall de saída) refaria a sonda inteira em TODA
+            // execução do cron, para sempre.
+            try {
+                Settings::set(self::CHAVE . '.tentado_em', $resultado['em']);
+            } catch (\Throwable) {
+                // sem banco, o cron tenta de novo no próximo ciclo: aceitável.
+            }
             return $resultado;
         }
 
@@ -192,7 +202,24 @@ final class Exposicao
             ];
         }
 
-        // 3. Dentro da área pública: só o teste real responde.
+        // 3. Sem endereço não há teste — e a checagem vem ANTES de gravar
+        //    qualquer coisa. app.base_url vazia é o PADRÃO do config de
+        //    exemplo, e pela linha de comando (o caminho normal deste teste)
+        //    não existe cabeçalho Host de onde tirar o endereço: sem isto a
+        //    isca era gravada, o curl recusava a URL sem host, e o resultado
+        //    culpava o servidor por um problema de configuração.
+        $base = rtrim(trim((string) Config::get('app.base_url', '')), '/');
+        if ($base === '' || parse_url($base, PHP_URL_SCHEME) === null || parse_url($base, PHP_URL_HOST) === null) {
+            return [
+                'estado'  => 'indeterminado',
+                'detalhe' => 'app.base_url não está preenchida na configuração. Sem ela não há endereço '
+                           . 'para testar: pela linha de comando não existe requisição de onde tirá-lo, e '
+                           . 'pela tela o endereço viria do cabeçalho Host — ou seja, de quem faz o pedido.',
+                'http'    => 0,
+            ];
+        }
+
+        // 4. Dentro da área pública: só o teste real responde.
         if (!is_writable($dir)) {
             return [
                 'estado'  => 'indeterminado',
@@ -220,16 +247,6 @@ final class Exposicao
             // escolheria o alvo do teste, e o resultado não valeria nada.
             // Pela linha de comando não existe Host nenhum, e a sonda pediria
             // um caminho relativo que nunca conclui.
-            $base = trim((string) Config::get('app.base_url', ''));
-            if ($base === '') {
-                return [
-                    'estado'  => 'indeterminado',
-                    'detalhe' => 'app.base_url não está preenchida na configuração. Sem ela, o teste só '
-                               . 'teria o endereço que veio na requisição — e quem faz a requisição '
-                               . 'escolhe esse endereço.',
-                    'http'    => 0,
-                ];
-            }
             // O caminho da URL é derivado do diretório FÍSICO, não do nome da
             // chave. Os dois divergem sempre que a pasta real tem outro nome
             // (paths.storage apontando para uma pasta dentro da área pública
@@ -240,7 +257,7 @@ final class Exposicao
             $relUrl   = ($raizReal !== false && str_starts_with($dir, $raizReal . '/'))
                 ? ltrim(substr($dir, strlen($raizReal)), '/')
                 : $rel;
-            $url = rtrim($base, '/') . '/' . $relUrl . '/' . $nome;
+            $url = $base . '/' . $relUrl . '/' . $nome;
             [$http, $corpo, $erro, $tlsOk] = self::buscar($url);
 
             // O que prova exposição é o SEGREDO voltar — não o código 200.
@@ -420,6 +437,19 @@ final class Exposicao
         }
         $d = json_decode($bruto, true);
         return is_array($d) && isset($d['itens']) && is_array($d['itens']) ? $d : null;
+    }
+
+    /**
+     * Quando a sonda rodou pela última vez, tenha ou não concluído algo.
+     * É esta marca que o cron usa para não repetir o teste a cada ciclo.
+     */
+    public static function tentadoEm(): ?string
+    {
+        $t = (string) Settings::get(self::CHAVE . '.tentado_em', '');
+        $u = (string) (self::ultimo()['em'] ?? '');
+        // Ambos no formato 'Y-m-d H:i:s': o máximo lexicográfico é o cronológico.
+        $m = max($t, $u);
+        return $m !== '' ? $m : null;
     }
 
     /** Há alguma pasta comprovadamente aberta no último teste? */

@@ -94,8 +94,11 @@ if ($only === '' || $only === 'core') {
     // Uma vez por dia basta: o que muda o resultado é um deploy ou uma troca
     // de servidor, não o movimento do dia.
     try {
-        $ultimo = Core\Exposicao::ultimo();
-        $idade  = $ultimo ? time() - (int) strtotime((string) $ultimo['em']) : PHP_INT_MAX;
+        // A marca de TENTATIVA, não a do último resultado: um teste que não
+        // conclui nada não grava resultado, e olhar só o resultado faria a
+        // sonda inteira rodar de novo em toda execução do cron.
+        $marca = Core\Exposicao::tentadoEm();
+        $idade = $marca !== null ? time() - (int) strtotime($marca) : PHP_INT_MAX;
         if ($idade > 20 * 3600) {
             $ex = Core\Exposicao::testar(false);
             $abertas = array_filter($ex['itens'], fn ($i) => $i['estado'] === 'exposta');
