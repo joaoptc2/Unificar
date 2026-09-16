@@ -93,6 +93,10 @@ return [
                 'enviar' => 'Responder mensagens',
             ],
         ],
+        'assistente' => [
+            'label'   => 'Assistente (IA)',
+            'actions' => ['usar' => 'Usar o assistente'],
+        ],
         'formularios' => [
             'label'   => 'Formulários de solicitação',
             'actions' => [
@@ -122,6 +126,11 @@ return [
         if ($can('solicitacoes.view')) { $items[] = ['label' => 'Solicitações', 'url' => $u('solicitacoes'), 'icon' => 'bi-inbox',      'key' => 'solicitacoes']; }
         if ($can('formularios.view'))  { $items[] = ['label' => 'Formulários',  'url' => $u('formularios'),  'icon' => 'bi-ui-checks',  'key' => 'formularios']; }
         if ($can('email.view'))        { $items[] = ['label' => 'E-mail',       'url' => $u('email'),        'icon' => 'bi-envelope',   'key' => 'email']; }
+        // Só aparece quando o hospital ligou o assistente: um item de menu que
+        // leva a "não está ligado" é ruído em toda a organização.
+        if ($can('assistente.usar') && Core\Assistente::ligado()) {
+            $items[] = ['label' => 'Assistente', 'url' => $u('assistente'), 'icon' => 'bi-stars', 'key' => 'assistente'];
+        }
 
         return [['heading' => 'Meu espaço', 'items' => $items]];
     },

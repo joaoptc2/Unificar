@@ -20,6 +20,7 @@ $routes = [
     'formularios'  => 'pages/formularios.php',
     'formulario'   => 'pages/formulario.php',
     'email'        => 'pages/email.php',
+    'assistente'   => 'pages/assistente.php',
 ];
 
 $file = $routes[$page] ?? null;

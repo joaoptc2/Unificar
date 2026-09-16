@@ -40,6 +40,7 @@ $coreActions = [
     'theme_save', 'theme_apply', 'theme_delete', 'theme_preview', 'appearance_unit_save',
     'surfaces',
     'migrations', 'migrations_apply', 'health', 'health_exposicao', 'cleanup_save', 'cleanup_run',
+    'assistente', 'assistente_save', 'assistente_test',
     'backup', 'backup_create', 'backup_download', 'backup_delete', 'backup_verify',
     'backup_schedule_save',
     'mailqueue', 'mailqueue_process', 'mailqueue_retry',
@@ -69,6 +70,7 @@ function admin_sidebar(): array
         $core[] = ['label' => 'Atualizações de banco','url' => core_module_url('admin', ['a' => 'migrations']),'icon' => 'bi-database-up',  'key' => 'migrations'];
         $core[] = ['label' => 'Backup',              'url' => core_module_url('admin', ['a' => 'backup']),     'icon' => 'bi-hdd-stack',    'key' => 'backup'];
         $core[] = ['label' => 'E-mail',              'url' => core_module_url('admin', ['a' => 'mail']),       'icon' => 'bi-envelope-at',  'key' => 'mail'];
+        $core[] = ['label' => 'Assistente (IA)',     'url' => core_module_url('admin', ['a' => 'assistente']), 'icon' => 'bi-stars',        'key' => 'assistente'];
         $core[] = ['label' => 'Auditoria',           'url' => core_module_url('admin', ['a' => 'audit']),      'icon' => 'bi-journal-text', 'key' => 'audit'];
     }
     $sections[] = ['heading' => 'Administração', 'items' => $core];
@@ -1417,6 +1419,17 @@ switch ($action) {
         ob_start();
         require CORE_PATH . '/views/surfaces.php';
         admin_render('Galeria de superfícies', (string) ob_get_clean(), 'appearance');
+        break;
+
+    case 'assistente':
+    case 'assistente_save':
+    case 'assistente_test':
+        require CORE_PATH . '/controllers/admin_assistente.php';
+        match ($action) {
+            'assistente'      => admin_render('Assistente', core_admin_assistente(), 'assistente'),
+            'assistente_save' => core_admin_assistente_save(),
+            'assistente_test' => core_admin_assistente_test(),
+        };
         break;
 
     case 'health_exposicao':

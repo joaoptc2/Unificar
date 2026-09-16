@@ -568,6 +568,7 @@ conteúdo é inteiramente privado — agenda, notas e tarefas de cada pessoa.
 | **Solicitações** | O que me pediram e o que eu pedi; aceitar vira tarefa minha |
 | **Formulários** | Os formulários que publico para receber pedidos, e os que posso preencher |
 | **E-mail** | Caixa Zoho por IMAP: ler e responder sem trocar de aba |
+| **Assistente** | Organizar anotações, resumir solicitações e rascunhar respostas (opcional) |
 
 ### Solicitações e formulários
 
@@ -674,6 +675,47 @@ não é teste. `scripts/imap_falso.py` é um servidor IMAP que fala o protocolo
 de verdade e serve três mensagens escolhidas para quebrar implementações
 descuidadas: assunto em RFC2047, corpo quoted-printable, uma mensagem em
 ISO-8859-1 com bytes altos crus, e um multipart com preâmbulo e parte base64.
+
+### Assistente (IA)
+
+Desligado por padrão. Ligado em *Administração › Assistente*, com chave da
+API da Anthropic (guardada cifrada, nunca exibida de volta), modelo e **teto
+mensal de gasto**.
+
+Três funções, todas sobre o que é **do próprio usuário**: transformar uma
+anotação solta em lista de tarefas, resumir as solicitações que ele recebeu e
+estão abertas, e rascunhar uma resposta.
+
+#### O que o sistema faz, e o que ele não faz
+
+| Faz | Não faz |
+| --- | --- |
+| Mostra na tela **exatamente o que será enviado**, antes de enviar | Decidir o que pode sair do hospital — isso é política, e política é de quem responde pela instituição |
+| Registra **que** houve a chamada, de quem, para quê e de que tamanho | Guardar o conteúdo enviado — seria criar uma segunda cópia do que se quer proteger |
+| Recusa texto com marca de CPF, cartão do SUS ou palavras de contexto assistencial | Prometer que isso é suficiente |
+| Impede o gasto acima do teto, conferido **antes** de cada chamada | Substituir a fatura real do painel da Anthropic |
+
+A trava é uma **rede, não uma garantia**: ela reconhece formato, e dado
+clínico escrito em português corrido não tem formato. Quando ela pega algo, o
+sistema **para** — não redige por cima. Apagar o CPF e mandar o resto daria a
+impressão errada de que o texto foi conferido. Para seguir, é preciso marcar
+"confirmo que não há dado de paciente", e essa confirmação vai para a
+auditoria (com a marca encontrada, sem o texto).
+
+#### Custo
+
+A chamada é HTTPS direto, sem SDK e sem Composer — este sistema é entregue
+por FTP a hospedagem compartilhada, e um `vendor/` é um problema maior que a
+comodidade que traz.
+
+O teto é do portal, em centavos de dólar por mês, conferido antes de gastar.
+A estimativa usa a tabela pública de preços; a cobrança real é a do painel da
+Anthropic, e a tela diz isso. Preços por milhão de tokens (entrada/saída):
+Opus 5 US$ 5/25, Sonnet 5 US$ 2/10, Haiku 4.5 US$ 1/5. Uma anotação de meia
+página custa frações de centavo.
+
+O item do menu só aparece quando o hospital ligou o assistente — um menu que
+leva a "não está ligado" é ruído para a organização inteira.
 
 ### Privacidade: como ela é garantida
 
