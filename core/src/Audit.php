@@ -36,12 +36,30 @@ final class Audit
 
     public static function ip(): string
     {
-        foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR'] as $key) {
+        // REMOTE_ADDR é o único valor que o cliente NÃO escolhe. Os cabeçalhos
+        // de proxy só valem quando o administrador declarou confiar no proxy
+        // (security.trust_proxy) — a mesma regra de Core\Https. Antes eles
+        // vinham PRIMEIRO, de qualquer origem: um atacante mandava um
+        // X-Forwarded-For diferente a cada requisição, o contador de força
+        // bruta por IP nunca acumulava (15 senhas em 15 contas, zero
+        // bloqueios, medido) e o IP gravado na auditoria era o inventado.
+        $remoto = substr(trim((string) ($_SERVER['REMOTE_ADDR'] ?? '')), 0, 45);
+        if (!Https::trustProxy()) {
+            return $remoto;
+        }
+        foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_REAL_IP', 'HTTP_X_FORWARDED_FOR'] as $key) {
             if (!empty($_SERVER[$key])) {
-                $ip = explode(',', (string) $_SERVER[$key])[0];
-                return substr(trim($ip), 0, 45);
+                // Numa cadeia "cliente, proxy1, proxy2" o proxy confiável
+                // acrescenta à direita; o salto mais à DIREITA não controlado
+                // por nós é o que o nosso proxy viu. Como só há um proxy
+                // declarado, é o último da lista.
+                $partes = array_map('trim', explode(',', (string) $_SERVER[$key]));
+                $ip = (string) end($partes);
+                if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return substr($ip, 0, 45);
+                }
             }
         }
-        return '';
+        return $remoto;
     }
 }

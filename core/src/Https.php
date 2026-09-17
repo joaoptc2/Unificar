@@ -149,6 +149,16 @@ final class Https
         if (self::isLocalRequest()) {
             return;
         }
+        // Atrás de um proxy que termina TLS, o backend recebe http SEMPRE, e
+        // só o cabeçalho do proxy diz o esquema real. Com trust_proxy
+        // desligado esse cabeçalho é ignorado — então redirecionar aqui manda
+        // o navegador para https, o proxy re-termina, repassa http de novo, e
+        // sai outro 301: laço infinito, portal inteiro fora do ar. Sem confiar
+        // no proxy não há como saber o esquema; não redireciona, e o checkup
+        // é quem avisa que force_https + proxy exige trust_proxy.
+        if (self::behindProxy() && !self::trustProxy()) {
+            return;
+        }
 
         $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
         if ($host === '' || !preg_match('/^[A-Za-z0-9.\-]+(:\d+)?$/', $host)) {

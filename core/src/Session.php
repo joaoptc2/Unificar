@@ -44,6 +44,30 @@ final class Session
         }
         $_SESSION['_last_activity'] = $now;
 
+        // Uma restauração de backup derruba as sessões abertas antes dela: o
+        // usuário logado pode não existir no banco que acabou de voltar, e as
+        // permissões dele são as de antes. BackupRestore avança a época a
+        // cada restauração de produção; ela vivia num "trecho para colar no
+        // bootstrap" que nenhuma instalação tinha colado — inerte. Mora aqui,
+        // que roda em toda requisição, sem depender de edição manual.
+        try {
+            $epoca = BackupRestore::sessionEpoch();
+            if ($epoca > 0 && (int) ($_SESSION['_backup_epoch'] ?? 0) < $epoca) {
+                $tinhaUsuario = isset($_SESSION['user_id']);
+                self::destroy();
+                session_start();
+                $_SESSION['_backup_epoch'] = $epoca;
+                $_SESSION['_last_activity'] = $now;
+                if ($tinhaUsuario) {
+                    $_SESSION['_flash']['warning'] = 'O sistema foi restaurado de um backup; entre de novo.';
+                }
+            } elseif (!isset($_SESSION['_backup_epoch'])) {
+                $_SESSION['_backup_epoch'] = $epoca;
+            }
+        } catch (\Throwable) {
+            // sem banco ainda (instalador): não há época a conferir.
+        }
+
         // Regeneração periódica do ID (a cada 15 min)
         if (($now - ($_SESSION['_last_regen'] ?? 0)) > 900) {
             session_regenerate_id(true);

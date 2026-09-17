@@ -108,6 +108,19 @@ if ($configIrmao !== ''
     $configFile = $configIrmao . '/config.php';
     $configFora = true;
 }
+// Reinstalando com ?force=1 sobre um config que EXISTE: grava por cima dele,
+// onde ele está. Calcular um destino novo gravava outro config, com app.key
+// nova, e abandonava o antigo — com a senha do banco — no public_html,
+// enquanto o portal seguia lendo o antigo pela cascata.
+$configAnterior = null;
+if ($configExistente !== null) {
+    $configFile     = $configExistente;
+    $configFora     = !str_starts_with($configExistente, BASE_PATH . '/');
+    $configAnterior = @include $configExistente;
+    if (!is_array($configAnterior)) {
+        $configAnterior = null;
+    }
+}
 
 $errors  = [];
 $success = false;
@@ -187,12 +200,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Gera config/config.php a partir do exemplo
             $template = require APP_DIR . '/config/config.example.php';
             $template['app']['name'] = $orgName;
-            $template['app']['key']  = bin2hex(random_bytes(24));
+            // app.key e cron_secret são PRESERVADOS numa reinstalação: gerar
+            // novos torna ilegível toda senha cifrada no banco (SMTP, IMAP,
+            // chave da IA) e quebra o agendamento do cron.
+            $template['app']['key']  = (string) ($configAnterior['app']['key'] ?? '') ?: bin2hex(random_bytes(24));
+            $template['cron_secret'] = (string) ($configAnterior['cron_secret'] ?? '') ?: bin2hex(random_bytes(16));
+            // app.base_url gravada com o endereço REAL desta instalação. Vazia
+            // (o padrão do exemplo), o portal montava toda URL absoluta a partir
+            // do Host da requisição — e o link do e-mail de redefinição de
+            // senha apontava para o domínio de quem pedisse o reset, com token
+            // válido. Reproduzido ponta a ponta. Quem tem proxy ou domínio
+            // diferente ajusta no config depois; o que não pode é ficar vazia.
+            $esquema = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $hostReq = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
+            $dirReq  = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
+            $template['app']['base_url'] = preg_match('/^[A-Za-z0-9.\-:\[\]]+$/', $hostReq)
+                ? $esquema . '://' . $hostReq . $dirReq
+                : null;
             $template['db'] = [
                 'host' => $dbHost, 'port' => $dbPort, 'name' => $dbName,
                 'user' => $dbUser, 'pass' => $dbPass, 'charset' => 'utf8mb4',
             ];
-            $template['cron_secret'] = bin2hex(random_bytes(16));
 
             $export = "<?php\n\n// Gerado pelo instalador em " . date('Y-m-d H:i:s') . "\n\nreturn " . var_export($template, true) . ";\n";
             if (!is_dir(dirname($configFile))) {
@@ -210,6 +238,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             // A senha do banco está aqui dentro: ninguém além do dono precisa ler.
             @chmod($configFile, 0600);
+
+            // A pasta de dados e as subpastas de runtime. Sem isto, com o
+            // código fora ou em subpasta, o portal subia sem diretório de
+            // logs e os primeiros erros não eram registrados em lugar nenhum.
+            $dados = (string) ($template['paths']['storage'] ?? '') ?: BASE_PATH . '/storage';
+            if (!str_starts_with($dados, '/') && !preg_match('#^[A-Za-z]:[\\\\/]#', $dados)) {
+                $dados = BASE_PATH . '/' . ltrim($dados, '/');
+            }
+            foreach (['', '/logs', '/cache', '/backups', '/uploads'] as $sub) {
+                if (!@is_dir($dados . $sub)) {
+                    @mkdir($dados . $sub, 0770, true);
+                }
+            }
+            if (@is_dir($dados . '/backups') && !@is_file($dados . '/backups/.htaccess')) {
+                @file_put_contents($dados . '/backups/.htaccess', "Require all denied\nDeny from all\n");
+            }
 
             $success = true;
         } catch (Throwable $e) {

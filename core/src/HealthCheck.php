@@ -678,6 +678,20 @@ final class HealthCheck
                 'Apague install.php: com ele, qualquer pessoa pode tentar reinstalar o portal.')
             : self::item('ok', 'Instalador', 'install.php já foi removido.');
 
+        // app.base_url vazia: toda URL absoluta passa a vir do cabeçalho Host
+        // da requisição — inclusive o link do e-mail de redefinição de senha,
+        // que então aponta para o domínio de QUEM PEDIU o reset, com token
+        // válido. Reproduzido ponta a ponta. Era o padrão de fábrica até o
+        // instalador passar a gravar o endereço; instalações antigas ainda
+        // podem estar assim.
+        $baseUrl = trim((string) Config::get('app.base_url', ''));
+        $out[] = $baseUrl === ''
+            ? self::item('erro', 'Endereço do portal (app.base_url)', 'Está vazio na configuração.',
+                'Preencha app.base_url no config.php com o endereço real deste portal (ex.: '
+                . 'https://portal.hospital.br). Vazio, os links de e-mail — inclusive o de '
+                . 'redefinição de senha — são montados a partir do Host de quem faz o pedido.')
+            : self::item('ok', 'Endereço do portal (app.base_url)', $baseUrl);
+
         $chave = (string) Config::get('app.key', '');
         $out[] = ($chave === '' || str_contains($chave, 'troque-esta-chave'))
             ? self::item('erro', 'Chave da aplicação', 'app.key está vazia ou ainda é a do exemplo.',

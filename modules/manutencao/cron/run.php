@@ -129,6 +129,15 @@ try {
     $updatePlan = $pdo->prepare("UPDATE man_maintenance_plans SET next_date = ?, last_executed = NOW() WHERE id = ?");
 
     foreach ($plans as $plan) {
+        // Reivindica o plano ANTES de criar a OS: o UPDATE condicional só
+        // afeta uma linha se next_date ainda for a que lemos. Dois crons
+        // concorrentes leem a mesma lista; só um vence aqui, o outro pula.
+        $claim = $pdo->prepare("UPDATE man_maintenance_plans SET last_executed = NOW()
+                                WHERE id = ? AND next_date = ? AND status = 'active'");
+        $claim->execute([$plan['id'], $plan['next_date']]);
+        if ($claim->rowCount() === 0) {
+            continue;
+        }
         $osNumber = generateOsNumber();
         $title    = '[Preventiva] ' . $plan['title'];
         $descr    = trim(($plan['description'] ?? '') . "\nGerado automaticamente pelo plano de manutenção #" . $plan['id']);

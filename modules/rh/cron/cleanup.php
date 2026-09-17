@@ -88,9 +88,18 @@ try {
     echo "  Notificações antigas removidas: {$stmt->rowCount()}\n";
 
     // 2. Resetar flags de notificação para vencimentos renovados
+    // SÓ o vencimento RENOVADO perde a marca. A condição antiga pegava TODO
+    // vencimento ainda no futuro — inclusive o que acabou de ser avisado pelo
+    // check_expirations, que roda logo antes neste mesmo cron. Resultado
+    // medido: a cada execução (de hora em hora, como o checkup manda
+    // agendar) o mesmo alerta saía de novo, com e-mail, para cada
+    // administrador. Renovado é: já venceu e foi avisado, e agora tem data
+    // futura; ou foi avisado na janela prévia e agora está fora dela.
     $stmt = $db->prepare(
         "UPDATE rh_expirations SET notified_at = NULL, notified_expired_at = NULL
-         WHERE expiry_date > CURDATE() AND (notified_at IS NOT NULL OR notified_expired_at IS NOT NULL)"
+         WHERE (notified_expired_at IS NOT NULL AND expiry_date > CURDATE())
+            OR (notified_at IS NOT NULL
+                AND expiry_date > DATE_ADD(CURDATE(), INTERVAL COALESCE(alert_days, 30) DAY))"
     );
     $stmt->execute();
     echo "  Flags de vencimento resetadas: {$stmt->rowCount()}\n";

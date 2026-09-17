@@ -1017,6 +1017,22 @@ seguro quando o servidor colabora não é seguro.
   natureza — o navegador precisa buscá-las —, mas nunca executáveis: SVG
   enviado é sanitizado antes de gravar e a extensão real é decidida pelo
   tipo do conteúdo, não pelo nome do arquivo;
+- **O IP do cliente é `REMOTE_ADDR`**, a menos que `security.trust_proxy`
+  esteja ligado. `X-Forwarded-For` e afins vinham PRIMEIRO, de qualquer
+  origem: um atacante trocava o cabeçalho a cada requisição e o bloqueio de
+  força bruta por IP nunca acumulava — 15 senhas em 15 contas, zero bloqueios,
+  medido — e o IP gravado na auditoria era o inventado. A mesma regra que
+  `Core\Https` já usava para `X-Forwarded-Proto`.
+- **`app.base_url` não pode ficar vazia.** Vazia, toda URL absoluta sai do
+  cabeçalho `Host` de quem faz o pedido — inclusive o link do e-mail de
+  redefinição de senha, que passa a apontar para o domínio do atacante com
+  token válido (reproduzido ponta a ponta). O instalador grava o endereço real
+  e o checkup marca em vermelho quando está vazia.
+- O código de 2FA tem limite de tentativas como o login (5 falhas descartam a
+  etapa pendente); a página pública de acompanhamento de candidatos compara o
+  token por igualdade (era `LIKE`, e doze sublinhados casavam com qualquer um);
+  só um `cron.php` roda por vez (`cron.lock`), e a materialização de
+  preventivas reivindica o plano antes de criar a OS.
 - Auditoria unificada (Administração → Auditoria).
 
 ## Tirar config e dados do public_html

@@ -499,6 +499,18 @@ final class Backup
         self::limpaTmp(null, $avisos);
 
         $comArquivos = (bool) ($opts['files'] ?? true);
+        // Banco alternativo (--into) é um ENSAIO do banco — mas esta rota não
+        // tem sandbox de arquivos: eles iam sempre para a instalação viva via
+        // caminhoFisico(). Um "restore --into=teste" reescrevia os uploads de
+        // PRODUÇÃO. Com banco alternativo, arquivos não são gravados; para
+        // ensaiar arquivos existe scripts/restore.php --target (com sandbox).
+        $bancoAlvo = trim((string) ($opts['database_name'] ?? ''));
+        if ($comArquivos && $bancoAlvo !== '' && $bancoAlvo !== (string) Config::get('db.name', '')) {
+            $comArquivos = false;
+            $avisos[] = 'Os ARQUIVOS não foram restaurados: com --into o banco vai para ' . $bancoAlvo
+                      . ', mas os arquivos iriam para a instalação em uso. Para ensaiar arquivos use '
+                      . 'scripts/restore.php --target=<pasta>; para restaurar na instalação, omita --into.';
+        }
         $comBanco    = (bool) ($opts['database'] ?? true);
         $comConfig   = (bool) ($opts['include_config'] ?? false);
 
@@ -1961,7 +1973,15 @@ final class Backup
         if ($itens !== []) {
             $ultimo = strtotime((string) $itens[0]['criado_em']) ?: (int) $itens[0]['mtime'];
             $horas  = (time() - $ultimo) / 3600;
-            if ($horas < 20) {
+            // Idade NEGATIVA é pacote com data no futuro (relógio adiantado na
+            // hora de gerar, fuso trocado, NTP corrigido depois). Tratá-la como
+            // "recente" fazia "$horas < 20" ser verdade todo dia, para sempre:
+            // o automático nunca mais rodava, e a retenção nunca apaga o mais
+            // recente — só apagar à mão resolvia. Ignora esse pacote e segue.
+            if ($horas < 0) {
+                error_log('backup agendado: o pacote mais recente (' . $itens[0]['id'] . ') tem data no futuro; '
+                        . 'confira o relógio do servidor. Gerando mesmo assim.');
+            } elseif ($horas < 20) {
                 return ['executou' => false, 'motivo' => sprintf('O último backup tem %.1f h (mínimo 20 h).', $horas)];
             }
         }

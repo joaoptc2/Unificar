@@ -10,6 +10,7 @@ declare(strict_types=1);
 use Core\Auth;
 use Core\Csrf;
 use Core\DB;
+use Core\RateLimit;
 use Core\Flash;
 use Core\Layout;
 use Core\Mailer;
@@ -111,12 +112,25 @@ switch ($action) {
             Flash::set('error', 'Sessão de verificação expirada. Faça login novamente.');
             core_redirect('index.php?m=auth&a=login');
         }
+        // O código TOTP tem 6 dígitos e a janela aceita 3 por vez: sem limite
+        // de tentativas, quem já tem a senha adivinha o segundo fator por
+        // força bruta on-line. Conta como o login conta — 5 falhas e o estado
+        // pendente é descartado, obrigando a refazer a etapa 1 (que já é
+        // limitada por IP e por conta).
+        $chave2fa = '2fa:' . $pendingId;
+        if (RateLimit::isBlocked($chave2fa)) {
+            unset($_SESSION['2fa_pending_user_id'], $_SESSION['2fa_pending_at']);
+            Flash::set('error', 'Muitas tentativas de código. Faça login novamente mais tarde.');
+            core_redirect('index.php?m=auth&a=login');
+        }
         $user = DB::queryOne('SELECT * FROM users WHERE id = ? AND active = 1', [$pendingId]);
         $code = (string) ($_POST['code'] ?? '');
         if (!$user || !$user['two_factor_secret'] || !Totp::verify((string) $user['two_factor_secret'], $code)) {
+            RateLimit::record($chave2fa, false);
             core_auth_render_2fa('Código inválido. Tente novamente.');
             break;
         }
+        RateLimit::record($chave2fa, true);
         unset($_SESSION['2fa_pending_user_id'], $_SESSION['2fa_pending_at']);
         Auth::establish($user);
         core_auth_redirect_after_login();

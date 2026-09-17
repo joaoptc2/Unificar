@@ -312,6 +312,19 @@ final class Perms
 
         // herdado dos grupos (sem overrides individuais)
         $inherited = [];
+        // Módulo 'todos' => true concede TUDO a toda pessoa logada, sem
+        // registro. A linha de base tem de refletir isso: sem esta parte,
+        // desmarcar uma caixa não gerava o registro allowed=0 (want=false ==
+        // inh=false → "herança já resolve"), effective() não tinha o que
+        // subtrair, e o usuário continuava com tudo enquanto a tela dizia
+        // "atualizado". Revogação silenciosamente ignorada.
+        try {
+            $mf = Modules::manifest($module);
+            if (!empty($mf['todos'])) {
+                $inherited = array_flip($valid);
+            }
+        } catch (\Throwable) {
+        }
         $groupIds  = self::groupIdsOf($userId);
         if ($groupIds) {
             $in   = implode(',', array_fill(0, count($groupIds), '?'));
@@ -320,7 +333,7 @@ final class Perms
                  WHERE subject_type = 'group' AND subject_id IN ({$in}) AND module_slug = ? AND allowed = 1",
                 [...$groupIds, $module]
             );
-            $inherited = array_flip(array_column($rows, 'perm_key'));
+            $inherited += array_flip(array_column($rows, 'perm_key'));
         }
 
         DB::execute(

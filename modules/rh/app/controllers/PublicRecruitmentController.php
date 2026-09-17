@@ -184,15 +184,18 @@ class PublicRecruitmentController
 
         // Exige token com tamanho mínimo (12 chars) para evitar enumeração
         // via prefixos curtos.
-        if ($token && strlen($token) >= 12) {
+        // Igualdade exata. Era LIKE com o token cru + '%': os curingas '_' e '%'
+        // valiam, e doze sublinhados casavam com QUALQUER token — a página
+        // pública devolvia o primeiro candidato do banco, sem autenticação.
+        if ($token && preg_match('/^[0-9a-f]{64}$/i', $token)) {
             $stmt = $this->db->prepare(
                 'SELECT c.*, rj.title as job_title, rs.name as current_step_name
                  FROM rh_candidates c
                  LEFT JOIN rh_recruitment_jobs rj ON c.job_id = rj.id
                  LEFT JOIN rh_recruitment_steps rs ON c.current_step_id = rs.id
-                 WHERE c.access_token LIKE ?'
+                 WHERE c.access_token = ?'
             );
-            $stmt->execute([$token . '%']);
+            $stmt->execute([$token]);
             $candidate = $stmt->fetch();
 
             if ($candidate) {

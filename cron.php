@@ -34,6 +34,24 @@ if (PHP_SAPI !== 'cli') {
     }
 }
 
+// TRAVA: só um cron por vez, ANTES de qualquer trabalho. O hourly da
+// hospedagem atrasado encontrando o da URL, ou o cron encontrando um
+// "Processar agora", rodavam JUNTOS — e os crons de módulo fazem
+// SELECT-depois-INSERT sem reserva. Medido: 150 planos de manutenção
+// vencidos, dois crons ao mesmo tempo, 300 ordens de serviço, todas em dobro.
+//
+// A execução completa segura cron.lock; cada subprocesso --module=<slug>
+// segura cron-<slug>.lock (o pai já tem a global, e os filhos não podem
+// disputá-la com ele — foi o que aconteceu na primeira versão desta trava:
+// os três módulos saíam com "já há um cron em andamento"). Um --module=
+// agendado diretamente também fica protegido de si mesmo.
+$cronLockNome = $only === '' ? 'cron.lock' : 'cron-' . preg_replace('/[^a-z0-9_-]/', '', $only) . '.lock';
+$cronLock = @fopen(STORAGE_PATH . '/' . $cronLockNome, 'c');
+if ($cronLock !== false && !flock($cronLock, LOCK_EX | LOCK_NB)) {
+    echo "já há um cron em andamento; esta execução não faz nada.\n";
+    exit(0);
+}
+
 // ---- Núcleo: fila de e-mails -------------------------------------------
 if ($only === '' || $only === 'core') {
     echo "[core] fila de e-mails...\n";

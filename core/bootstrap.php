@@ -365,9 +365,10 @@ if (!defined('BASE_URL')) {
     } elseif (PHP_SAPI === 'cli') {
         define('BASE_URL', '');
     } else {
-        $https  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-               || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-        $scheme = $https ? 'https' : 'http';
+        // A mesma detecção de Core\Https: esta cópia aceitava X-Forwarded-Proto
+        // de qualquer origem — o defeito que Session e Https já tinham
+        // corrigido, deixado para trás aqui.
+        $scheme = Core\Https::requestIsSecure() ? 'https' : 'http';
         $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $dir    = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
         define('BASE_URL', $scheme . '://' . $host . $dir);

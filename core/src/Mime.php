@@ -311,7 +311,16 @@ final class Mime
             }
         }
         if (function_exists('mb_convert_encoding')) {
-            return self::limpa((string) @mb_convert_encoding($s, 'UTF-8', $charset));
+            // No PHP 8.4 um charset desconhecido é ValueError, que o @ não
+            // segura: "unknown-8bit" (token padrão da RFC 3282, comum em
+            // servidores que não sabem a codificação) derrubava a tela com o
+            // erro cru em vez de mostrar a mensagem. O fallback pretendido
+            // sempre foi "mostra como veio".
+            try {
+                return self::limpa((string) mb_convert_encoding($s, 'UTF-8', $charset));
+            } catch (\Throwable) {
+                // charset que ninguém conhece: cai no texto cru abaixo.
+            }
         }
         return self::limpa($s);
     }
