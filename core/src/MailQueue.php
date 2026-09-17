@@ -123,10 +123,19 @@ final class MailQueue
             // Este UPDATE faz duas coisas: renova reserved_at (a janela de 10
             // min passa a valer POR LINHA, não por lote) e confere que a linha
             // ainda é nossa. Zero linhas afetadas = alguém a roubou: pula.
+            //
+            // O bilhete é TROCADO por um bilhete de linha, e isso não é
+            // enfeite: o PDO daqui conta linhas ALTERADAS, não encontradas.
+            // A primeira versão só fazia SET reserved_at = NOW() — e no mesmo
+            // segundo da reserva do lote o valor já era NOW(), o UPDATE
+            // "não alterava nada", devolvia 0, e as 85 mensagens foram puladas
+            // como se roubadas. Zero enviadas, 85 pendentes, sem erro. Trocar
+            // reserved_by garante que uma linha que ainda é nossa SEMPRE conta.
+            $bilheteLinha = bin2hex(random_bytes(8));
             $minha = DB::execute(
-                'UPDATE mail_queue SET reserved_at = NOW()
+                'UPDATE mail_queue SET reserved_by = ?, reserved_at = NOW()
                   WHERE id = ? AND reserved_by = ? AND status = "pending"',
-                [$row['id'], $ticket]
+                [$bilheteLinha, $row['id'], $ticket]
             );
             if ($minha < 1) {
                 continue;
@@ -145,7 +154,7 @@ final class MailQueue
                         SET status = "sent", attempts = ?, sent_at = NOW(), last_error = NULL,
                             error_code = NULL, delivery = ?, reserved_by = NULL, reserved_at = NULL
                       WHERE id = ? AND reserved_by = ?',
-                    [$attempts + 1, $r['path'], $row['id'], $ticket]
+                    [$attempts + 1, $r['path'], $row['id'], $bilheteLinha]
                 );
                 $stats['sent']++;
                 continue;
@@ -158,7 +167,7 @@ final class MailQueue
                     'UPDATE mail_queue
                         SET last_error = ?, error_code = ?, reserved_by = NULL, reserved_at = NULL
                       WHERE id = ? AND reserved_by = ?',
-                    [$erro, $r['code'], $row['id'], $ticket]
+                    [$erro, $r['code'], $row['id'], $bilheteLinha]
                 );
                 $stats['held']++;
                 continue;
@@ -171,7 +180,7 @@ final class MailQueue
                     SET status = ?, attempts = ?, last_error = ?, error_code = ?,
                         reserved_by = NULL, reserved_at = NULL
                   WHERE id = ? AND reserved_by = ?',
-                [$final ? 'failed' : 'pending', $attempts, $erro, $r['code'], $row['id'], $ticket]
+                [$final ? 'failed' : 'pending', $attempts, $erro, $r['code'], $row['id'], $bilheteLinha]
             );
             $stats[$final ? 'failed' : 'retried']++;
         }
