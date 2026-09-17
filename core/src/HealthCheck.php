@@ -82,6 +82,21 @@ final class HealthCheck
         }
 
         // Migrações pendentes — o motivo mais comum de "sumiu uma coluna".
+        //
+        // Antes de responder, é preciso saber se dá para responder: sem a
+        // pasta do SQL versionado, glob() devolve lista vazia e lista vazia
+        // era lida como "nada pendente". A tela anunciava em verde que estava
+        // tudo aplicado com migração pendente no disco e tabela faltando no
+        // banco. Não saber não é o mesmo que estar em dia.
+        if (!Migrations::temSql()) {
+            $out[] = self::item('erro', 'Atualizações de banco',
+                'Não encontrei o SQL versionado em ' . Migrations::raizSql() . '.',
+                'Esta tela NÃO pode afirmar nada sobre migrações ou tabelas enquanto a pasta '
+                . 'não estiver lá. Se o código foi movido, confira se sql/ subiu junto com '
+                . 'core/ e modules/.');
+            return $out;
+        }
+
         try {
             $pend = Migrations::pending();
             $out[] = count($pend) === 0
@@ -272,6 +287,114 @@ final class HealthCheck
                 'Recomendado 30s ou mais (o backup já pede mais tempo por conta própria).');
 
         $out[] = self::item('info', 'Fuso horário', date_default_timezone_get() . ' · agora ' . date('d/m/Y H:i'));
+
+        return $out;
+    }
+
+    /**
+     * O estado da separação entre o código e a área servida.
+     *
+     * Este item nasceu errado de três jeitos, e os três eram silenciosos:
+     *
+     *  1. dava VERDE comparando só APP_PATH com BASE_PATH. Numa instalação em
+     *     SUBPASTA do site (public_html/portal), a irmã public_html/portal-codigo
+     *     fica DENTRO do que o servidor serve: /portal-codigo/sql/schema.sql
+     *     devolvia o schema inteiro enquanto a tela dizia "não sobrou cópia na
+     *     área pública". O mesmo arquivo, 200 linhas acima, já fazia a
+     *     comparação certa para o config — com um comentário dizendo que
+     *     comparar com BASE_PATH é "uma mentira tranquilizadora".
+     *
+     *  2. chamava de "sobra" qualquer pasta encontrada no público, e mandava
+     *     APAGAR. Se uma pasta não tivesse subido para a irmã, ela existia SÓ
+     *     no público — e o conselho era apagar a ÚNICA cópia que havia.
+     *
+     *  3. vivia inteiro dentro de `if (APP_PATH !== BASE_PATH)`. Uma irmã
+     *     malfeita (aninhada um nível, nome com maiúscula numa hospedagem
+     *     sensível a caixa) não é reconhecida, APP_PATH volta a ser igual a
+     *     BASE_PATH, e a tela ficava sem UMA linha sobre o assunto: fazer
+     *     errado era indistinguível de não ter feito.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private static function separacaoDoCodigo(string $raiz): array
+    {
+        $pastas = ['core', 'modules', 'sql', 'docs', 'scripts'];
+
+        // Onde está cada pasta: no código, no público, ou nos dois.
+        $soNoPublico = [];
+        $nosDois     = [];
+        foreach ($pastas as $p) {
+            $noApp     = @is_dir(APP_PATH . '/' . $p);
+            $noPublico = @is_dir($raiz . '/' . $p);
+            if ($noPublico && $noApp) {
+                $nosDois[] = $p . '/';
+            } elseif ($noPublico && !$noApp) {
+                $soNoPublico[] = $p . '/';
+            }
+        }
+
+        if (APP_PATH === BASE_PATH) {
+            // Código na área pública. Não é erro — é a arrumação de origem, e
+            // ela é suportada. Mas se existir ao lado uma pasta com cara de
+            // irmã, é quase certo que alguém TENTOU separar e não conseguiu.
+            $irmaEsperada = dirname($raiz) . '/' . basename($raiz) . '-codigo';
+            $tentativa    = @is_dir($irmaEsperada) || (glob(dirname($raiz) . '/*-codigo*') ?: []) !== [];
+            return [$tentativa
+                ? self::item('aviso', 'Separação do código',
+                    'O código está na área pública (' . $raiz . '), mas existe uma pasta com nome '
+                    . 'de irmã ao lado que NÃO foi reconhecida.',
+                    'A pasta tem de se chamar exatamente ' . basename($irmaEsperada) . ', ficar ao '
+                    . 'lado de ' . basename($raiz) . ', e ter core/bootstrap.php dentro dela. '
+                    . 'Se o nome não puder ser esse, aponte a pasta com a variável de ambiente '
+                    . 'UNIFICAR_APP.')
+                : self::item('ok', 'Separação do código',
+                    'O código está na área pública (' . $raiz . '), que é a arrumação de origem. '
+                    . 'Tirá-lo de lá é opcional — veja "Tirar o CÓDIGO do public_html" no README.')];
+        }
+
+        $out = [];
+
+        // A irmã existe. Ela está mesmo FORA do que o servidor serve?
+        [$raizServida, $confiavel] = Exposicao::raizPublica();
+        if (!$confiavel || $raizServida === null) {
+            $out[] = self::item('aviso', 'Separação do código',
+                'O código está em ' . APP_PATH . ', mas ainda não sei onde o servidor web '
+                . 'começa a servir — então não posso afirmar que ele ficou fora do alcance de '
+                . 'uma URL.',
+                'Abra esta tela pelo navegador uma vez: é o que ensina o DOCUMENT_ROOT ao '
+                . 'sistema. Depois disso este item passa a dizer sim ou não.');
+        } elseif (str_starts_with(APP_PATH . '/', rtrim($raizServida, '/') . '/')) {
+            $rel = ltrim(substr(APP_PATH, strlen(rtrim($raizServida, '/'))), '/');
+            $out[] = self::item('erro', 'Separação do código',
+                'O código saiu da instalação, mas continua DENTRO da área servida: ele está em '
+                . APP_PATH . ', que o servidor entrega pela URL /' . $rel . '/.',
+                'Isto costuma acontecer quando o portal mora numa subpasta do site: a irmã '
+                . 'nasce ao lado da subpasta, e não ao lado do site. Mova a pasta do código '
+                . 'para fora de ' . $raizServida . ' e aponte-a com a variável de ambiente '
+                . 'UNIFICAR_APP. Do jeito que está, a mudança não protegeu nada — e protege '
+                . 'menos que antes, porque core/, sql/ e docs/ não levam .htaccess próprio.');
+        } else {
+            $out[] = self::item('ok', 'Separação do código',
+                'O código está em ' . APP_PATH . ', fora da área servida (' . $raizServida . ').');
+        }
+
+        if ($nosDois !== []) {
+            $out[] = self::item('erro', 'Cópia de código na área pública',
+                'Estas pastas existem NOS DOIS lugares: ' . implode(', ', $nosDois),
+                'Apague-as de ' . $raiz . '. Enquanto existirem, o servidor continua entregando '
+                . 'o código por URL, e o portal roda a cópia de fora — uma correção aplicada na '
+                . 'cópia do público não tem efeito nenhum.');
+        }
+
+        if ($soNoPublico !== []) {
+            // O CONTRÁRIO de sobra: não subiu.
+            $out[] = self::item('erro', 'Pasta que não subiu para o código',
+                'Estas pastas existem SÓ na área pública, e não em ' . APP_PATH . ': '
+                . implode(', ', $soNoPublico),
+                'NÃO as apague: são a única cópia que existe. Copie-as para ' . APP_PATH
+                . ' e só então remova as do público. Enquanto faltarem lá, o portal roda sem '
+                . 'elas — e o que depende delas falha de maneiras difíceis de ligar à causa.');
+        }
 
         return $out;
     }
@@ -501,35 +624,8 @@ final class HealthCheck
             $out[] = $item;
         }
 
-        // ── Mudança pela metade ────────────────────────────────────────
-        // Mover pasta por FTP é COPIAR e depois APAGAR, e é o apagar que
-        // falha: o cliente perde a conexão, o servidor recusa uma pasta não
-        // vazia, ou a pessoa é interrompida. O resultado é o pior dos dois
-        // mundos — o portal roda do lugar novo (o localizador prefere a pasta
-        // irmã) e a cópia VELHA continua servida pela web, com o mesmo código
-        // e o mesmo estrago de antes.
-        //
-        // A sonda de exposição NÃO pega isso: depois da mudança ela procura
-        // essas pastas sob APP_PATH, que é justamente onde está a cópia boa.
-        // A perigosa é a que ela deixou de olhar, e por isso a conferência
-        // mora aqui.
-        if (APP_PATH !== BASE_PATH) {
-            $sobras = [];
-            foreach (['core', 'modules', 'sql', 'docs', 'scripts'] as $pasta) {
-                if (@is_dir($raiz . '/' . $pasta)) {
-                    $sobras[] = $pasta . '/';
-                }
-            }
-            $out[] = $sobras === []
-                ? self::item('ok', 'Separação do código',
-                    'O código está em ' . APP_PATH . ' e não sobrou cópia na área pública.')
-                : self::item('erro', 'Separação do código',
-                    'O código foi movido para ' . APP_PATH . ', mas sobrou cópia na área '
-                    . 'pública: ' . implode(', ', $sobras),
-                    'Apague essas pastas de ' . $raiz . '. Enquanto elas existirem, a mudança '
-                    . 'não protegeu nada: o servidor continua entregando o código por URL, e o '
-                    . 'portal roda a cópia de fora — ou seja, uma correção aplicada numa delas '
-                    . 'não tem efeito nenhum.');
+        foreach (self::separacaoDoCodigo($raiz) as $item) {
+            $out[] = $item;
         }
 
         $out[] = is_file($raiz . '/install.php')

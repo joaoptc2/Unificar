@@ -487,9 +487,20 @@ final class Exposicao
         if ($rel === 'config' && defined('CONFIG_PATH')) {
             return realpath(CONFIG_PATH) ?: null;
         }
-        // Pasta de código segue APP_PATH; o resto segue a raiz pública.
+        // Pasta de código segue APP_PATH — mas se ela NÃO estiver lá e
+        // estiver na área pública, é essa que tem de ser testada.
+        //
+        // O caso é a mudança pela metade: sql/ ainda no public_html e ainda
+        // não na irmã. Olhando só APP_PATH, a sonda respondia "a pasta não
+        // existe nesta instalação" e nem tentava a URL — enquanto o servidor
+        // entregava o arquivo. Pior que não testar: o checkup somava aquilo
+        // como "nenhuma pasta sensível é entregue pela web". A pasta que
+        // precisa do teste é exatamente a que sobrou no público.
         if (in_array($rel, self::PASTAS_DE_CODIGO, true) && defined('APP_PATH')) {
-            return realpath(APP_PATH . '/' . $rel) ?: null;
+            $noApp = realpath(APP_PATH . '/' . $rel);
+            if ($noApp !== false) {
+                return $noApp;
+            }
         }
         return realpath(BASE_PATH . '/' . $rel) ?: null;
     }

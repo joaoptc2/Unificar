@@ -52,12 +52,31 @@ if (!function_exists('unificar_localizar_app')) {
         // 3. A arrumação de sempre: o código está aqui mesmo.
         $candidatos[] = $publico;
 
+        // O que qualifica um candidato NÃO é só ter o bootstrap: é ter o
+        // suficiente para o núcleo subir. Uma pasta irmã com a cópia ainda em
+        // andamento tem o bootstrap (ele vem cedo, em ordem alfabética) e não
+        // tem o resto — e nesse intervalo o site já prefere a irmã e cai com
+        // página em branco. Medido numa subida em ordem alfabética: a janela
+        // ia de "core/bootstrap.php chegou" até o fim da cópia.
+        //
+        // Estes três são os que o bootstrap carrega ANTES de existir qualquer
+        // tratador de erro — sem eles não há nem mensagem, só página vazia.
+        // Isto ENCURTA a janela; não a fecha. Fechar é atribuição do
+        // procedimento, e o README manda subir com outro nome e renomear no
+        // fim, porque renomear é instantâneo.
+        $exigidos = ['/core/bootstrap.php', '/core/helpers.php', '/core/src/Config.php'];
         foreach ($candidatos as $c) {
-            // O que qualifica um candidato é ter o bootstrap DENTRO dele.
-            // Sem esta conferência, uma pasta irmã vazia (criada por um
-            // upload interrompido) venceria o degrau 3 e derrubaria o site
-            // com um require de arquivo inexistente.
-            if ($c !== '' && @is_file($c . '/core/bootstrap.php')) {
+            if ($c === '') {
+                continue;
+            }
+            $completo = true;
+            foreach ($exigidos as $arq) {
+                if (!@is_file($c . $arq)) {
+                    $completo = false;
+                    break;
+                }
+            }
+            if ($completo) {
                 return $c;
             }
         }

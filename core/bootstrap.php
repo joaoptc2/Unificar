@@ -47,7 +47,40 @@ function unificar_raiz_publica(string $app): string
     }
 
     // 3. Arrumação de sempre: o código E a área pública são a mesma pasta.
-    return $app;
+    //    Só vale se esta pasta REALMENTE for a raiz servida, e o que prova
+    //    isso é ter o front controller dentro dela.
+    if (@is_file($app . '/index.php')) {
+        return $app;
+    }
+
+    // 4. Não sei, e CHUTAR AQUI É O PIOR DESFECHO POSSÍVEL.
+    //
+    //    Devolver $app quando ele não é a raiz servida fazia a linha de
+    //    comando trabalhar com um BASE_PATH diferente do da tela — e
+    //    BASE_PATH manda em UPLOADS_PATH, na pasta irmã do config e no
+    //    destino dos backups. Na prática: o cron gravaria o backup de hoje
+    //    numa pasta que a tela não lista, procuraria a configuração onde ela
+    //    não está, e o anexo enviado pela tela iria para um lugar que o cron
+    //    nunca limpa. Nada disso dá erro. Tudo isso dá resultado errado.
+    //
+    //    Acontece sempre que a pasta do código não se chama exatamente
+    //    "<publico>-codigo": um "-codigo2" de teste, um nome em maiúscula
+    //    numa hospedagem sensível a caixa, uma pasta aninhada um nível a
+    //    mais. Nesses casos existe UMA resposta certa, e ela não é um
+    //    palpite: é a pessoa dizer onde fica.
+    $msg = "Não consegui descobrir qual é a pasta servida pela web.\n\n"
+         . "O código está em {$app}, que não tem um index.php dentro e não segue a\n"
+         . "convenção \"<pasta pública>-codigo\". Sem saber a raiz servida, eu gravaria\n"
+         . "upload, backup e log nos lugares errados, em silêncio.\n\n"
+         . "Aponte a pasta pública com a variável de ambiente UNIFICAR_PUBLIC. Exemplo:\n"
+         . "  UNIFICAR_PUBLIC=/home/conta/public_html php " . basename($_SERVER['SCRIPT_NAME'] ?? 'cron.php') . "\n";
+    if (PHP_SAPI === 'cli') {
+        fwrite(STDERR, $msg);
+        exit(1);
+    }
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    exit($msg);
 }
 
 /**

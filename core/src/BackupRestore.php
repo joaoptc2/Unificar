@@ -1385,8 +1385,14 @@ final class BackupRestore
      */
     public static function sessionEpochHint(): array
     {
+        // core/ viaja com o CÓDIGO. Este era o quinto uso de BASE_PATH com
+        // sentido de "onde está o código" — o commit da separação dizia
+        // serem exatamente quatro, e estava errado. Com as raízes separadas o
+        // arquivo não existia, o @file() engolia o aviso e a instrução dada
+        // ao administrador virava "cole em core/bootstrap.php, logo depois da
+        // linha 0".
         $rel     = 'core/bootstrap.php';
-        $arquivo = BASE_PATH . '/' . $rel;
+        $arquivo = APP_PATH . '/' . $rel;
         $ancora  = 'Core\Session::start();';
         $linha   = 0;
 
@@ -1412,7 +1418,11 @@ final class BackupRestore
 PHP;
 
         return [
-            'arquivo' => $rel,
+            // Caminho ABSOLUTO: com o código fora do public_html, "core/
+            // bootstrap.php" não diz a ninguém onde o arquivo está. E linha 0
+            // significa que não achei a âncora — dizer isso é melhor que
+            // mandar colar "depois da linha 0".
+            'arquivo' => $arquivo,
             'linha'   => $linha,
             'ancora'  => $ancora,
             'trecho'  => $trecho,

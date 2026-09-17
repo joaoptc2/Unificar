@@ -1164,19 +1164,30 @@ sem a constante que o `cron.php` define depois de conferir o token.
 O ensaio abaixo foi executado, passo a passo, contra uma instalação servida:
 
 1. **Suba** `core/`, `modules/`, `sql/`, `docs/`, `scripts/` e
-   `config/config.example.php` para `<nome>-codigo`. **Não apague nada
-   ainda.** O portal continua respondendo, e já passa a rodar o código de lá:
-   o localizador prefere a pasta irmã justamente para você poder conferir de
-   verdade antes de apagar. O checkup fica **vermelho** e nomeia as pastas que
-   sobraram.
+   `config/config.example.php` para uma pasta com nome **provisório** —
+   `<nome>-codigo.subindo`, por exemplo. Quando a cópia terminar, **renomeie**
+   para `<nome>-codigo`.
+
+   A ordem importa. O localizador prefere a pasta irmã assim que ela existe e
+   parece completa, então subir direto com o nome final abre uma janela em que
+   o portal já escolheu a irmã e ela ainda está pela metade: **medido, o site
+   fica fora do ar com página em branco durante parte da transferência.**
+   Renomear é instantâneo e não tem essa janela. (O localizador também exige
+   três arquivos do núcleo, e não só o `bootstrap.php`, o que encurta a
+   janela de quem subir direto — mas encurtar não é fechar.)
+
+   Depois do rename o portal já roda o código de lá, e **você não apagou
+   nada**: é o momento de conferir de verdade. O checkup fica **vermelho** e
+   nomeia as pastas que sobraram.
 2. **Confira** o portal e o checkup. Se algo estiver errado, **apague a pasta
    irmã** — e tudo volta exatamente ao que era, sem tocar em configuração nem
    em banco.
 3. **Apague** as pastas de código do `public_html`. O checkup fica verde:
    *"O código está em … e não sobrou cópia na área pública."*
 
-Não há janela de indisponibilidade em nenhum passo, nem edição de
-configuração, nem mudança no banco.
+Nenhum passo exige editar configuração ou mexer no banco. E nenhum derruba o
+portal — **desde que a subida use nome provisório e rename**, como diz o passo
+1; subir direto com o nome final tem, sim, uma janela de indisponibilidade.
 
 **A armadilha é o passo 3**, e o checkup existe por causa dela: mover por FTP
 é copiar-e-apagar, e é o apagar que falha — conexão caindo, servidor recusando
@@ -1185,6 +1196,22 @@ sendo servida, e a sonda **não a vê** (depois da mudança ela procura essas
 pastas em `APP_PATH`, que é onde está a cópia boa). A pasta perigosa é
 justamente a que a sonda deixou de olhar — por isso a conferência de sobras é
 um item separado do checkup, em vermelho, com os nomes.
+
+### Se o portal mora numa SUBPASTA do site
+
+Aqui a convenção falha, e falha de um jeito que parece certo. Com o portal em
+`public_html/portal`, a irmã derivada é `public_html/portal-codigo` — que está
+**dentro** do `DocumentRoot` e responde por `https://site/portal-codigo/`.
+Conferido: `/portal-codigo/sql/schema.sql` devolve o schema inteiro.
+
+E é **pior que antes de mover**: dentro da instalação, `core/`, `sql/` e
+`docs/` eram cobertas pela regra do `.htaccess` da raiz; na pasta irmã não há
+`.htaccess` nenhum para elas (só `modules/` e `scripts/` levam o seu).
+
+Nesse arranjo, ponha o código fora do `DocumentRoot` — ao lado do **site**, e
+não ao lado da subpasta — e aponte-o com `UNIFICAR_APP`. O checkup confere
+isso contra o `DocumentRoot` de verdade, não contra a pasta da instalação, e
+fica **vermelho** enquanto o código estiver servido por alguma URL.
 
 ### Se a convenção não servir
 

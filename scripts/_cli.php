@@ -28,3 +28,55 @@ if (PHP_SAPI !== 'cli') {
     // precisa saber se acertou o nome de um utilitário de banco.
     exit("Este script é só para a linha de comando.\n");
 }
+
+/**
+ * Segunda conferência: ESTE script está ao lado do MESMO código que a web roda?
+ *
+ * Os scripts daqui carregam o núcleo com dirname(__DIR__) — eles fixam o
+ * código que está ao lado deles. Já index.php, cron.php e install.php
+ * perguntam ao localizar.php, que PREFERE a pasta irmã. Numa mudança pela
+ * metade (código já na irmã, cópia velha ainda no public_html) as duas coisas
+ * apontam para lugares diferentes: a tela roda uma cópia e a linha de comando
+ * roda outra.
+ *
+ * O estrago não é abstrato. Rodando o migrate.php da cópia VELHA, ele lê o
+ * sql/ velho, conclui "nada pendente" e vai embora — enquanto a migração nova,
+ * que está na irmã, nunca é aplicada. Ninguém vê erro: vê um "nada pendente"
+ * que é verdade sobre a pasta errada.
+ *
+ * Aqui não se conserta nada sozinho: rodar a outra cópia por conta própria
+ * seria trocar uma surpresa por outra. Recusa-se, dizendo quais são as duas.
+ */
+$meuApp = dirname(__DIR__);
+
+$publico = getenv('UNIFICAR_PUBLIC') ?: null;
+if ($publico === null) {
+    if (str_ends_with($meuApp, '-codigo') && @is_file(substr($meuApp, 0, -7) . '/index.php')) {
+        $publico = substr($meuApp, 0, -7);
+    } elseif (@is_file($meuApp . '/index.php')) {
+        $publico = $meuApp;
+    }
+}
+
+if ($publico !== null) {
+    // A MESMA ordem do localizar.php, e ela tem de continuar a mesma.
+    $daWeb = null;
+    foreach ([getenv('UNIFICAR_APP') ?: null,
+              dirname($publico) . '/' . basename($publico) . '-codigo',
+              $publico] as $cand) {
+        if ($cand !== null && $cand !== '' && @is_file($cand . '/core/bootstrap.php')) {
+            $daWeb = $cand;
+            break;
+        }
+    }
+    if ($daWeb !== null && realpath($daWeb) !== realpath($meuApp)) {
+        fwrite(STDERR,
+            "Recusado: este script rodaria um código DIFERENTE do que o portal roda.\n\n"
+            . "  este script está em .. {$meuApp}\n"
+            . "  o portal (web) roda ... {$daWeb}\n\n"
+            . "Isso acontece quando a mudança de pastas ficou pela metade. Rode o script\n"
+            . "de dentro de {$daWeb}/scripts/, ou termine a mudança apagando a cópia que\n"
+            . "sobrou. O checkup, em Administração, lista o que falta.\n");
+        exit(1);
+    }
+}
