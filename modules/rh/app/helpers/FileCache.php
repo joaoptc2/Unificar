@@ -17,7 +17,20 @@ class FileCache
     private static function dir(): string
     {
         if (self::$dir === null) {
-            self::$dir = dirname(__DIR__, 2) . '/storage/cache/';
+            // Cache do módulo debaixo da MESMA pasta de dados do portal. Antes
+            // ficava em modules/rh/storage/cache, uma segunda pasta de dados
+            // escondida dentro da área pública, protegida só pelo .htaccess do
+            // próprio módulo. Com STORAGE_PATH movido para fora, ela era a
+            // única que continuaria exposta.
+            //
+            // O que ficou na pasta antiga NÃO é inofensivo: o payload do
+            // painel do RH traz nome completo, setor e dia de aniversário
+            // dos funcionários. Como nada mais LÊ aquela pasta, os arquivos
+            // parariam de expirar e ficariam ali dentro da área pública para
+            // sempre — por isso purgeExpired() varre as duas.
+            self::$dir = defined('STORAGE_PATH')
+                ? rtrim(STORAGE_PATH, '/') . '/cache/rh/'
+                : dirname(__DIR__, 2) . '/storage/cache/';
             if (!is_dir(self::$dir)) @mkdir(self::$dir, 0755, true);
         }
         return self::$dir;
@@ -92,8 +105,7 @@ class FileCache
     public static function purgeExpired(): int
     {
         $count = 0;
-        $dir = self::dir();
-        foreach (glob($dir . '*.cache') ?: [] as $file) {
+        foreach (glob(self::dir() . '*.cache') ?: [] as $file) {
             $raw = @file_get_contents($file);
             if ($raw === false) continue;
             $payload = @unserialize($raw, ['allowed_classes' => false]);
@@ -103,6 +115,23 @@ class FileCache
                 $count++;
             }
         }
+
+        // Pasta antiga (modules/rh/storage/cache), de antes de o cache passar
+        // a viver sob STORAGE_PATH. Nada mais LÊ dali, então o conteúdo
+        // pararia de expirar — e ele não é inócuo: o payload do painel traz
+        // nome completo, setor e dia de aniversário dos funcionários, parados
+        // dentro da área pública. Como ninguém mais os usa, saem todos, sem
+        // conferir validade: o único efeito é a próxima consulta refazer a
+        // contagem.
+        $antigo = dirname(__DIR__, 2) . '/storage/cache/';
+        if (rtrim($antigo, '/') !== rtrim(self::dir(), '/') && is_dir($antigo)) {
+            foreach (glob($antigo . '*.cache') ?: [] as $file) {
+                if (@unlink($file)) {
+                    $count++;
+                }
+            }
+        }
+
         return $count;
     }
 }

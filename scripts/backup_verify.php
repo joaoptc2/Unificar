@@ -27,15 +27,11 @@
 
 declare(strict_types=1);
 
+require __DIR__ . '/_cli.php';
 require dirname(__DIR__) . '/core/bootstrap.php';
 
 use Core\BackupDump;
 use Core\Config;
-
-if (PHP_SAPI !== 'cli') {
-    http_response_code(403);
-    exit("Este script é só para a linha de comando.\n");
-}
 
 $args = bv_args($argv ?? []);
 if (isset($args['help']) || isset($args['h'])) {

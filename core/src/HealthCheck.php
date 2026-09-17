@@ -82,6 +82,21 @@ final class HealthCheck
         }
 
         // Migrações pendentes — o motivo mais comum de "sumiu uma coluna".
+        //
+        // Antes de responder, é preciso saber se dá para responder: sem a
+        // pasta do SQL versionado, glob() devolve lista vazia e lista vazia
+        // era lida como "nada pendente". A tela anunciava em verde que estava
+        // tudo aplicado com migração pendente no disco e tabela faltando no
+        // banco. Não saber não é o mesmo que estar em dia.
+        if (!Migrations::temSql()) {
+            $out[] = self::item('erro', 'Atualizações de banco',
+                'Não encontrei o SQL versionado em ' . Migrations::raizSql() . '.',
+                'Esta tela NÃO pode afirmar nada sobre migrações ou tabelas enquanto a pasta '
+                . 'não estiver lá. Se o código foi movido, confira se sql/ subiu junto com '
+                . 'core/ e modules/.');
+            return $out;
+        }
+
         try {
             $pend = Migrations::pending();
             $out[] = count($pend) === 0
@@ -148,6 +163,36 @@ final class HealthCheck
                 (int) $r['n'] . ' tabelas · ' . self::bytes((int) $r['bytes']));
         } catch (\Throwable $e) { /* informativo */ }
 
+        // Módulos: o que o banco diz que existe × o que há no disco. Sem a
+        // pasta modules/ (uma mudança de pastas pela metade), Modules::all()
+        // devolve lista vazia sem erro nenhum: o portal sobe perfeito e VAZIO,
+        // o administrador lê "você não tem acesso a nenhum módulo", e o cron
+        // termina com "concluído" sem rodar rotina nenhuma. O erro é
+        // "permissão" para quem lê a tela, e é "pasta" na verdade.
+        try {
+            $noBanco = array_column(DB::query('SELECT slug FROM modules WHERE active = 1'), 'slug');
+            $noDisco = array_keys(Modules::all());
+            $faltam  = array_values(array_diff($noBanco, $noDisco));
+            if ($noBanco !== [] && $noDisco === []) {
+                $out[] = self::item('erro', 'Módulos',
+                    'O banco tem ' . count($noBanco) . ' módulo(s) ativo(s) e NENHUM manifesto foi '
+                    . 'encontrado em ' . MODULES_PATH . '.',
+                    'A pasta modules/ não está onde o código está. Se o código foi movido, confira '
+                    . 'se modules/ subiu junto. Enquanto isso, o portal está vazio e nenhuma rotina '
+                    . 'de módulo roda no cron.');
+            } elseif ($faltam !== []) {
+                $out[] = self::item('erro', 'Módulos',
+                    'Ativo(s) no banco sem pasta no disco: ' . implode(', ', $faltam) . '.',
+                    'Cada um precisa de modules/<slug>/module.php em ' . MODULES_PATH . '. Sem ele o '
+                    . 'módulo responde 404 e o cron dele não roda.');
+            } else {
+                $out[] = self::item('ok', 'Módulos',
+                    count($noDisco) . ' manifesto(s) em ' . MODULES_PATH . ', todos os ativos presentes.');
+            }
+        } catch (\Throwable $e) {
+            $out[] = self::item('aviso', 'Módulos', 'Não verificado: ' . $e->getMessage());
+        }
+
         // max_allowed_packet pequeno quebra a restauração de backups grandes.
         try {
             $p = (int) (DB::queryOne("SHOW VARIABLES LIKE 'max_allowed_packet'")['Value'] ?? 0);
@@ -169,9 +214,10 @@ final class HealthCheck
         }
 
         $esperadas = [];
+        $sqlRaiz   = Migrations::raizSql();
         $arquivos  = array_merge(
-            [dirname(CORE_PATH) . '/sql/schema.sql'],
-            glob(dirname(CORE_PATH) . '/sql/modules/*.sql') ?: []
+            [$sqlRaiz . '/schema.sql'],
+            glob($sqlRaiz . '/modules/*.sql') ?: []
         );
         foreach ($arquivos as $f) {
             if (!is_file($f)) {
@@ -275,29 +321,184 @@ final class HealthCheck
         return $out;
     }
 
+    /**
+     * O estado da separação entre o código e a área servida.
+     *
+     * Este item nasceu errado de três jeitos, e os três eram silenciosos:
+     *
+     *  1. dava VERDE comparando só APP_PATH com BASE_PATH. Numa instalação em
+     *     SUBPASTA do site (public_html/portal), a irmã public_html/portal-codigo
+     *     fica DENTRO do que o servidor serve: /portal-codigo/sql/schema.sql
+     *     devolvia o schema inteiro enquanto a tela dizia "não sobrou cópia na
+     *     área pública". O mesmo arquivo, 200 linhas acima, já fazia a
+     *     comparação certa para o config — com um comentário dizendo que
+     *     comparar com BASE_PATH é "uma mentira tranquilizadora".
+     *
+     *  2. chamava de "sobra" qualquer pasta encontrada no público, e mandava
+     *     APAGAR. Se uma pasta não tivesse subido para a irmã, ela existia SÓ
+     *     no público — e o conselho era apagar a ÚNICA cópia que havia.
+     *
+     *  3. vivia inteiro dentro de `if (APP_PATH !== BASE_PATH)`. Uma irmã
+     *     malfeita (aninhada um nível, nome com maiúscula numa hospedagem
+     *     sensível a caixa) não é reconhecida, APP_PATH volta a ser igual a
+     *     BASE_PATH, e a tela ficava sem UMA linha sobre o assunto: fazer
+     *     errado era indistinguível de não ter feito.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private static function separacaoDoCodigo(string $raiz): array
+    {
+        $pastas = ['core', 'modules', 'sql', 'docs', 'scripts'];
+
+        // Onde está cada pasta: no código, no público, ou nos dois.
+        $soNoPublico = [];
+        $nosDois     = [];
+        foreach ($pastas as $p) {
+            $noApp     = @is_dir(APP_PATH . '/' . $p);
+            $noPublico = @is_dir($raiz . '/' . $p);
+            if ($noPublico && $noApp) {
+                $nosDois[] = $p . '/';
+            } elseif ($noPublico && !$noApp) {
+                $soNoPublico[] = $p . '/';
+            }
+        }
+
+        if (APP_PATH === BASE_PATH) {
+            // Código na área pública. Não é erro — é a arrumação de origem, e
+            // ela é suportada. Mas se existir ao lado uma pasta com cara de
+            // irmã, é quase certo que alguém TENTOU separar e não conseguiu.
+            $irmaEsperada = dirname($raiz) . '/' . basename($raiz) . '-codigo';
+            $tentativa    = @is_dir($irmaEsperada) || (glob(dirname($raiz) . '/*-codigo*') ?: []) !== [];
+            return [$tentativa
+                ? self::item('aviso', 'Separação do código',
+                    'O código está na área pública (' . $raiz . '), mas existe uma pasta com nome '
+                    . 'de irmã ao lado que NÃO foi reconhecida.',
+                    'A pasta tem de se chamar exatamente ' . basename($irmaEsperada) . ', ficar ao '
+                    . 'lado de ' . basename($raiz) . ', e ter core/bootstrap.php dentro dela. '
+                    . 'Se o nome não puder ser esse, aponte a pasta com a variável de ambiente '
+                    . 'UNIFICAR_APP.')
+                : self::item('ok', 'Separação do código',
+                    'O código está na área pública (' . $raiz . '), que é a arrumação de origem. '
+                    . 'Tirá-lo de lá é opcional — veja "Tirar o CÓDIGO do public_html" no README.')];
+        }
+
+        $out = [];
+
+        // A irmã existe. Ela está mesmo FORA do que o servidor serve?
+        [$raizServida, $confiavel] = Exposicao::raizPublica();
+        if (!$confiavel || $raizServida === null) {
+            $out[] = self::item('aviso', 'Separação do código',
+                'O código está em ' . APP_PATH . ', mas ainda não sei onde o servidor web '
+                . 'começa a servir — então não posso afirmar que ele ficou fora do alcance de '
+                . 'uma URL.',
+                'Abra esta tela pelo navegador uma vez: é o que ensina o DOCUMENT_ROOT ao '
+                . 'sistema. Depois disso este item passa a dizer sim ou não.');
+        } elseif (str_starts_with(APP_PATH . '/', rtrim($raizServida, '/') . '/')) {
+            $rel = ltrim(substr(APP_PATH, strlen(rtrim($raizServida, '/'))), '/');
+            $out[] = self::item('erro', 'Separação do código',
+                'O código saiu da instalação, mas continua DENTRO da área servida: ele está em '
+                . APP_PATH . ', que o servidor entrega pela URL /' . $rel . '/.',
+                'Isto costuma acontecer quando o portal mora numa subpasta do site: a irmã '
+                . 'nasce ao lado da subpasta, e não ao lado do site. Mova a pasta do código '
+                . 'para fora de ' . $raizServida . ' e aponte-a com a variável de ambiente '
+                . 'UNIFICAR_APP. Do jeito que está, a mudança não protegeu nada — e protege '
+                . 'menos que antes, porque core/, sql/ e docs/ não levam .htaccess próprio.');
+        } else {
+            $out[] = self::item('ok', 'Separação do código',
+                'O código está em ' . APP_PATH . ', fora da área servida (' . $raizServida . ').');
+        }
+
+        if ($nosDois !== []) {
+            $out[] = self::item('erro', 'Cópia de código na área pública',
+                'Estas pastas existem NOS DOIS lugares: ' . implode(', ', $nosDois),
+                'Apague-as de ' . $raiz . '. Enquanto existirem, o servidor continua entregando '
+                . 'o código por URL, e o portal roda a cópia de fora — uma correção aplicada na '
+                . 'cópia do público não tem efeito nenhum.');
+        }
+
+        if ($soNoPublico !== []) {
+            // O CONTRÁRIO de sobra: não subiu.
+            $out[] = self::item('erro', 'Pasta que não subiu para o código',
+                'Estas pastas existem SÓ na área pública, e não em ' . APP_PATH . ': '
+                . implode(', ', $soNoPublico),
+                'NÃO as apague: são a única cópia que existe. Copie-as para ' . APP_PATH
+                . ' e só então remova as do público. Enquanto faltarem lá, o portal roda sem '
+                . 'elas — e o que depende delas falha de maneiras difíceis de ligar à causa.');
+        }
+
+        return $out;
+    }
+
     // ── Pastas e arquivos ──────────────────────────────────────────────────
 
     private static function arquivos(): array
     {
-        $raiz = dirname(CORE_PATH);
+        // Tudo o que este método olha — uploads/ e o .htaccess dela — vive na
+        // área SERVIDA, não junto do código. Com as duas raízes separadas,
+        // dirname(CORE_PATH) apontaria para a pasta irmã e o checkup diria
+        // "pasta uploads não existe" sobre uma instalação sadia.
+        $raiz = BASE_PATH;
         $out  = [];
 
+        // As pastas que o sistema precisa ESCREVER. config saiu desta lista:
+        // nada em runtime grava lá (só o instalador, uma vez), e exigir
+        // escrita virava aviso permanente para quem mudou o arquivo de lugar
+        // ou tirou a permissão — que é justamente a configuração mais segura.
         $pastas = [
-            'uploads'          => 'arquivos de documentos, fotos e anexos',
-            'logs'             => 'registro de erros',
-            'config'           => 'configuração',
+            'uploads'      => ['arquivos de documentos, fotos e anexos', $raiz . '/uploads'],
+            'dados'        => ['logs, cache, backups e anexos privados', STORAGE_PATH],
         ];
-        foreach ($pastas as $rel => $para) {
-            $caminho = $raiz . '/' . $rel;
+        foreach ($pastas as $rel => [$para, $caminho]) {
             if (!is_dir($caminho)) {
-                $out[] = self::item('aviso', 'Pasta ' . $rel, 'Não existe — ' . $para . '.',
-                    'Crie a pasta ' . $rel . ' com permissão de escrita para o usuário do servidor web.');
+                $out[] = self::item('erro', 'Pasta ' . $rel, 'Não existe: ' . $caminho . ' — ' . $para . '.',
+                    'Crie a pasta com permissão de escrita para o usuário do servidor web.');
                 continue;
             }
             $out[] = is_writable($caminho)
-                ? self::item('ok', 'Pasta ' . $rel, 'Existe e pode ser escrita (' . $para . ').')
-                : self::item('erro', 'Pasta ' . $rel, 'Existe mas NÃO pode ser escrita — ' . $para . ' falha.',
+                ? self::item('ok', 'Pasta ' . $rel, 'Existe e pode ser escrita (' . $para . ') — ' . $caminho . '.')
+                : self::item('erro', 'Pasta ' . $rel, 'Existe mas NÃO pode ser escrita: ' . $caminho . ' — ' . $para . ' falha.',
                     'Dê permissão de escrita ao usuário do servidor web (geralmente www-data).');
+        }
+
+        // Onde config e storage realmente estão — e se isso é bom.
+        //
+        // A comparação é com a raiz SERVIDA pelo servidor web, não com a
+        // pasta da instalação: um portal numa subpasta do site
+        // (public_html/portal) tem a "pasta irmã" public_html/portal-config
+        // ainda dentro da área pública, e comparar com BASE_PATH diria
+        // "está fora" — uma mentira tranquilizadora.
+        [$raizPublica, $raizConfiavel] = Exposicao::raizPublica();
+        $refere = $raizPublica ?? $raiz;
+        $foraConfig  = !str_starts_with(CONFIG_PATH . '/', $refere . '/');
+        $foraStorage = !str_starts_with(rtrim(STORAGE_PATH, '/') . '/', $refere . '/');
+        $ressalva = $raizConfiavel ? '' : ' (comparado com a pasta da instalação: a raiz do site '
+                  . 'só é conhecida depois de abrir esta página pelo navegador)';
+        $out[] = self::item($foraConfig ? 'ok' : 'aviso', 'Onde fica a configuração',
+            CONFIG_FILE . ' (' . CONFIG_ORIGEM . ').'
+            . ($foraConfig ? ' Fora da área pública — nenhuma URL alcança.' . $ressalva
+                           : ' Dentro da área pública: enquanto o PHP executa, o acesso direto devolve '
+                             . 'página em branco, mas no dia em que ele parar de processar .php sai o fonte '
+                             . 'com a senha do banco.'),
+            $foraConfig ? '' : 'Mova config.php para uma pasta irmã da instalação — veja "Tirar config e dados '
+                             . 'do public_html" no README.');
+        $out[] = self::item($foraStorage ? 'ok' : 'aviso', 'Onde ficam os dados',
+            STORAGE_PATH . '.'
+            . ($foraStorage ? ' Fora da área pública — nenhuma URL alcança.' . $ressalva
+                            : ' Dentro da área pública: backup, log e anexo privado não são arquivos .php, '
+                              . 'então nenhum interpretador protege — só a configuração do servidor, que '
+                              . 'falha em silêncio no Nginx.'),
+            $foraStorage ? '' : "Aponte 'paths' => ['storage' => '/caminho/fora/do/public_html'] em config.php.");
+
+        // Caminho configurado que não existe: o boot volta para o padrão, e
+        // sem este aviso o backup passaria a ser gravado num lugar que o
+        // administrador não procura.
+        if (STORAGE_CONFIGURADO !== '' && !is_dir(STORAGE_PATH)) {
+            $out[] = self::item('erro', 'Pasta de dados configurada não existe',
+                "config.php pede paths.storage = '" . STORAGE_CONFIGURADO . "', que não existe ou não "
+                . 'está acessível. Toda gravação de log, cache, backup e anexo privado vai falhar.',
+                'Crie a pasta (ou corrija o caminho em config.php). O sistema NÃO volta sozinho para '
+                . 'a pasta pública: fazer isso espalharia atestado e backup dentro do public_html sem '
+                . 'ninguém notar.');
         }
 
         // Espaço em disco: é o que faz o backup falhar no meio sem aviso.
@@ -312,26 +513,138 @@ final class HealthCheck
                 $nivel === 'ok' ? '' : 'Libere espaço: backups antigos e logs são os primeiros candidatos (ver a limpeza automática nas configurações).');
         }
 
-        // uploads acessível direto pela web é vazamento de documento.
+        // A presença do .htaccess continua valendo como pista — mas só como
+        // pista. Quem responde de verdade se as pastas estão fechadas é o
+        // teste de exposição, na seção de segurança.
         $ht = $raiz . '/uploads/.htaccess';
         if (is_dir($raiz . '/uploads')) {
             $out[] = is_file($ht)
-                ? self::item('ok', 'Proteção da pasta uploads', 'Há um .htaccess restringindo o acesso direto.')
+                ? self::item('ok', 'Proteção da pasta uploads',
+                    'Há um .htaccess restringindo o acesso direto. Em Nginx ele é ignorado — '
+                    . 'veja o teste de exposição das pastas, na seção de segurança.')
                 : self::item('aviso', 'Proteção da pasta uploads',
                     'Sem .htaccess: em servidores Apache os arquivos podem ser baixados direto pela URL.',
                     'Em Nginx, bloqueie /uploads na configuração do site; em Apache, adicione um .htaccess.');
         }
 
         // Log de erros crescendo sem parar.
-        $log = $raiz . '/logs/app_errors.log';
-        if (is_file($log)) {
-            $tam = (int) filesize($log);
-            $out[] = $tam > 50 * 1024 * 1024
-                ? self::item('aviso', 'Log de erros', 'app_errors.log com ' . self::bytes($tam) . '.',
-                    'Verifique os erros recorrentes e configure a limpeza automática nas configurações.')
-                : self::item('ok', 'Log de erros', 'app_errors.log com ' . self::bytes($tam) . '.');
+        //
+        // Este item vigiava "<raiz>/logs/app_errors.log" — um arquivo que
+        // NÃO EXISTE em instalação nenhuma. O log do PHP é definido em
+        // core/bootstrap.php como STORAGE_PATH/logs/php_errors.log, e
+        // app_errors.log é de um módulo (documentos), dentro da pasta dele.
+        // Como o is_file() dava falso, o item simplesmente NÃO APARECIA na
+        // tela: o checkup parecia cobrir o assunto e não cobria nada,
+        // enquanto o log de verdade crescia sem ninguém olhar. Numa conta com
+        // cota, o primeiro sintoma seria upload parando de funcionar.
+        $logs = array_merge(
+            [STORAGE_PATH . '/logs/php_errors.log'],
+            glob(MODULES_PATH . '/*/logs/*.log') ?: []
+        );
+        $maior = null;
+        $total = 0;
+        foreach ($logs as $log) {
+            if (!@is_file($log)) {
+                continue;
+            }
+            $tam    = (int) @filesize($log);
+            $total += $tam;
+            if ($maior === null || $tam > $maior[1]) {
+                $maior = [$log, $tam];
+            }
+        }
+        if ($maior === null) {
+            $out[] = self::item('ok', 'Log de erros', 'Nenhum arquivo de log com conteúdo ainda.');
+        } else {
+            $out[] = $total > 50 * 1024 * 1024
+                ? self::item('aviso', 'Log de erros',
+                    self::bytes($total) . ' em log(s); o maior é ' . basename($maior[0])
+                    . ' (' . self::bytes($maior[1]) . ') em ' . dirname($maior[0]) . '.',
+                    'Veja os erros recorrentes — um log que cresce assim costuma ser o MESMO erro '
+                    . 'repetindo — e ligue a limpeza automática nas configurações.')
+                : self::item('ok', 'Log de erros',
+                    self::bytes($total) . ' em log(s); o maior é ' . basename($maior[0])
+                    . ' (' . self::bytes($maior[1]) . ').');
         }
 
+        return $out;
+    }
+
+    /**
+     * Itens do checkup vindos do último teste de exposição das pastas.
+     *
+     * Um item por pasta seria ruído: seis linhas quase iguais empurram o
+     * resto da página para baixo. Então: uma linha de resumo quando está
+     * tudo bem, e uma linha POR PASTA apenas quando há algo a fazer.
+     *
+     * @return array<int, array<string,mixed>>
+     */
+    private static function exposicao(): array
+    {
+        $r = Exposicao::ultimo();
+        if ($r === null) {
+            return [self::item('info', 'Exposição das pastas internas',
+                'Ainda não foi testado. O teste grava um arquivo temporário em cada pasta '
+                . 'sensível e tenta baixá-lo pela web — é a única forma de saber se a proteção '
+                . 'realmente funciona neste servidor (um .htaccess não vale nada em Nginx).',
+                'Use o botão "Testar agora" nesta página, ou espere o cron rodar.')];
+        }
+
+        $quando = 'testado em ' . date('d/m/Y H:i', (int) strtotime((string) $r['em']))
+                . ' (' . ($r['origem'] === 'cron' ? 'pelo cron' : 'pela tela') . ')';
+
+        $expostas = $duvidosas = [];
+        $meta = Exposicao::pastas();
+        foreach ($r['itens'] as $i) {
+            if (($i['estado'] ?? '') === 'exposta')       { $expostas[]  = $i; }
+            elseif (($i['estado'] ?? '') === 'indeterminado') { $duvidosas[] = $i; }
+        }
+
+        // "A pasta não existe nesta instalação" não é prova de nada: sem este
+        // ramo, uma instalação em que a sonda não achou nada para testar
+        // recebia a mesma linha verde de quem testou tudo e passou.
+        $testadas = array_filter($r['itens'], fn ($i) => in_array($i['estado'] ?? '', ['exposta', 'protegida', 'fora'], true));
+
+        $out = [];
+        if ($expostas === [] && $duvidosas === []) {
+            $out[] = $testadas === []
+                ? self::item('aviso', 'Exposição das pastas internas',
+                    'O teste rodou (' . $quando . ') mas não encontrou nenhuma pasta para verificar — '
+                    . 'o resultado não diz nada sobre a segurança desta instalação.',
+                    'Confira se os caminhos de config e dados estão corretos no checkup acima.')
+                : self::item('ok', 'Exposição das pastas internas',
+                    count($testadas) . ' pasta(s) verificada(s), nenhuma é entregue pela web — ' . $quando . '.');
+            return $out;
+        }
+
+        foreach ($expostas as $i) {
+            $pasta = (string) $i['pasta'];
+            $out[] = self::item($meta[$pasta]['nivel'] ?? 'erro',
+                'Pasta ABERTA na web: ' . $pasta,
+                ($meta[$pasta]['porque'] ?? '') . ' Confirmado por teste: o arquivo-isca foi baixado pela URL (' . $quando . ').',
+                'Mova a pasta para fora do public_html (ver o README) ou bloqueie o caminho na '
+                . 'configuração do servidor. Em Nginx o .htaccess não é lido.');
+        }
+        // O conselho depende do MOTIVO. Antes era um só para todos — "rode
+        // pelo cron" — e saía até quando tinha sido o cron que acabara de
+        // rodar, oito vezes na mesma tela, encobrindo o motivo verdadeiro.
+        $conselhos = [
+            'tempo'                => 'Rode o teste pelo cron — sem a disputa por processo do servidor web, ele costuma concluir.',
+            'rede'                 => 'Este servidor não conseguiu alcançar o próprio endereço. Confira se app.base_url é acessível de dentro da hospedagem (NAT sem hairpin e firewall de saída costumam ser a causa).',
+            'controle'             => 'Confira app.base_url na configuração: ela precisa apontar para ESTA instalação. Enquanto a isca de controle não voltar, nenhuma recusa vale como prova.',
+            'base_url'             => 'Preencha app.base_url na configuração com o endereço deste portal.',
+            'fora_da_instalacao'   => 'A pasta está dentro do site mas fora da instalação — provavelmente o portal mora numa subpasta. Mova-a para fora do DocumentRoot (ao lado do SITE, não da subpasta) ou bloqueie o caminho na configuração do servidor.',
+            'docroot_desconhecido' => 'Abra esta tela pelo navegador uma vez: é o que ensina ao sistema onde o servidor começa a servir.',
+            'escrita'              => 'Dê permissão de escrita na pasta ao usuário do servidor web; sem isso não há como deixar o arquivo de teste.',
+            'tls'                  => 'O certificado de app.base_url não pôde ser verificado de dentro do servidor. Corrija o certificado (ou a cadeia) e teste de novo.',
+            'resposta_estranha'    => 'Algo responde nesse endereço com um conteúdo que não é o arquivo de teste — um proxy, uma regra catch-all, a tela de login. Confira app.base_url e a configuração do servidor.',
+        ];
+        foreach ($duvidosas as $i) {
+            $motivo = (string) ($i['motivo'] ?? '');
+            $out[] = self::item('aviso', 'Não foi possível testar: ' . (string) $i['pasta'],
+                (string) $i['detalhe'] . ' (' . $quando . ')',
+                $conselhos[$motivo] ?? 'Veja o detalhe acima: ele diz o que impediu o teste.');
+        }
         return $out;
     }
 
@@ -339,13 +652,45 @@ final class HealthCheck
 
     private static function seguranca(): array
     {
-        $raiz = dirname(CORE_PATH);
+        // A raiz SERVIDA, não a do código. O install.php é um artefato da
+        // área pública: quando o código vai para a pasta irmã, procurá-lo por
+        // dirname(CORE_PATH) faz o checkup anunciar em verde "install.php já
+        // foi removido" com o install.php vivo e servido — o único aviso que
+        // existe sobre isso passaria a mentir, com selo de verificado.
+        $raiz = BASE_PATH;
         $out  = [];
+
+        // Pastas internas realmente fechadas? Resultado do teste de exposição
+        // (Core\Exposicao), que grava um arquivo-isca e tenta baixá-lo pela
+        // web. Aqui só LEMOS o último resultado: o checkup não pode disparar
+        // a auto-requisição sozinho, porque em hospedagem com um worker de
+        // PHP só ela trava a própria página até estourar o tempo.
+        foreach (self::exposicao() as $item) {
+            $out[] = $item;
+        }
+
+        foreach (self::separacaoDoCodigo($raiz) as $item) {
+            $out[] = $item;
+        }
 
         $out[] = is_file($raiz . '/install.php')
             ? self::item('erro', 'Instalador', 'O arquivo install.php ainda está no servidor.',
                 'Apague install.php: com ele, qualquer pessoa pode tentar reinstalar o portal.')
             : self::item('ok', 'Instalador', 'install.php já foi removido.');
+
+        // app.base_url vazia: toda URL absoluta passa a vir do cabeçalho Host
+        // da requisição — inclusive o link do e-mail de redefinição de senha,
+        // que então aponta para o domínio de QUEM PEDIU o reset, com token
+        // válido. Reproduzido ponta a ponta. Era o padrão de fábrica até o
+        // instalador passar a gravar o endereço; instalações antigas ainda
+        // podem estar assim.
+        $baseUrl = trim((string) Config::get('app.base_url', ''));
+        $out[] = $baseUrl === ''
+            ? self::item('erro', 'Endereço do portal (app.base_url)', 'Está vazio na configuração.',
+                'Preencha app.base_url no config.php com o endereço real deste portal (ex.: '
+                . 'https://portal.hospital.br). Vazio, os links de e-mail — inclusive o de '
+                . 'redefinição de senha — são montados a partir do Host de quem faz o pedido.')
+            : self::item('ok', 'Endereço do portal (app.base_url)', $baseUrl);
 
         $chave = (string) Config::get('app.key', '');
         $out[] = ($chave === '' || str_contains($chave, 'troque-esta-chave'))
@@ -409,13 +754,29 @@ final class HealthCheck
         $ultimo = (string) Settings::get('cron.last_run_at', '');
         if ($ultimo === '') {
             $out[] = self::item('aviso', 'Rotina periódica (cron)', 'Nunca executou.',
-                'Agende "php cron.php" (ou a URL cron.php?key=…) para rodar de hora em hora: é o que envia avisos de vencimento, processa a fila de e-mail e faz o backup agendado.');
+                'Agende "php cron.php" (ou a URL cron.php?token=… com o cron_secret do config) para rodar de hora em hora: é o que envia avisos de vencimento, processa a fila de e-mail e faz o backup agendado.');
         } else {
             $idade = time() - (strtotime($ultimo) ?: 0);
             $nivel = $idade > 86400 ? 'erro' : ($idade > 7200 ? 'aviso' : 'ok');
             $out[] = self::item($nivel, 'Rotina periódica (cron)',
                 'Última execução em ' . date('d/m/Y H:i', strtotime($ultimo)) . ' (' . self::duracao($idade) . ' atrás).',
                 $nivel === 'ok' ? '' : 'A rotina parou. Confira o agendamento no painel da hospedagem.');
+        }
+
+        // Módulos que o cron NÃO conseguiu rodar por falta de isolamento de
+        // processo. Sem isto, o item acima ficava verde ("rodou há 1 h")
+        // enquanto as rotinas de vencimento, calibração e estoque de todos os
+        // módulos menos o primeiro nunca aconteciam — foi assim numa
+        // hospedagem sem proc_open, sem uma linha na tela.
+        $semIso = array_filter(explode(',', (string) Settings::get('cron.sem_isolamento', '')));
+        if ($semIso !== []) {
+            $out[] = self::item('erro', 'Cron: módulos que não rodam',
+                'O servidor não permite abrir subprocesso (proc_open, popen e exec desabilitados), '
+                . 'e os módulos não podem rodar juntos no mesmo processo. Ficaram de fora: '
+                . implode(', ', $semIso) . '.',
+                'No painel da hospedagem, agende uma linha por módulo: '
+                . implode(' ; ', array_map(fn ($s) => 'php cron.php --module=' . $s, $semIso))
+                . ' (além da linha atual). Ou peça à hospedagem para liberar proc_open.');
         }
 
         $out[] = MailConfig::enabled()

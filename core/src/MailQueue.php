@@ -111,6 +111,36 @@ final class MailQueue
         $rows = DB::query('SELECT * FROM mail_queue WHERE reserved_by = ? ORDER BY id ASC', [$ticket]);
 
         foreach ($rows as $row) {
+            // REIVINDICA A LINHA NA HORA DE ENVIAR. A reserva do lote inteiro
+            // era feita uma vez, no início, com um reserved_at só — e um lote
+            // de 300 com SMTP lento passa de 10 minutos. Aí um segundo
+            // processo (o botão "Processar agora", ou outro cron) via as linhas
+            // ainda pendentes com reserved_at velho, re-reservava e enviava; o
+            // primeiro, que ainda as tinha em memória, enviava também. Medido:
+            // 85 mensagens a 8 s, 9 destinatários receberam em dobro, e o banco
+            // ficou com 85 "sent" e nenhum rastro.
+            //
+            // Este UPDATE faz duas coisas: renova reserved_at (a janela de 10
+            // min passa a valer POR LINHA, não por lote) e confere que a linha
+            // ainda é nossa. Zero linhas afetadas = alguém a roubou: pula.
+            //
+            // O bilhete é TROCADO por um bilhete de linha, e isso não é
+            // enfeite: o PDO daqui conta linhas ALTERADAS, não encontradas.
+            // A primeira versão só fazia SET reserved_at = NOW() — e no mesmo
+            // segundo da reserva do lote o valor já era NOW(), o UPDATE
+            // "não alterava nada", devolvia 0, e as 85 mensagens foram puladas
+            // como se roubadas. Zero enviadas, 85 pendentes, sem erro. Trocar
+            // reserved_by garante que uma linha que ainda é nossa SEMPRE conta.
+            $bilheteLinha = bin2hex(random_bytes(8));
+            $minha = DB::execute(
+                'UPDATE mail_queue SET reserved_by = ?, reserved_at = NOW()
+                  WHERE id = ? AND reserved_by = ? AND status = "pending"',
+                [$bilheteLinha, $row['id'], $ticket]
+            );
+            if ($minha < 1) {
+                continue;
+            }
+
             $r = Mailer::sendDetailed(
                 (string) $row['to_email'],
                 (string) $row['subject'],
@@ -123,8 +153,8 @@ final class MailQueue
                     'UPDATE mail_queue
                         SET status = "sent", attempts = ?, sent_at = NOW(), last_error = NULL,
                             error_code = NULL, delivery = ?, reserved_by = NULL, reserved_at = NULL
-                      WHERE id = ?',
-                    [$attempts + 1, $r['path'], $row['id']]
+                      WHERE id = ? AND reserved_by = ?',
+                    [$attempts + 1, $r['path'], $row['id'], $bilheteLinha]
                 );
                 $stats['sent']++;
                 continue;
@@ -136,8 +166,8 @@ final class MailQueue
                 DB::execute(
                     'UPDATE mail_queue
                         SET last_error = ?, error_code = ?, reserved_by = NULL, reserved_at = NULL
-                      WHERE id = ?',
-                    [$erro, $r['code'], $row['id']]
+                      WHERE id = ? AND reserved_by = ?',
+                    [$erro, $r['code'], $row['id'], $bilheteLinha]
                 );
                 $stats['held']++;
                 continue;
@@ -149,8 +179,8 @@ final class MailQueue
                 'UPDATE mail_queue
                     SET status = ?, attempts = ?, last_error = ?, error_code = ?,
                         reserved_by = NULL, reserved_at = NULL
-                  WHERE id = ?',
-                [$final ? 'failed' : 'pending', $attempts, $erro, $r['code'], $row['id']]
+                  WHERE id = ? AND reserved_by = ?',
+                [$final ? 'failed' : 'pending', $attempts, $erro, $r['code'], $row['id'], $bilheteLinha]
             );
             $stats[$final ? 'failed' : 'retried']++;
         }

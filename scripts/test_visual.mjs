@@ -163,6 +163,13 @@ const cenas = [
   { nome: 'aparencia',          url: `${BASE}/index.php?m=admin&a=appearance`, tema: 'claro' },
 ];
 
+// Drena qualquer flash pendente ANTES de fotografar. Flash::pull() consome
+// a mensagem na primeira página que carrega, então um "Configurações
+// salvas" deixado por outra aba somava uma barra de aviso à primeira cena —
+// e a referência gravada saía 74 px mais alta que todas as comparações
+// seguintes, com o teste acusando 100% de diferença sem nada ter mudado.
+await page.goto(`${BASE}/index.php`, { waitUntil: 'networkidle' });
+
 let falhas = 0, novas = 0;
 for (const cena of cenas) {
   await page.goto(cena.url, { waitUntil: 'networkidle' });

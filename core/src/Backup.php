@@ -124,6 +124,14 @@ final class Backup
         }
 
         $storage = STORAGE_PATH . '/backups';
+        // dirname(BASE_PATH) é o VIZINHO da área pública — o mesmo lugar onde
+        // moram "<nome>-config" e "<nome>-codigo". É deliberadamente a raiz
+        // PÚBLICA, e não a do código: é ela que identifica a instalação, e é
+        // dela que todas as pastas irmãs derivam o nome. Derivar daqui a
+        // pasta do código faria o destino dos backups mudar sozinho no dia em
+        // que o código se mudasse — e o histórico inteiro do hospital ficaria
+        // invisível, sem um erro sequer, com o cron gravando o pacote de
+        // amanhã na pasta nova e vazia.
         $irmao   = dirname(BASE_PATH) . '/backups';
 
         if ($cfg !== '') {
@@ -146,16 +154,46 @@ final class Backup
                            . 'nem que o servidor ignore o .htaccess.',
             ];
         } else {
+            // A pasta de dados pode ter sido movida para fora da área pública
+            // (paths.storage no config.php). Afirmar "DENTRO do webroot" sem
+            // conferir era verdade antes e virou mentira depois da mudança —
+            // e uma mentira tranquilizadora é pior que um aviso a mais.
+            $storageFora = !str_starts_with(rtrim($storage, '/') . '/', BASE_PATH . '/');
             $info = [
                 'caminho' => $storage,
                 'origem'  => 'storage',
-                'motivo'  => $irmao . ' não pôde ser criado ou não é gravável, então os pacotes ficam DENTRO '
-                           . 'do webroot e a única proteção é o .htaccess (que o nginx ignora e o Apache só '
-                           . 'aplica com AllowOverride ligado). Assim que puder, aponte backup.path para fora.',
+                'motivo'  => $irmao . ' não pôde ser criado ou não é gravável, então os pacotes ficam na '
+                           . 'pasta de dados. '
+                           . ($storageFora
+                                ? 'Ela está FORA da área pública, então nenhuma URL chega até eles.'
+                                : 'Ela está DENTRO da área pública e a única proteção é o .htaccess (que o '
+                                  . 'nginx ignora e o Apache só aplica com AllowOverride ligado). Assim que '
+                                  . "puder, aponte backup.path ou paths.storage para fora."),
             ];
         }
 
-        $info['dentro_do_webroot'] = str_starts_with($info['caminho'] . '/', BASE_PATH . '/');
+        // "Dentro do webroot" é contra a raiz SERVIDA, não contra a pasta da
+        // instalação. Com o portal numa subpasta do site (public_html/portal),
+        // dirname(BASE_PATH) É o public_html: a pasta irmã de backups nasce
+        // servida pela web, e comparar com BASE_PATH dizia "fora". Provado: o
+        // pacote baixável por URL anônima e a tela com o selo verde.
+        //
+        // Quando a raiz servida não é conhecida (o DOCUMENT_ROOT nunca foi
+        // visto), a resposta honesta é "não sei", e não sei aqui vira
+        // dentro_do_webroot = null — quem exibe trata como aviso, nunca como
+        // selo verde.
+        [$raizServida, $confiavel] = Exposicao::raizPublica();
+        $caminhoReal = realpath($info['caminho']) ?: $info['caminho'];
+        if ($confiavel && $raizServida !== null) {
+            $info['dentro_do_webroot'] = str_starts_with(rtrim($caminhoReal, '/') . '/', rtrim($raizServida, '/') . '/');
+        } else {
+            $info['dentro_do_webroot'] = null;
+        }
+        if ($info['origem'] === 'irmao' && $info['dentro_do_webroot'] === true) {
+            $info['motivo'] = 'diretório irmão da instalação — mas a instalação mora numa SUBPASTA do '
+                            . 'site, e a irmã caiu DENTRO da área servida (' . $raizServida . '). Aponte '
+                            . 'backup.path para fora do site.';
+        }
 
         // Pacotes que ficaram no lugar antigo depois da mudança de padrão: a
         // listagem só enxerga o diretório em uso, e um backup que o admin
@@ -461,6 +499,18 @@ final class Backup
         self::limpaTmp(null, $avisos);
 
         $comArquivos = (bool) ($opts['files'] ?? true);
+        // Banco alternativo (--into) é um ENSAIO do banco — mas esta rota não
+        // tem sandbox de arquivos: eles iam sempre para a instalação viva via
+        // caminhoFisico(). Um "restore --into=teste" reescrevia os uploads de
+        // PRODUÇÃO. Com banco alternativo, arquivos não são gravados; para
+        // ensaiar arquivos existe scripts/restore.php --target (com sandbox).
+        $bancoAlvo = trim((string) ($opts['database_name'] ?? ''));
+        if ($comArquivos && $bancoAlvo !== '' && $bancoAlvo !== (string) Config::get('db.name', '')) {
+            $comArquivos = false;
+            $avisos[] = 'Os ARQUIVOS não foram restaurados: com --into o banco vai para ' . $bancoAlvo
+                      . ', mas os arquivos iriam para a instalação em uso. Para ensaiar arquivos use '
+                      . 'scripts/restore.php --target=<pasta>; para restaurar na instalação, omita --into.';
+        }
         $comBanco    = (bool) ($opts['database'] ?? true);
         $comConfig   = (bool) ($opts['include_config'] ?? false);
 
@@ -536,15 +586,23 @@ final class Backup
                 if ($comArquivos) {
                     $raizes = $opts['roots'] ?? ['uploads', 'storage/uploads'];
                     foreach ($raizes as $raiz) {
-                        self::empacotaRaiz($escreve, (string) $raiz, $anota, $arqStats, $grupos);
+                        self::empacotaRaiz($escreve, (string) $raiz, $anota, $arqStats, $grupos, $avisos);
                     }
                 }
                 if ($comConfig) {
-                    $cfg = BASE_PATH . '/config/config.php';
+                    // O arquivo REALMENTE em uso, que pode estar fora da área
+                    // pública. Antes isto era um caminho fixo: com o config
+                    // movido, o pacote saía sem ele e sem uma linha de
+                    // reclamação — o administrador só descobria na hora de
+                    // restaurar, que é a pior hora possível.
+                    $cfg = defined('CONFIG_FILE') ? CONFIG_FILE : BASE_PATH . '/config/config.php';
                     if (is_file($cfg)) {
                         $anota(self::tarArquivo($escreve, 'arquivos/config/config.php', $cfg, $grupos));
-                        $avisos[] = 'ATENÇÃO: config/config.php foi incluído no pacote. '
-                            . 'Ele traz a senha do banco e a chave do aplicativo — guarde este backup como segredo.';
+                        $avisos[] = 'ATENÇÃO: a configuração (' . $cfg . ') foi incluída no pacote. '
+                            . 'Ela traz a senha do banco e a chave do aplicativo — guarde este backup como segredo.';
+                    } else {
+                        $avisos[] = 'A configuração foi pedida no pacote mas NÃO foi encontrada em ' . $cfg
+                            . ' — o backup saiu sem ela.';
                     }
                 }
 
@@ -750,16 +808,27 @@ final class Backup
      * @param callable(?array):void $anota grava a entrada na lista (NDJSON)
      * @param array{total:int, bytes:int, diretorios:int} $stats
      * @param array<string, array{n:int, exemplos:string[]}> $grupos
+     * @param string[] $avisos
      */
     private static function empacotaRaiz(
         callable $escreve,
         string $raiz,
         callable $anota,
         array &$stats,
-        array &$grupos
+        array &$grupos,
+        array &$avisos
     ): void {
-        $base = BASE_PATH . '/' . trim($raiz, '/');
+        $base = self::caminhoFisico(trim($raiz, '/'));
         if (!is_dir($base)) {
+            // Antes isto era um `return` mudo, e era a falha mais perigosa
+            // que um backup pode ter: o pacote sai COMPLETO aos olhos de
+            // quem olha — banco inteiro, manifesto, hash — só que sem um
+            // único anexo. Ninguém percebe até a hora de restaurar, que é a
+            // pior hora possível. A configuração ausente já avisava (mais
+            // acima, no mesmo método que chama este); a pasta de anexos não.
+            $avisos[] = 'A pasta "' . trim($raiz, '/') . '" NÃO entrou no pacote: '
+                      . $base . ' não existe ou não é um diretório. '
+                      . 'Se ela deveria ter anexos, este backup está incompleto.';
             return;
         }
         $backupReal = realpath(self::dir()) ?: self::dir();
@@ -1904,7 +1973,15 @@ final class Backup
         if ($itens !== []) {
             $ultimo = strtotime((string) $itens[0]['criado_em']) ?: (int) $itens[0]['mtime'];
             $horas  = (time() - $ultimo) / 3600;
-            if ($horas < 20) {
+            // Idade NEGATIVA é pacote com data no futuro (relógio adiantado na
+            // hora de gerar, fuso trocado, NTP corrigido depois). Tratá-la como
+            // "recente" fazia "$horas < 20" ser verdade todo dia, para sempre:
+            // o automático nunca mais rodava, e a retenção nunca apaga o mais
+            // recente — só apagar à mão resolvia. Ignora esse pacote e segue.
+            if ($horas < 0) {
+                error_log('backup agendado: o pacote mais recente (' . $itens[0]['id'] . ') tem data no futuro; '
+                        . 'confira o relógio do servidor. Gerando mesmo assim.');
+            } elseif ($horas < 20) {
                 return ['executou' => false, 'motivo' => sprintf('O último backup tem %.1f h (mínimo 20 h).', $horas)];
             }
         }
@@ -2012,7 +2089,9 @@ final class Backup
                     if ($comArquivos && str_starts_with($nome, 'arquivos/')) {
                         $rel = substr($nome, strlen('arquivos/'));
                         if ($tipo === '5') {
-                            @mkdir(BASE_PATH . '/' . rtrim($rel, '/'), 0770, true);
+                            if (self::destinoSeguro(rtrim($rel, '/') . '/')) {
+                                @mkdir(self::caminhoFisico(rtrim($rel, '/')), 0770, true);
+                            }
                             return null;
                         }
                         if (str_starts_with($rel, 'config/') && !$comConfig) {
@@ -2026,7 +2105,7 @@ final class Backup
                             $arquivos['ignorados']++;
                             return null;
                         }
-                        $destino = BASE_PATH . '/' . $rel;
+                        $destino = self::caminhoFisico($rel);
                         @mkdir(dirname($destino), 0770, true);
                         $arquivos['restaurados']++;
                         $arquivos['bytes'] += $tamanho;
@@ -2138,6 +2217,80 @@ final class Backup
     }
 
     /** Recusa caminhos absolutos, ../ e qualquer coisa fora das raízes esperadas. */
+    /**
+     * Traduz um caminho LÓGICO do pacote para o caminho FÍSICO no servidor.
+     *
+     * Dentro do pacote — e dentro do banco, na coluna file_path do RH — os
+     * caminhos continuam começando por "storage/" e "config/" mesmo depois
+     * que essas pastas saem do public_html. Isso é de propósito: o prefixo é
+     * um TOKEN, não um endereço. Trocá-lo obrigaria a migrar dados gravados e
+     * invalidaria todo pacote de backup gerado antes da mudança.
+     *
+     * Quem sabe onde as pastas realmente estão são as constantes do
+     * bootstrap — e este é o único lugar que faz a conversão, para os dois
+     * lados (empacotar e restaurar) nunca discordarem.
+     */
+    public static function caminhoFisico(string $rel): string
+    {
+        $rel = ltrim($rel, '/');
+        if ($rel === 'storage' || str_starts_with($rel, 'storage/')) {
+            $resto = substr($rel, strlen('storage'));
+            return rtrim(STORAGE_PATH, '/') . $resto;
+        }
+        // O ÚNICO arquivo de configuração que o pacote carrega é
+        // 'config/config.php', e ele tem de voltar para o arquivo REALMENTE
+        // EM USO — que pode nem se chamar config.php, quando o caminho vem da
+        // constante ou da variável de ambiente UNIFICAR_CONFIG. Montar
+        // CONFIG_PATH . '/config.php' criaria um arquivo novo ao lado do
+        // verdadeiro: a restauração diria "pronto" e a instalação continuaria
+        // lendo a configuração antiga.
+        if ($rel === 'config/config.php' && defined('CONFIG_FILE')) {
+            return CONFIG_FILE;
+        }
+        if ($rel === 'config' || str_starts_with($rel, 'config/')) {
+            $resto = substr($rel, strlen('config'));
+            return rtrim(CONFIG_PATH, '/') . $resto;
+        }
+        return BASE_PATH . '/' . $rel;
+    }
+
+    /**
+     * O caminho lógico é um destino que a restauração pode gravar?
+     *
+     * Um predicado só, usado pelas DUAS rotas de restauração. 'uploads/' e
+     * 'storage/uploads/' são prefixos (o pacote traz árvores inteiras);
+     * 'config/config.php' é igualdade exata (o pacote só pode trazer ESSE
+     * arquivo de configuração, e mais nenhum). Tratar 'config/' como prefixo
+     * abria CONFIG_PATH para qualquer nome que um pacote quisesse gravar.
+     */
+    public static function destinoPermitido(string $rel): bool
+    {
+        $rel = ltrim($rel, '/');
+        if ($rel === 'config/config.php') {
+            return true;
+        }
+        foreach (['uploads/', 'storage/uploads/'] as $p) {
+            if (str_starts_with($rel, $p)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** As raízes físicas em que a restauração pode escrever. */
+    private static function raizesPermitidas(): array
+    {
+        $r = [BASE_PATH, STORAGE_PATH, CONFIG_PATH];
+        $out = [];
+        foreach ($r as $x) {
+            $real = realpath($x);
+            if ($real !== false) {
+                $out[$real] = true;
+            }
+        }
+        return array_keys($out);
+    }
+
     private static function destinoSeguro(string $rel): bool
     {
         if ($rel === '' || str_starts_with($rel, '/') || str_contains($rel, "\0")) {
@@ -2148,8 +2301,29 @@ final class Backup
                 return false;
             }
         }
-        foreach (['uploads/', 'storage/uploads/', 'config/'] as $ok) {
-            if (str_starts_with($rel, $ok)) {
+        // A regra do que pode ser gravado mora em destinoPermitido(), e é a
+        // MESMA que BackupRestore::caminhoSeguro() usa. Antes cada rota tinha
+        // a sua, e a outra tratava 'config/' como prefixo.
+        if (!self::destinoPermitido($rel)) {
+            return false;
+        }
+
+        // Segunda barreira, agora que o destino pode ficar fora de BASE_PATH:
+        // o caminho FÍSICO resolvido precisa cair dentro de uma das raízes
+        // conhecidas. Sem isto, bastaria um 'storage/uploads/...' com
+        // STORAGE_PATH apontando para um lugar inesperado para a restauração
+        // escrever onde não deve.
+        $destino   = self::caminhoFisico($rel);
+        $existente = $destino;
+        while (!file_exists($existente) && dirname($existente) !== $existente) {
+            $existente = dirname($existente);
+        }
+        $real = realpath($existente);
+        if ($real === false) {
+            return false;
+        }
+        foreach (self::raizesPermitidas() as $raiz) {
+            if ($real === $raiz || str_starts_with($real, $raiz . '/')) {
                 return true;
             }
         }

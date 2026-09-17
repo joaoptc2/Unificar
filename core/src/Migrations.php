@@ -33,9 +33,24 @@ final class Migrations
         1022, // can't write; duplicate key
     ];
 
+    /**
+     * A raiz do SQL versionado — schema.sql, modules/ e migrations/.
+     *
+     * Existe como UM lugar só porque havia dois: aqui a pasta era
+     * BASE_PATH . '/sql', e no checkup era dirname(CORE_PATH) . '/sql'. As
+     * duas dão no mesmo enquanto core/ for filha da raiz, e passam a
+     * discordar no dia em que o código sair da área pública — uma acha os
+     * arquivos, a outra não, e o checkup diria "faltam tabelas" sobre um
+     * banco correto. Quem for mover as pastas muda este método e mais nada.
+     */
+    public static function raizSql(): string
+    {
+        return APP_PATH . '/sql';
+    }
+
     public static function dir(): string
     {
-        return BASE_PATH . '/sql/migrations';
+        return self::raizSql() . '/migrations';
     }
 
     public static function ensureTable(): void
@@ -52,9 +67,21 @@ final class Migrations
     /** @return string[] nomes de arquivo, em ordem de aplicação */
     public static function files(): array
     {
+        // Pasta AUSENTE não é o mesmo que pasta VAZIA, e tratar as duas igual
+        // era mentira com consequência: com o sql/ fora do lugar (uma metade
+        // de migração, um caminho errado), glob() devolvia [], o checkup lia
+        // "nada pendente" e anunciava em verde que todas as migrações estavam
+        // aplicadas — com migração pendente no disco e tabela faltando no
+        // banco. Quem quiser tratar o caso pergunta antes a temSql().
         $files = array_map('basename', glob(self::dir() . '/*.sql') ?: []);
         natsort($files);
         return array_values($files);
+    }
+
+    /** A pasta do SQL versionado existe? Ver o porquê em files(). */
+    public static function temSql(): bool
+    {
+        return @is_dir(self::raizSql()) && @is_dir(self::dir());
     }
 
     /** @return array<string, string> filename => applied_at */

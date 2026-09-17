@@ -2,6 +2,19 @@
     <h1><i class="bi bi-list-check me-2"></i>Checklist: <?= Sanitize::e($employee['full_name']) ?></h1>
     <a href="index.php?m=rh&page=employees&action=show&id=<?= $employee['id'] ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
 </div>
+<?php if (empty($items)): ?>
+    <div class="card border-0 shadow-sm"><div class="card-body text-center text-muted py-5">
+        <i class="bi bi-list-check fs-2 d-block mb-2 opacity-50"></i>
+        Nenhum checklist atribuído a <?= Sanitize::e($employee['full_name']) ?>.
+        <?php if (core_can('onboarding.manage_templates')): ?>
+            <div class="mt-3">
+                <a href="index.php?m=rh&page=onboarding&action=assign" class="btn btn-primary btn-sm">
+                    <i class="bi bi-person-plus me-1"></i> Atribuir checklist
+                </a>
+            </div>
+        <?php endif; ?>
+    </div></div>
+<?php else: ?>
 <div class="mb-3">
     <div class="progress" style="height:24px">
         <?php $pct = $total > 0 ? round(($completed / $total) * 100) : 0; ?>
@@ -40,3 +53,4 @@
     </table>
 </div>
 </div></div>
+<?php endif; ?>

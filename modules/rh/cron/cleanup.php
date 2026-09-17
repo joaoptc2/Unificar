@@ -14,6 +14,19 @@
  * dessas tabelas deixou de ser responsabilidade do módulo.
  */
 
+
+// Este arquivo só existe para ser chamado pelo cron da raiz (cron.php), que é
+// quem confere CLI ou token. Sem esta guarda a frase acima era uma suposição:
+// um GET direto no arquivo executava a rotina inteira, sem autenticação
+// nenhuma — reproduzido em modules/manutencao/cron/run.php, que respondeu
+// HTTP 200 e rodou as cinco tarefas. O .htaccess não salva: o Nginx o ignora,
+// o Apache com AllowOverride None também, e o do próprio módulo manutenção
+// bloqueava o arquivo `cron.php` e não a PASTA `cron/`.
+// 404, e não 403: quem pediu não precisa saber que o arquivo existe.
+if (!defined('CRON_AUTORIZADO')) {
+    http_response_code(404);
+    exit;
+}
 /**
  * Remove arquivos em {storage/uploads/rh | uploads/rh}/{sub}/ que não são
  * referenciados no banco. Arquivos com menos de 24h são preservados (margem
@@ -65,19 +78,36 @@ echo "[" . date('Y-m-d H:i:s') . "] [rh] Iniciando limpeza...\n";
 try {
     $db = Database::getInstance();
 
-    // 1. Notificações do módulo lidas com mais de 90 dias
-    $stmt = $db->prepare(
-        "DELETE FROM notifications
-         WHERE module = 'rh' AND read_at IS NOT NULL
-           AND created_at < DATE_SUB(NOW(), INTERVAL 90 DAY)"
-    );
-    $stmt->execute();
-    echo "  Notificações antigas removidas: {$stmt->rowCount()}\n";
+    // 1. Notificações do módulo lidas — com o prazo da Administração, que
+    //    também sabe dizer "desligado" e "nunca apagar" (0). Eram 90 dias
+    //    cravados, ignorando as duas.
+    $diasNotif = (class_exists('Core\\Cleanup') && Core\Cleanup::habilitado())
+        ? Core\Cleanup::dias('notifications') : 0;
+    if ($diasNotif > 0) {
+        $stmt = $db->prepare(
+            "DELETE FROM notifications
+             WHERE module = 'rh' AND read_at IS NOT NULL
+               AND created_at < DATE_SUB(NOW(), INTERVAL ? DAY)"
+        );
+        $stmt->execute([$diasNotif]);
+        echo "  Notificações antigas removidas: {$stmt->rowCount()}\n";
+    } else {
+        echo "  Notificações antigas: limpeza desligada na Administração, nada removido\n";
+    }
 
     // 2. Resetar flags de notificação para vencimentos renovados
+    // SÓ o vencimento RENOVADO perde a marca. A condição antiga pegava TODO
+    // vencimento ainda no futuro — inclusive o que acabou de ser avisado pelo
+    // check_expirations, que roda logo antes neste mesmo cron. Resultado
+    // medido: a cada execução (de hora em hora, como o checkup manda
+    // agendar) o mesmo alerta saía de novo, com e-mail, para cada
+    // administrador. Renovado é: já venceu e foi avisado, e agora tem data
+    // futura; ou foi avisado na janela prévia e agora está fora dela.
     $stmt = $db->prepare(
         "UPDATE rh_expirations SET notified_at = NULL, notified_expired_at = NULL
-         WHERE expiry_date > CURDATE() AND (notified_at IS NOT NULL OR notified_expired_at IS NOT NULL)"
+         WHERE (notified_expired_at IS NOT NULL AND expiry_date > CURDATE())
+            OR (notified_at IS NOT NULL
+                AND expiry_date > DATE_ADD(CURDATE(), INTERVAL COALESCE(alert_days, 30) DAY))"
     );
     $stmt->execute();
     echo "  Flags de vencimento resetadas: {$stmt->rowCount()}\n";

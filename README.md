@@ -67,8 +67,14 @@ aplicadas: `php scripts/migrate.php --mark-all` (ou execute
 
 ## Estrutura
 
+A árvore abaixo é a arrumação de origem, com tudo junto. `config/`, a pasta de
+dados e o CÓDIGO podem sair do `public_html` — cada um por vez, sem obrigação
+e sem pressa; ver *Tirar config e dados do public_html* e *Tirar o CÓDIGO do
+public_html*.
+
 ```
 index.php                  Front controller (?m=<módulo>&...)
+localizar.php              Acha o código (só faz diferença quando ele sai do público)
 install.php                Instalador (remover após instalar)
 cron.php                   Cron unificado (chama o cron de cada módulo)
 config/config.php          Configuração (gerada pelo instalador)
@@ -391,6 +397,25 @@ favicon e cores próprios; o que ficar em branco herda do portal. São poucas
 chaves de propósito: quem circula entre as unidades precisa reconhecer o
 mesmo sistema. Em instalação de unidade única a sobreposição é inerte.
 
+### Página inicial
+
+A tela que abre depois do login era a única sem nenhum ajuste: uma saudação
+fixa e uma grade de cartões fixa, igual para a instalação de três módulos e
+para a de quinze. *Administração › Aparência › Página inicial* abriu:
+
+| Ajuste | Para quê |
+| --- | --- |
+| **Formato**: cartões, lista compacta ou mosaico de ícones | Com muitos módulos a grade de cartões obriga a rolar; a lista cabe numa tela só, e o mosaico funciona melhor em tela tocável |
+| **Colunas** (2, 3, 4 ou 6) | Só divisores de 12, para a grade fechar certo |
+| **Saudação** e **linha de apoio** | `{nome}` vira o primeiro nome de quem entrou; em branco, o texto padrão |
+| **Mostrar ícones / descrição / saudação** | Cada um desligável |
+| **Mural** | Aviso no topo, em HTML (negrito, listas, links), com o tom escolhido |
+
+O mural aceita HTML porque um aviso de campanha de vacinação sem negrito
+nem link não é um aviso — mas passa pelo mesmo filtro dos comunicados do
+RH (`HtmlSanitizer`), que remove `<script>` e atributos de evento. Em
+branco, o mural não aparece.
+
 ### Galeria de superfícies e CSS livre
 
 *Administração › Aparência › Galeria de superfícies* mostra todas as peças
@@ -534,6 +559,258 @@ Editor de texto com os layouts do hospital (página, capa, fontes),
 versionamento das edições (visualizar/restaurar qualquer versão), cópia
 pública opcional por link e exportação em PDF.
 
+## Módulo Meu espaço (organização pessoal)
+
+O módulo que **leva o nome de quem está usando**: quem entra como João vê
+"João" no portal e no menu, não um rótulo genérico. É o único módulo cujo
+conteúdo é inteiramente privado — agenda, notas e tarefas de cada pessoa.
+
+| Tela | O que faz |
+| --- | --- |
+| **Hoje** | Abre por padrão: compromissos do dia (com selo *agora* no que está em curso), próximas tarefas, notas recentes e um aviso quando há prazo vencido |
+| **Agenda** | Semana de segunda a domingo, com cor por compromisso, local, observação e lembrete |
+| **Tarefas** | Prazo, prioridade e situação; as de prazo mais apertado primeiro, concluídas separadas |
+| **Notas** | Bloco de notas com título, cor, fixação e arquivamento |
+| **Solicitações** | O que me pediram e o que eu pedi; aceitar vira tarefa minha |
+| **Formulários** | Os formulários que publico para receber pedidos, e os que posso preencher |
+| **E-mail** | Caixa Zoho por IMAP: ler e responder sem trocar de aba |
+| **Assistente** | Organizar anotações, resumir solicitações e rascunhar respostas (opcional) |
+
+### Solicitações e formulários
+
+As três primeiras telas são privadas. **Solicitações** e **Formulários** são o
+contrário: existem para ligar duas pessoas.
+
+- **Solicitações** — peça algo a um colega, com prazo e prioridade. Quem
+  recebe aceita, recusa ou conclui. **Aceitar cria a tarefa** de quem aceitou,
+  com o vínculo guardado: sem isso o "aceito" não vira trabalho em lugar
+  nenhum e o pedido some da vista.
+- **Formulários** — cada pessoa cria os seus ("Pedido de material",
+  "Liberação de acesso"), com os mesmos oito tipos de campo das pesquisas do
+  RH. Quem preenche gera uma solicitação para o dono, com as respostas
+  anexadas. Não existe tabela de "envio": **o preenchimento É a solicitação**,
+  o que elimina a possibilidade de resposta órfã.
+
+#### O que muda no escopo
+
+Com duas pontas, "toda consulta filtra por `user_id`" deixa de bastar. O
+predicado passa a ser **"eu sou uma das pontas"**, e vai no `WHERE` de toda
+leitura e de toda escrita — nunca se carrega pelo id para decidir depois o que
+mostrar. Conferido com três usuários: o remetente e o destinatário veem; um
+terceiro, com sessão válida e token CSRF válido, não vê nada e não consegue
+responder nem cancelar.
+
+Por isso estas telas **não** reutilizam as funções da etapa 1: a allowlist de
+lá casa por `user_id`, que não descreve nenhuma das duas relações.
+
+#### Perguntas congelam depois da primeira resposta
+
+Editar um formulário já respondido apagaria campos cujos ids estão nas
+respostas — o que sobrasse responderia a perguntas que não existem mais. A
+tela avisa e o servidor recusa a regravação: conferido com um POST forjado
+tentando trocar as perguntas de um formulário já usado.
+
+#### Permissões num módulo universal
+
+O módulo é `'todos' => true`, o que concede **toda** chave a **todo mundo**.
+Logo, cada chave descreve um poder sobre o próprio envolvimento ("ver as que
+me envolvem", "responder as que recebi") — nunca sobre o de terceiros, que
+seria concedido à organização inteira. O escopo real vem do `WHERE`.
+
+Um efeito colateral disso era grave e foi corrigido junto: a tela de
+permissões listava o módulo, aceitava desmarcar, gravava e dizia "atualizado"
+— **sem revogar nada**, porque o conjunto era devolvido antes de qualquer
+leitura das concessões. Agora a negação explícita vale também aqui.
+
+### Caixa de e-mail pessoal (IMAP)
+
+Ler e responder o e-mail de trabalho sem trocar de aba. Configurado para o
+Zoho por padrão (`imap.zoho.com:993`), serve qualquer servidor IMAP.
+
+#### A senha NÃO é guardada — e isso é a decisão central
+
+Uma análise de risco antes de escrever o código mudou o desenho. Três fatos
+decidiram:
+
+- a **senha de aplicativo do Zoho contorna a verificação em duas etapas** e
+  **nunca expira** — nem quando a senha principal da conta é trocada. Um
+  vazamento não se cura com o tempo nem com "todo mundo troque a senha": só
+  com revogação individual, uma por uma, dentro do Zoho;
+- `MailSecret::hide()` **nunca falha**: sem OpenSSL ela grava base64 e devolve
+  normalmente. Quem confiasse no retorno gravaria texto claro sem perceber;
+- o banco e o `config.php` (de onde sai a chave de cifra) ficam no **mesmo
+  servidor**. "Só vaza se os dois vazarem" é uma leitura de arquivo, não dois
+  incidentes independentes.
+
+Então a tabela `meu_email_contas` **não tem coluna de senha**. A pessoa digita
+a senha de aplicativo uma vez por sessão; ela vive em `$_SESSION` e morre com
+ela. Conferido: um dump completo do banco tem **zero** ocorrências da senha, e
+o pacote de backup também.
+
+**O limite honesto:** enquanto a caixa está aberta, a senha está no arquivo de
+sessão, no disco do servidor (`-rw-------`, em diretório sem leitura para
+outros usuários). Ela não está no banco nem no backup, e some quando a sessão
+expira — mas não é "em lugar nenhum".
+
+**O caminho para não digitar toda vez** é OAuth 2.0 com o Zoho: guarda-se um
+*refresh token* em vez da senha, com escopo só de e-mail, revogável pela
+própria pessoa e sem anular o 2FA. Fica como evolução; exige registrar um
+aplicativo no Zoho Developer Console.
+
+#### O cliente IMAP é próprio
+
+`Core\MailInbox` não serviu: ele é um **diagnóstico de um tiro** — conecta,
+autentica, conta as mensagens, lê alguns cabeçalhos e sai. Não lê corpo, e
+sobretudo **lê sempre linha a linha**. O corpo de uma mensagem chega num
+*literal* (`{4096}` seguido de 4096 bytes crus) que pode conter qualquer
+coisa, inclusive uma linha que começa com a etiqueta do comando — lendo linha
+a linha, o cliente confunde conteúdo com protocolo.
+
+`Core\ImapCliente` é uma instância (não estático), entende literais, busca por
+UID e sabe marcar como lida. `Core\Mime` faz a leitura do que chega:
+`=?UTF-8?B?...?=` no assunto, quoted-printable, base64, multipart aninhado,
+conversão de charset e o preâmbulo que não é conteúdo.
+
+Nada usa a extensão `imap` do PHP: ela foi separada do núcleo e falta na maior
+parte das hospedagens compartilhadas — que é onde este sistema roda.
+
+#### Como isso é testado
+
+`imap.zoho.com` não é alcançável do ambiente de teste, e "funciona em teoria"
+não é teste. `scripts/imap_falso.py` é um servidor IMAP que fala o protocolo
+de verdade e serve três mensagens escolhidas para quebrar implementações
+descuidadas: assunto em RFC2047, corpo quoted-printable, uma mensagem em
+ISO-8859-1 com bytes altos crus, e um multipart com preâmbulo e parte base64.
+
+Metade das mensagens vem com `UID` e `FLAGS` **depois** do literal — a RFC
+3501 permite os *data items* em qualquer ordem, e servidores reais usam essa
+ordem com frequência. Foi esse caso que revelou um defeito de verdade: o
+cliente lia UID e FLAGS só da primeira linha do item, e nessas mensagens o UID
+saía **zero** — a lista aparecia inteira e certa, com todos os links quebrados,
+sem erro nenhum na tela. Reproduzido no servidor de teste antes de consertar.
+
+#### O que ainda não faz
+
+- **Anexo não baixa pelo portal.** A tela lista o nome e o tamanho; para abrir,
+  é o webmail. Baixar exigiria uma rota de download com o conteúdo vindo do
+  IMAP a cada clique, e ela seria o caminho mais curto para servir qualquer
+  arquivo com qualquer tipo — fica para quando tiver revisão própria.
+- **Cada carregamento de página abre uma conexão nova.** Sem cache: a lista é
+  buscada de novo a cada visita. Numa caixa grande isso é lento. O caminho é
+  guardar a lista na sessão por alguns minutos, com botão de atualizar.
+- **A resposta não é encadeada.** Sai como mensagem nova com `Re:` no assunto,
+  sem `In-Reply-To`/`References`, então o cliente de quem recebe não a coloca
+  na mesma conversa.
+- **Mensagem grande demais abre só o cabeçalho.** Acima de 2 MB o corpo é
+  cortado e acima de 8 MB nem é pedido — a tela mostra remetente, assunto e
+  data com um aviso. Antes disso, a mensagem simplesmente não abria.
+
+#### Duas exigências da tela da senha
+
+Como a senha digitada é a senha de aplicativo do Zoho — que contorna o 2FA e
+nunca expira —, o formulário **se recusa a funcionar fora de https**: o campo
+vem desabilitado com o motivo à vista, e o `POST` é recusado no servidor,
+porque campo desabilitado na tela não impede requisição direta. A exceção é a
+instalação local (`localhost`), a mesma que `Https::enforce()` já abre.
+
+E a senha **não aparece em mensagem de erro**: o diagnóstico do envio ecoa o
+diálogo SMTP, onde o `LOGIN` passou. `MailConfig::redact()` só conhece a senha
+global do portal, então a do usuário passaria inteira para a tela — ela é
+apagada explicitamente antes de virar mensagem.
+
+Abrir a caixa e responder por ela ficam na **auditoria** (`meu.email.abrir`,
+`meu.email.responder`): é quando credencial de e-mail entra no sistema e
+quando sai mensagem com o nome da pessoa para fora do hospital.
+
+### Assistente (IA)
+
+Desligado por padrão. Ligado em *Administração › Assistente*, com chave da
+API da Anthropic (guardada cifrada, nunca exibida de volta), modelo e **teto
+mensal de gasto**.
+
+Três funções, sobre o que está **no espaço do próprio usuário**: transformar
+uma anotação solta em lista de tarefas, resumir as solicitações que ele
+recebeu e estão abertas, e rascunhar uma resposta. O resumo é o único que
+toca em algo escrito por outra pessoa — o título da solicitação; o nome de
+quem pediu não vai (ver abaixo).
+
+#### O que o sistema faz, e o que ele não faz
+
+| Faz | Não faz |
+| --- | --- |
+| Mostra na tela **exatamente o que será enviado**, antes de enviar | Decidir o que pode sair do hospital — isso é política, e política é de quem responde pela instituição |
+| Registra **que** houve a chamada, de quem, para quê e de que tamanho | Guardar o conteúdo enviado — seria criar uma segunda cópia do que se quer proteger |
+| Recusa texto com marca de CPF, cartão do SUS ou palavras de contexto assistencial | Prometer que isso é suficiente |
+| Impede o gasto acima do teto, conferido **antes** de cada chamada | Substituir a fatura real do painel da Anthropic |
+
+#### O que sai de verdade no resumo de solicitações
+
+"Todas sobre o que é do próprio usuário" era **impreciso**, e a revisão pegou:
+o resumo das solicitações recebidas montava a lista com o **nome de quem
+pediu** — um terceiro, que não escolheu ter o próprio nome enviado para fora
+do hospital e nem sabe que o colega usou o assistente. Para priorizar, o nome
+não acrescenta nada: o que decide é prazo, prioridade e situação. Hoje sai
+`- <título> (pedido por um colega, prioridade alta, prazo 20/09/2026,
+situação aberta)`.
+
+Continua saindo o **título que o colega escreveu**, porque sem ele não há o
+que resumir. Quem escreve um título de solicitação está escrevendo para uma
+pessoa, não para um modelo — e por isso o texto exato aparece na tela antes
+de enviar, para quem clica poder ver e desistir.
+
+A trava é uma **rede, não uma garantia**: ela reconhece formato, e dado
+clínico escrito em português corrido não tem formato. Quando ela pega algo, o
+sistema **para** — não redige por cima. Apagar o CPF e mandar o resto daria a
+impressão errada de que o texto foi conferido. Para seguir, é preciso marcar
+"confirmo que não há dado de paciente", e essa confirmação vai para a
+auditoria (com a marca encontrada, sem o texto).
+
+#### Custo
+
+A chamada é HTTPS direto, sem SDK e sem Composer — este sistema é entregue
+por FTP a hospedagem compartilhada, e um `vendor/` é um problema maior que a
+comodidade que traz.
+
+O teto é do portal, em centavos de dólar por mês, conferido antes de gastar.
+Ele conta **também as chamadas que falharam depois de o prompt sair** — tempo
+esgotado no meio da resposta, conexão cortada: a Anthropic cobra do mesmo
+jeito, e somar só o que deu certo deixaria o teto sempre abaixo do gasto real,
+que é exatamente o erro que ele existe para evitar. A estimativa usa a tabela
+pública de preços; a cobrança real é a do painel da Anthropic, e a tela diz
+isso. Preços por milhão de tokens (entrada/saída):
+Opus 5 US$ 5/25, Sonnet 5 US$ 2/10, Haiku 4.5 US$ 1/5. Uma anotação de meia
+página custa frações de centavo.
+
+O item do menu só aparece quando o hospital ligou o assistente — um menu que
+leva a "não está ligado" é ruído para a organização inteira.
+
+### Privacidade: como ela é garantida
+
+Toda tabela do módulo tem `user_id` e **toda** consulta filtra por ele —
+inclusive `UPDATE` e `DELETE`, que levam `user_id` no `WHERE`. Adivinhar o
+id de um registro alheio não adianta: a instrução não casa nenhuma linha.
+Nem o administrador global vê a agenda de outra pessoa por estas telas.
+Conferido com dois usuários reais: nas três telas e no acesso direto por
+id, nada do outro aparece.
+
+Por isso o módulo é marcado `'todos' => true` no manifesto e toda pessoa
+logada o recebe sem o administrador conceder nada. Conceder "tudo" num
+módulo que só mostra o próprio espaço é conceder acesso a si mesmo; semear
+permissões por usuário quebraria no primeiro funcionário admitido depois
+da instalação.
+
+### Dois detalhes que custam caro quando faltam
+
+- **Plantão que vira a noite.** Fim antes do início vira o dia seguinte, e
+  a consulta da semana busca por **interseção** (`inicio <= fim_periodo AND
+  fim >= inicio_periodo`), não por "começa dentro do dia". Sem isso o
+  plantão das 19h às 7h sumiria do segundo dia — que é justamente quando
+  ele termina. Na tela, o dia seguinte mostra o mesmo compromisso com um
+  marcador `+1`.
+- **Nota colada de fora.** O conteúdo passa pelo `HtmlSanitizer` dos
+  comunicados: o dono da nota é quem escreve, mas colar de um e-mail traz
+  junto o que veio.
+
 ## Módulo Planejamento (planejamento e gestão de processos)
 
 - **Planos de trabalho e planejamento organizacional**: objetivos → metas
@@ -599,6 +876,19 @@ Agende (uma vez por hora, por exemplo):
 ```
 php /caminho/para/cron.php            # CLI
 https://seu-dominio/cron.php?token=<cron_secret do config>   # HTTP
+```
+
+Cada módulo roda num **subprocesso próprio** (`php cron.php --module=<slug>`),
+porque os módulos declaram funções globais com o mesmo nome (`e`, `redirect`,
+`url`, `paginate`) e não podem conviver no mesmo processo — o segundo a
+carregar mata tudo com *Fatal error*. O cron tenta `proc_open`, depois `popen`,
+depois `exec`. Se a hospedagem desabilitou os três, ele **não finge**: roda só
+o primeiro módulo, imprime a linha exata para agendar cada um dos outros, e o
+checkup mostra em vermelho quais ficaram de fora até isso ser feito. Antes,
+nessa situação, o cron morria no segundo módulo sem uma linha na tela, e a
+rotina de manutenção simplesmente nunca rodava.
+
+```
 ```
 
 Executa, nesta ordem: a fila de e-mails, o **backup agendado**, a **limpeza
@@ -682,17 +972,312 @@ então a atualização ficou muito mais rápida sem multiplicar os pedidos.
   `AllowOverride`), negue explicitamente os diretórios internos:
 
   ```nginx
-  location ~ ^/(core|config|sql|storage|docs)/ { deny all; }
+  location ~ ^/(core|config|sql|storage|docs|scripts)/ { deny all; }
   location ~ ^/uploads/.*\.(php|phar|phtml)$ { deny all; }
+  location ~ /\.(?!well-known) { deny all; }         # .git, .gitignore, .htaccess (não o ACME)
+  location ~ ^/(README|CHANGELOG)[^/]*\.md$ { deny all; }
   ```
 
+### `scripts/` executava por URL — e a tranca não podia ser o `.htaccess`
+
+Uma varredura desta pasta achou o pior caso possível de "protegido por
+configuração": `scripts/` **não estava** na lista do `.htaccess` da raiz nem
+no trecho de Nginx aqui acima, e `migrate.php`, `migrate_role_grants.php` e
+`test_contraste.php` não tinham nenhuma guarda de linha de comando.
+
+Reproduzido, não deduzido: com um arquivo pendente em `sql/migrations/`, um
+**GET anônimo** em `/scripts/migrate.php` — sem login, sem token, sem nada —
+aplicou a migração e criou a tabela no banco. O `migrate_role_grants.php`
+também rodava, e devolvia o resultado da conversão na tela.
+
+A correção **não é** a linha nova no `.htaccess`. Essa linha entrou, e o
+trecho de Nginx acima também, mas as duas são a segunda tranca. A que vale é
+`scripts/_cli.php`: o primeiro `require` de todo script da pasta, **antes do
+bootstrap**, que recusa qualquer coisa que não seja `PHP_SAPI === 'cli'`.
+Carregar o núcleo primeiro abriria sessão e mandaria cabeçalho antes da
+recusa sair — trabalho e rastro para uma requisição que não deveria existir.
+
+O motivo de a guarda ficar no PHP é o mesmo que vale para o resto deste
+sistema: `.htaccess` falha em silêncio. Nginx o ignora, Apache com
+`AllowOverride None` o ignora, e uma cópia por FTP que perde arquivos ocultos
+o deixa para trás — nos três casos sem um aviso sequer. Um script que só é
+seguro quando o servidor colabora não é seguro.
+
+`scripts/` também entrou na sonda de exposição do checkup, com nível de
+**erro** — é a única pasta da lista que não apenas vaza, mas executa.
+
   Arquivos privados (anexos de comunicados, por exemplo) ficam em
-  `storage/uploads/` e só são entregues pelo download autenticado do módulo;
+  `storage/uploads/` e só são entregues pelo download autenticado do módulo.
+  **Limite honesto:** os anexos do chat e os arquivos de mural continuam em
+  `uploads/`, que é pública por natureza, e a única coisa entre eles e uma URL
+  anônima é o `.htaccess` da pasta — que o Nginx ignora. O nome aleatório do
+  arquivo é o que resta. Fechar isso de verdade é movê-los também para a pasta
+  de dados e servi-los só pela rota autenticada, como já se fez com os do RH;
 - Imagens da identidade visual (`uploads/branding/`) são públicas por
   natureza — o navegador precisa buscá-las —, mas nunca executáveis: SVG
   enviado é sanitizado antes de gravar e a extensão real é decidida pelo
   tipo do conteúdo, não pelo nome do arquivo;
+- **O IP do cliente é `REMOTE_ADDR`**, a menos que `security.trust_proxy`
+  esteja ligado. `X-Forwarded-For` e afins vinham PRIMEIRO, de qualquer
+  origem: um atacante trocava o cabeçalho a cada requisição e o bloqueio de
+  força bruta por IP nunca acumulava — 15 senhas em 15 contas, zero bloqueios,
+  medido — e o IP gravado na auditoria era o inventado. A mesma regra que
+  `Core\Https` já usava para `X-Forwarded-Proto`.
+- **`app.base_url` não pode ficar vazia.** Vazia, toda URL absoluta sai do
+  cabeçalho `Host` de quem faz o pedido — inclusive o link do e-mail de
+  redefinição de senha, que passa a apontar para o domínio do atacante com
+  token válido (reproduzido ponta a ponta). O instalador grava o endereço real
+  e o checkup marca em vermelho quando está vazia.
+- O código de 2FA tem limite de tentativas como o login (5 falhas descartam a
+  etapa pendente); a página pública de acompanhamento de candidatos compara o
+  token por igualdade (era `LIKE`, e doze sublinhados casavam com qualquer um);
+  só um `cron.php` roda por vez (`cron.lock`), e a materialização de
+  preventivas reivindica o plano antes de criar a OS.
 - Auditoria unificada (Administração → Auditoria).
+
+## Tirar config e dados do public_html
+
+Backup, log e anexo privado **não são arquivos `.php`**: nenhum interpretador
+se mete no caminho, o servidor simplesmente entrega. Entre a internet e um
+dump completo do banco existe só a configuração do servidor web — que falha
+em silêncio (o Nginx ignora `.htaccess` sem um aviso sequer, e o mesmo vale
+para Apache com `AllowOverride None` ou para uma cópia por FTP que escondeu
+arquivos ocultos).
+
+Nada abaixo é obrigatório: quem não mexer em nada continua funcionando igual.
+
+### A pasta de dados
+
+Em `config.php`:
+
+```php
+'paths' => [
+    'storage' => '/home/suaconta/portal-dados',
+],
+```
+
+Copie o conteúdo de `storage/` para lá e pronto — logs, cache, backups e
+anexos privados passam a morar fora. O caminho relativo conta a partir da
+raiz da instalação; o absoluto vale como está.
+
+**Se o caminho não existir, o sistema NÃO volta para `storage/`.** Ele
+registra um erro crítico no log do servidor, o checkup acusa, e as gravações
+falham — de propósito. Cair de volta para dentro da área pública espalharia
+atestado e backup no `public_html` sem ninguém notar, que é exatamente o que
+esta configuração existe para evitar.
+
+### O arquivo de configuração
+
+O sistema procura `config.php` nesta ordem, e o **primeiro que existir vence**:
+
+| Ordem | Onde | Para quê |
+| --- | --- | --- |
+| 1 | constante `UNIFICAR_CONFIG` definida antes do bootstrap | testes, front controller próprio |
+| 2 | variável de ambiente `UNIFICAR_CONFIG` | `SetEnv` no Apache, env do PHP-FPM, systemd |
+| 3 | pasta irmã `<nome-da-pasta-pública>-config/config.php` | o caminho recomendado |
+| 4 | `config/config.php` | o lugar de sempre |
+
+A pasta irmã leva o nome da pasta pública (`public_html` → `public_html-config`)
+porque em hospedagem com *addon domains* o diretório acima é o **home da
+conta, compartilhado**: uma pasta chamada só `config` colidiria entre duas
+instalações, e em silêncio.
+
+**Se o portal fica numa subpasta do site** (`public_html/portal`), a irmã
+`public_html/portal-config` **continua dentro da área pública** — responde
+pela URL `/portal-config/`. O instalador detecta isso e sobe para a irmã da
+raiz do site; o checkup compara com a raiz **servida** (`DOCUMENT_ROOT`), não
+com a pasta da instalação, justamente para não dizer "está fora" quando não
+está. Como o `DOCUMENT_ROOT` só existe em requisição web e o teste roda no
+cron, o valor visto pelo navegador fica guardado para a linha de comando usar.
+
+O instalador de uma instalação nova já grava fora quando consegue criar a
+pasta irmã, com `chmod 0600`, e diz na tela onde gravou.
+
+### O teste que prova (Administração › Checkup)
+
+Verificar se existe um `.htaccess` não prova nada — é o mesmo erro de conferir
+o artefato em vez do efeito. O sistema grava um **arquivo-isca com um segredo
+aleatório** em cada pasta sensível e tenta baixá-lo pela própria URL. Se o
+segredo voltar pela web, a pasta está aberta.
+
+Detalhes que decidem se o teste vale:
+
+- **O veredito é o segredo voltar, não o código 200.** Servidor que responde a
+  tela de login com 200 para qualquer caminho daria falso positivo. E um 200
+  que *não* traz o segredo vira **"não consegui testar"**, nunca "protegida":
+  pode ser login, proxy ou regra que responde qualquer endereço.
+- **O endereço vem de `app.base_url`**, nunca do cabeçalho `Host` — senão quem
+  faz a requisição escolheria o alvo do teste.
+- **Roda no cron, não na tela.** Uma requisição web que busca o próprio
+  servidor precisa de um segundo processo: em hospedagem com **um** worker de
+  PHP — justamente a barata, que é quem mais precisa deste aviso — a página
+  espera uma resposta que só ela poderia dar. Medido: 1 worker estoura o tempo
+  com 0 bytes; 4 workers respondem em 1 ms. O botão *Testar agora* existe,
+  desiste em 8 s e relata **"não consegui testar"**.
+- **Uma recusa só vale como prova se veio DESTE servidor.** Antes de acreditar
+  em qualquer 403/404, a sonda grava uma **isca de controle** numa pasta que é
+  obrigatoriamente servida (`assets/`) e a pede pela `app.base_url`. Se nem ela
+  volta, `app.base_url` não chega a esta instalação — domínio antigo, cópia de
+  homologação, `www`/não-`www` trocado — e o 404 estava vindo de outro lugar.
+  Nesse caso nenhuma pasta é dada como "protegida": todas viram "não foi
+  possível testar", com o motivo. Antes disso, uma instalação com `sql/` e
+  `core/` escancarados era relatada como protegida porque o domínio errado
+  respondia 404 para tudo.
+- **Cada "não foi possível testar" diz o porquê e o que fazer** — e o que fazer
+  muda com o porquê. "Rode pelo cron" só aparece quando foi estouro de tempo;
+  pasta dentro do site mas fora da instalação manda mover a pasta; `app.base_url`
+  vazia manda preenchê-la. Antes era um conselho só para tudo, e ele saía até
+  quando tinha sido o cron que acabara de rodar.
+- **Um teste inconclusivo não apaga um resultado conclusivo** guardado antes.
+- A isca sai sempre, inclusive se a busca falhar no meio.
+
+### O limite honesto
+
+Isto protege contra **erro de configuração do servidor web**. Não protege
+contra falha de leitura de arquivo no próprio PHP nem contra conta invadida:
+ali o código já tem o caminho e lê do mesmo jeito.
+
+## Tirar o CÓDIGO do public_html
+
+Depois do config e dos dados, sobra o código: `core/`, `modules/`, `sql/`,
+`docs/` e `scripts/`. Ele também pode sair, para uma pasta irmã chamada
+`<nome>-codigo` — a mesma convenção do `-config`, para o administrador não ter
+de aprender duas. A área servida fica com seis itens:
+
+```
+/home/conta/public_html/          ← DocumentRoot
+├── index.php        front controller
+├── localizar.php    acha o código (é o único que os outros precisam conhecer)
+├── install.php      instalador (apague depois de instalar)
+├── cron.php         rotina periódica — precisa ficar aqui, ver abaixo
+├── assets/          CSS, JS, imagens do sistema
+└── uploads/         o que é público por natureza (logo, avatar, anexo de mural)
+
+/home/conta/public_html-codigo/   ← fora da web
+├── core/  modules/  sql/  docs/  scripts/  config/config.example.php
+/home/conta/public_html-config/   ← já era assim
+/home/conta/public_html-dados/    ← já era assim
+```
+
+### O que este ganho é, medido — e o que ele não é
+
+A varredura que precedeu a mudança procurou segredo embutido em fonte nas
+50.877 linhas de `core/` e `modules/`, mais `sql/`, `docs/` e `scripts/`:
+atribuição literal, DSN, hash, alta entropia, padrões de chave conhecidos.
+Achou **zero**, fora o admin semente `admin`/`admin123` do `schema.sql`. Todo
+segredo de verdade já estava no `config.php` ou cifrado no banco.
+
+Então **este passo rende muito menos que os dois anteriores**, e é honesto
+dizer isso: ele esconde código que não tem senha nenhuma. O que ele entrega,
+medido nas duas arrumações rodando lado a lado em servidores de verdade:
+
+| pasta | código junto | código na irmã |
+| --- | --- | --- |
+| `sql/` | **exposta** | fora |
+| `modules/` | **exposta** | fora |
+| `core/` | **exposta** | fora |
+| `scripts/` | **exposta** | fora |
+| `docs/` | **exposta** | fora |
+
+"Exposta" ali não é teoria: é a sonda gravando um arquivo-isca e o servidor
+devolvendo o conteúdo pela URL. O servidor de teste ignora `.htaccess` — como
+o Nginx, e como o Apache com `AllowOverride None`.
+
+### A decisão que faz a mudança ser segura
+
+`BASE_PATH` **não mudou de significado nem de valor**. Ela continua sendo a
+raiz servida pela web, e é dela que derivam as URLs, a pasta irmã do config, a
+pasta irmã dos backups e o destino dos uploads. Quem nasceu foi `APP_PATH`,
+para as quatro coisas que na verdade queriam dizer "onde está o código".
+
+Isso não é preciosismo de nomenclatura. `BASE_PATH` era `dirname(core/)`:
+mover `core/` mudaria o valor dela **sem ninguém editar uma linha**, e junto
+mudariam o config procurado, a pasta dos backups e o destino dos uploads.
+Nenhuma dessas mudanças daria erro. Todas dariam resultado errado em silêncio
+— o histórico de backup do hospital ficaria invisível e o cron gravaria o
+pacote de amanhã numa pasta nova e vazia, enquanto a tela mostraria "1 backup,
+hoje" e o administrador concluiria que está tudo funcionando.
+
+Por isso `BASE_PATH` passou a vir de onde está o `index.php`, que é a
+definição de "raiz servida", e é definida **antes** do bootstrap.
+
+### `cron.php` fica no público, de propósito
+
+Em hospedagem compartilhada, agendar por URL costuma ser a **única** opção. A
+rota `cron.php?token=<cron_secret>` está documentada e continua valendo. O
+arquivo é minúsculo e a autorização é conferida nele; as rotinas de verdade
+moram em `modules/<slug>/cron/`, fora do público, e **recusam** ser chamadas
+sem a constante que o `cron.php` define depois de conferir o token.
+
+### Como mover, com o portal no ar
+
+O ensaio abaixo foi executado, passo a passo, contra uma instalação servida:
+
+1. **Suba** `core/`, `modules/`, `sql/`, `docs/`, `scripts/` e
+   `config/config.example.php` para uma pasta com nome **provisório** —
+   `<nome>-codigo.subindo`, por exemplo. Quando a cópia terminar, **renomeie**
+   para `<nome>-codigo`.
+
+   A ordem importa. O localizador prefere a pasta irmã assim que ela existe e
+   parece completa, então subir direto com o nome final abre uma janela em que
+   o portal já escolheu a irmã e ela ainda está pela metade: **medido, o site
+   fica fora do ar com página em branco durante parte da transferência.**
+   Renomear é instantâneo e não tem essa janela. (O localizador também exige
+   três arquivos do núcleo, e não só o `bootstrap.php`, o que encurta a
+   janela de quem subir direto — mas encurtar não é fechar.)
+
+   Depois do rename o portal já roda o código de lá, e **você não apagou
+   nada**: é o momento de conferir de verdade. O checkup fica **vermelho** e
+   nomeia as pastas que sobraram.
+2. **Confira** o portal e o checkup. Se algo estiver errado, **apague a pasta
+   irmã** — e tudo volta exatamente ao que era, sem tocar em configuração nem
+   em banco.
+3. **Apague** as pastas de código do `public_html`. O checkup fica verde:
+   *"O código está em … e não sobrou cópia na área pública."*
+
+Nenhum passo exige editar configuração ou mexer no banco. E nenhum derruba o
+portal — **desde que a subida use nome provisório e rename**, como diz o passo
+1; subir direto com o nome final tem, sim, uma janela de indisponibilidade.
+
+**A armadilha é o passo 3**, e o checkup existe por causa dela: mover por FTP
+é copiar-e-apagar, e é o apagar que falha — conexão caindo, servidor recusando
+pasta não vazia, pessoa interrompida. Uma cópia esquecida de `core/` continua
+sendo servida, e a sonda **não a vê** (depois da mudança ela procura essas
+pastas em `APP_PATH`, que é onde está a cópia boa). A pasta perigosa é
+justamente a que a sonda deixou de olhar — por isso a conferência de sobras é
+um item separado do checkup, em vermelho, com os nomes.
+
+### Se o portal mora numa SUBPASTA do site
+
+Aqui a convenção falha, e falha de um jeito que parece certo. Com o portal em
+`public_html/portal`, a irmã derivada é `public_html/portal-codigo` — que está
+**dentro** do `DocumentRoot` e responde por `https://site/portal-codigo/`.
+Conferido: `/portal-codigo/sql/schema.sql` devolve o schema inteiro.
+
+E é **pior que antes de mover**: dentro da instalação, `core/`, `sql/` e
+`docs/` eram cobertas pela regra do `.htaccess` da raiz; na pasta irmã não há
+`.htaccess` nenhum para elas (só `modules/` e `scripts/` levam o seu).
+
+Nesse arranjo, ponha o código fora do `DocumentRoot` — ao lado do **site**, e
+não ao lado da subpasta — e aponte-o com `UNIFICAR_APP`. O checkup confere
+isso contra o `DocumentRoot` de verdade, não contra a pasta da instalação, e
+fica **vermelho** enquanto o código estiver servido por alguma URL.
+
+### Se a convenção não servir
+
+`UNIFICAR_APP` (variável de ambiente) aponta a pasta do código, e
+`UNIFICAR_PUBLIC` aponta a pasta servida — esta última só é consultada pela
+linha de comando, onde não existe requisição de onde deduzir. É a mesma saída
+que `UNIFICAR_CONFIG` já oferecia para o arquivo de configuração.
+
+### O limite honesto, de novo
+
+Vale o mesmo de antes, e vale mais aqui: isto protege contra **erro de
+configuração do servidor web**. Não protege contra falha de leitura de arquivo
+no próprio PHP, nem contra conta de FTP invadida — ali o código já tem o
+caminho e lê do mesmo jeito. E, como a varredura mostrou, o que está sendo
+escondido não contém segredo: o ganho real é não entregar de graça o mapa da
+instalação a quem for procurar por onde atacar.
 
 ## HTTPS (diagnóstico e reforço)
 

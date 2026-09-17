@@ -34,16 +34,12 @@
 
 declare(strict_types=1);
 
+require __DIR__ . '/_cli.php';
 require dirname(__DIR__) . '/core/bootstrap.php';
 
 use Core\Backup;
 use Core\BackupRestore;
 use Core\Config;
-
-if (PHP_SAPI !== 'cli') {
-    http_response_code(403);
-    exit("Este script é só para a linha de comando.\n");
-}
 
 $args = rst_args($argv ?? []);
 

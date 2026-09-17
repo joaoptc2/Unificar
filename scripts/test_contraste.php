@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 $_SERVER['REQUEST_METHOD'] = 'GET';
 $_SERVER['SCRIPT_NAME']    = '/index.php';
+require __DIR__ . '/_cli.php';
 require __DIR__ . '/../core/bootstrap.php';
 
 use Core\Tokens;

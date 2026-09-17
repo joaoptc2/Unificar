@@ -58,7 +58,19 @@ final class MailSecret
      */
     public static function unreadable(string $stored): bool
     {
-        return str_starts_with($stored, 'v1:') && !self::hasStrongCrypto();
+        if (!str_starts_with($stored, 'v1:')) {
+            return false;
+        }
+        if (!self::hasStrongCrypto()) {
+            return true;
+        }
+        // "Ilegível" tem de incluir "cifrado com OUTRA chave". Antes só o
+        // caso sem OpenSSL contava: com a app.key trocada (config restaurado
+        // de outra instalação, chave regenerada), o GCM recusava a tag,
+        // reveal() devolvia '' e esta função dizia "legível". As telas então
+        // mostravam "senha guardada" e o sistema usava string vazia — o SMTP
+        // falhava por "senha errada" com a senha que ninguém trocou.
+        return self::reveal($stored) === '' ;
     }
 
     public static function reveal(string $stored): string

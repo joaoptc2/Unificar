@@ -56,7 +56,20 @@ class Upload
         return dirname(__DIR__, 4) . '/uploads/rh';
     }
 
-    /** Diretório físico dos uploads PRIVADOS do módulo (/storage/uploads/rh — fora da área pública). */
+    /**
+     * Diretório físico dos uploads PRIVADOS do módulo.
+     *
+     * O prefixo 'storage/uploads/' gravado no banco (colunas file_path,
+     * resume_path, attachment_path) é um TOKEN, não um endereço: quem sabe
+     * onde a pasta de dados realmente está é STORAGE_PATH, que pode apontar
+     * para fora da área pública. Trocar o prefixo obrigaria a migrar dados já
+     * gravados e invalidaria os pacotes de backup antigos.
+     *
+     * O fallback abaixo só é alcançado se este helper for carregado sem o
+     * bootstrap do núcleo — o que não acontece pelo front controller. Ele
+     * aponta para o lugar histórico, de propósito: nesse cenário não há
+     * configuração para consultar.
+     */
     public static function privateDir(): string
     {
         if (defined('STORAGE_PATH')) {

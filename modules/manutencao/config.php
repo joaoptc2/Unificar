@@ -154,9 +154,12 @@ require_once __DIR__ . '/lib/admin_actions.php';
 // SEGURANÇA
 // ============================================================
 
-function e($str): string
-{
-    return htmlspecialchars((string) ($str ?? ''), ENT_QUOTES, 'UTF-8');
+// function_exists: ver o mesmo comentário em documentos/includes/security.php.
+if (!function_exists('e')) {
+    function e($str): string
+    {
+        return htmlspecialchars((string) ($str ?? ''), ENT_QUOTES, 'UTF-8');
+    }
 }
 
 /** Token CSRF único da plataforma (Core\Csrf). */

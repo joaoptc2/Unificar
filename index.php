@@ -15,7 +15,8 @@
  * ============================================================
  */
 
-require __DIR__ . '/core/bootstrap.php';
+require __DIR__ . '/localizar.php';
+require UNIFICAR_APP_DIR . '/core/bootstrap.php';
 
 use Core\Access;
 use Core\Auth;
@@ -23,6 +24,17 @@ use Core\Layout;
 use Core\Modules;
 
 $module = preg_replace('/[^a-z0-9_-]/', '', strtolower((string) ($_GET['m'] ?? '')));
+
+// ---- Troca de senha obrigatória: antes de QUALQUER rota autenticada ----
+// Vivia só no despacho de módulos; m=admin e m=auth passavam direto, e um
+// usuário obrigado a trocar a senha administrava usuários sem trocá-la.
+$acao = (string) ($_GET['a'] ?? '');
+$liberadas = ['brand_css', 'manifest', 'login', 'do_login', 'logout', 'security', 'password_save', 'two_factor',
+              'two_factor_verify', 'forgot', 'forgot_send', 'reset', 'reset_save'];
+if (Auth::check() && !in_array($acao, $liberadas, true)
+    && !empty(Auth::user()['force_password_change'])) {
+    core_redirect('index.php?m=auth&a=security&force=1');
+}
 
 // ---- Rotas do núcleo ----------------------------------------------------
 if ($module === '' || $module === 'auth') {

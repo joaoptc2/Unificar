@@ -106,6 +106,38 @@ final class Perms
             return self::$effective[$userId][$module] = $set;
         }
 
+        // Módulo de uso pessoal ('todos' => true no manifesto): toda pessoa
+        // logada recebe o conjunto inteiro, sem concessão nenhuma no banco.
+        //
+        // Isto só é seguro porque um módulo assim não expõe dado de outra
+        // pessoa: todas as suas tabelas têm user_id e todas as suas consultas
+        // filtram por ele. Conceder "tudo" ali é conceder acesso ao próprio
+        // espaço — o contrário de um furo. A alternativa, semear concessões
+        // para cada usuário, quebraria no primeiro funcionário admitido
+        // depois da instalação.
+        $manifest = Modules::manifest($module);
+        if ($manifest !== null && !empty($manifest['todos'])) {
+            $set = [];
+            foreach (self::allKeys($module) as $key) {
+                $set[$key] = true;
+            }
+            // A NEGAÇÃO EXPLÍCITA continua valendo. Sem isto a tela
+            // Administração > Permissões mentiria: ela lista o módulo,
+            // aceita desmarcar, grava allowed = 0 e diz "atualizado" — e o
+            // usuário continuaria com tudo, porque o conjunto era devolvido
+            // antes de qualquer leitura de permission_grants. Uma revogação
+            // que não revoga é pior que não oferecer revogação nenhuma.
+            $negados = DB::query(
+                "SELECT perm_key FROM permission_grants
+                  WHERE subject_type = 'user' AND subject_id = ? AND module_slug = ? AND allowed = 0",
+                [$userId, $module]
+            );
+            foreach ($negados as $n) {
+                unset($set[$n['perm_key']]);
+            }
+            return self::$effective[$userId][$module] = $set;
+        }
+
         // As concessões de TODOS os módulos são lidas de uma vez (duas
         // consultas por request): o menu superior, a administração e os
         // gates do módulo ativo consultam vários módulos em sequência.
@@ -280,6 +312,19 @@ final class Perms
 
         // herdado dos grupos (sem overrides individuais)
         $inherited = [];
+        // Módulo 'todos' => true concede TUDO a toda pessoa logada, sem
+        // registro. A linha de base tem de refletir isso: sem esta parte,
+        // desmarcar uma caixa não gerava o registro allowed=0 (want=false ==
+        // inh=false → "herança já resolve"), effective() não tinha o que
+        // subtrair, e o usuário continuava com tudo enquanto a tela dizia
+        // "atualizado". Revogação silenciosamente ignorada.
+        try {
+            $mf = Modules::manifest($module);
+            if (!empty($mf['todos'])) {
+                $inherited = array_flip($valid);
+            }
+        } catch (\Throwable) {
+        }
         $groupIds  = self::groupIdsOf($userId);
         if ($groupIds) {
             $in   = implode(',', array_fill(0, count($groupIds), '?'));
@@ -288,7 +333,7 @@ final class Perms
                  WHERE subject_type = 'group' AND subject_id IN ({$in}) AND module_slug = ? AND allowed = 1",
                 [...$groupIds, $module]
             );
-            $inherited = array_flip(array_column($rows, 'perm_key'));
+            $inherited += array_flip(array_column($rows, 'perm_key'));
         }
 
         DB::execute(

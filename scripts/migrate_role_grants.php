@@ -13,6 +13,7 @@
 
 declare(strict_types=1);
 
+require __DIR__ . '/_cli.php';
 require dirname(__DIR__) . '/core/bootstrap.php';
 
 use Core\DB;

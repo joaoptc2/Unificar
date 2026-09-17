@@ -13,6 +13,19 @@
  * carrega a infraestrutura do próprio módulo (sem bootstrap próprio).
  */
 
+
+// Este arquivo só existe para ser chamado pelo cron da raiz (cron.php), que é
+// quem confere CLI ou token. Sem esta guarda a frase acima era uma suposição:
+// um GET direto no arquivo executava a rotina inteira, sem autenticação
+// nenhuma — reproduzido em modules/manutencao/cron/run.php, que respondeu
+// HTTP 200 e rodou as cinco tarefas. O .htaccess não salva: o Nginx o ignora,
+// o Apache com AllowOverride None também, e o do próprio módulo manutenção
+// bloqueava o arquivo `cron.php` e não a PASTA `cron/`.
+// 404, e não 403: quem pediu não precisa saber que o arquivo existe.
+if (!defined('CRON_AUTORIZADO')) {
+    http_response_code(404);
+    exit;
+}
 require_once dirname(__DIR__) . '/includes/config.php';
 require_once dirname(__DIR__) . '/includes/db.php';
 require_once dirname(__DIR__) . '/includes/cache.php';
@@ -62,7 +75,10 @@ try {
                 "SELECT id FROM notifications
                  WHERE user_id = ? AND module = 'documentos' AND type = 'document_expiring'
                    AND message LIKE ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 DAY)",
-                [$user['id'], '%doc_id=' . $doc['id'] . '%']
+                // O padrão FECHA o colchete: '%doc_id=1%' casava com '[doc_id=10]',
+                // e o aviso do documento 1 era engolido pelo do 10 (11, 12, 100…)
+                // sempre que os dois entravam na janela no mesmo período.
+                [$user['id'], '%[doc_id=' . $doc['id'] . ']%']
             );
             if ($exists) continue;
 
@@ -119,7 +135,7 @@ try {
                     "SELECT id FROM notifications
                      WHERE user_id = ? AND module = 'documentos' AND type = 'document_expired'
                        AND message LIKE ? AND created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)",
-                    [$user['id'], '%doc_id=' . $doc['id'] . '%']
+                    [$user['id'], '%[doc_id=' . $doc['id'] . ']%']
                 );
                 if ($exists) continue;
 

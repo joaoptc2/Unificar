@@ -39,7 +39,8 @@ $coreActions = [
     'modules', 'settings', 'appearance', 'appearance_save', 'appearance_export', 'audit',
     'theme_save', 'theme_apply', 'theme_delete', 'theme_preview', 'appearance_unit_save',
     'surfaces',
-    'migrations', 'migrations_apply', 'health', 'cleanup_save', 'cleanup_run',
+    'migrations', 'migrations_apply', 'health', 'health_exposicao', 'cleanup_save', 'cleanup_run',
+    'assistente', 'assistente_save', 'assistente_test',
     'backup', 'backup_create', 'backup_download', 'backup_delete', 'backup_verify',
     'backup_schedule_save',
     'mailqueue', 'mailqueue_process', 'mailqueue_retry',
@@ -69,6 +70,7 @@ function admin_sidebar(): array
         $core[] = ['label' => 'Atualizações de banco','url' => core_module_url('admin', ['a' => 'migrations']),'icon' => 'bi-database-up',  'key' => 'migrations'];
         $core[] = ['label' => 'Backup',              'url' => core_module_url('admin', ['a' => 'backup']),     'icon' => 'bi-hdd-stack',    'key' => 'backup'];
         $core[] = ['label' => 'E-mail',              'url' => core_module_url('admin', ['a' => 'mail']),       'icon' => 'bi-envelope-at',  'key' => 'mail'];
+        $core[] = ['label' => 'Assistente (IA)',     'url' => core_module_url('admin', ['a' => 'assistente']), 'icon' => 'bi-stars',        'key' => 'assistente'];
         $core[] = ['label' => 'Auditoria',           'url' => core_module_url('admin', ['a' => 'audit']),      'icon' => 'bi-journal-text', 'key' => 'audit'];
     }
     $sections[] = ['heading' => 'Administração', 'items' => $core];
@@ -1419,6 +1421,45 @@ switch ($action) {
         admin_render('Galeria de superfícies', (string) ob_get_clean(), 'appearance');
         break;
 
+    case 'assistente':
+    case 'assistente_save':
+    case 'assistente_test':
+        require CORE_PATH . '/controllers/admin_assistente.php';
+        match ($action) {
+            'assistente'      => admin_render('Assistente', core_admin_assistente(), 'assistente'),
+            'assistente_save' => core_admin_assistente_save(),
+            'assistente_test' => core_admin_assistente_test(),
+        };
+        break;
+
+    case 'health_exposicao':
+        // Teste de exposição sob demanda. O caminho normal é o cron; este
+        // botão existe para quem acabou de mexer na configuração do servidor
+        // e quer a resposta agora.
+        Auth::requireGlobalAdmin();
+        Csrf::check();
+        try {
+            $ex = Core\Exposicao::testar(true);
+            $abertas = array_filter($ex['itens'], fn ($i) => $i['estado'] === 'exposta');
+            $duvida  = array_filter($ex['itens'], fn ($i) => $i['estado'] === 'indeterminado');
+            Audit::log('seguranca.exposicao', 'settings', null,
+                ['abertas' => array_column($abertas, 'pasta'), 'indeterminadas' => array_column($duvida, 'pasta')]);
+            if ($abertas) {
+                Flash::set('error', count($abertas) . ' pasta(s) estão abertas na web: '
+                    . implode(', ', array_column($abertas, 'pasta')) . '. Veja o detalhe abaixo.');
+            } elseif ($duvida) {
+                Flash::set('warning', 'O teste não conseguiu concluir em ' . count($duvida)
+                    . ' pasta(s). Em hospedagem com um processo de PHP só, a página não consegue '
+                    . 'buscar a si mesma — rode o teste pelo cron.');
+            } else {
+                Flash::set('success', 'Nenhuma pasta sensível é entregue pela web.');
+            }
+        } catch (\Throwable $e) {
+            error_log('exposicao sob demanda: ' . $e->getMessage());
+            Flash::set('error', 'Não foi possível concluir o teste: ' . $e->getMessage());
+        }
+        core_redirect('index.php?m=admin&a=health');
+
     case 'health':
         $grupos = Core\HealthCheck::all();
         $resumo = Core\HealthCheck::resumo($grupos);
@@ -1432,6 +1473,13 @@ switch ($action) {
                 <a class="btn btn-outline-secondary" href="<?= core_module_url('admin', ['a' => 'migrations']) ?>">
                     <i class="bi bi-database-up me-1"></i>Atualizações de banco
                 </a>
+                <form method="post" action="<?= core_module_url('admin', ['a' => 'health_exposicao']) ?>" class="d-inline">
+                    <?= Csrf::field() ?>
+                    <button class="btn btn-outline-secondary"
+                            title="Grava um arquivo temporário em cada pasta sensível e tenta baixá-lo pela web">
+                        <i class="bi bi-shield-check me-1"></i>Testar exposição das pastas
+                    </button>
+                </form>
                 <a class="btn btn-outline-primary" href="<?= core_module_url('admin', ['a' => 'health']) ?>">
                     <i class="bi bi-arrow-clockwise me-1"></i>Verificar de novo
                 </a>

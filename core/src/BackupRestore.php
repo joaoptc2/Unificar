@@ -1385,8 +1385,14 @@ final class BackupRestore
      */
     public static function sessionEpochHint(): array
     {
+        // core/ viaja com o CÓDIGO. Este era o quinto uso de BASE_PATH com
+        // sentido de "onde está o código" — o commit da separação dizia
+        // serem exatamente quatro, e estava errado. Com as raízes separadas o
+        // arquivo não existia, o @file() engolia o aviso e a instrução dada
+        // ao administrador virava "cole em core/bootstrap.php, logo depois da
+        // linha 0".
         $rel     = 'core/bootstrap.php';
-        $arquivo = BASE_PATH . '/' . $rel;
+        $arquivo = APP_PATH . '/' . $rel;
         $ancora  = 'Core\Session::start();';
         $linha   = 0;
 
@@ -1412,7 +1418,11 @@ final class BackupRestore
 PHP;
 
         return [
-            'arquivo' => $rel,
+            // Caminho ABSOLUTO: com o código fora do public_html, "core/
+            // bootstrap.php" não diz a ninguém onde o arquivo está. E linha 0
+            // significa que não achei a âncora — dizer isso é melhor que
+            // mandar colar "depois da linha 0".
+            'arquivo' => $arquivo,
             'linha'   => $linha,
             'ancora'  => $ancora,
             'trecho'  => $trecho,
@@ -1657,31 +1667,62 @@ PHP;
                 return null;
             }
         }
-        // Só as raízes que o backup empacota (mais config/, tratado à parte).
-        $permitidas = ['uploads/', 'storage/uploads/', 'config/'];
-        $ok = false;
-        foreach ($permitidas as $p) {
-            if (str_starts_with($rel, $p)) {
-                $ok = true;
-                break;
-            }
-        }
-        if (!$ok) {
+        // Só as raízes que o backup empacota. 'config/' NÃO é prefixo: o
+        // único arquivo de configuração que um pacote pode trazer é
+        // config/config.php, e é igualdade exata. Como prefixo, um pacote
+        // adulterado (íntegro, com hashes certos, só com NOMES hostis) fazia
+        // esta rota gravar config/shell.php e config/.ssh/authorized_keys
+        // dentro de CONFIG_PATH — a mesma regra que Backup::destinoSeguro()
+        // já aplicava na outra rota de restauração, e que esta não aplicava.
+        // As duas rotas passam a usar o MESMO predicado, para não divergirem
+        // de novo.
+        if (!Backup::destinoPermitido($rel)) {
             return null;
         }
 
-        $destino = $raizReal . '/' . rtrim($rel, '/');
+        // "storage/" e "config/" no pacote são TOKENS, não endereços: as
+        // pastas podem ter sido movidas para fora da área pública, e a
+        // tradução mora em Backup::caminhoFisico(), um lugar só.
+        //
+        // MAS ela só vale quando a raiz pedida É a instalação. A restauração
+        // de teste (e o --files-dir) aponta a raiz para um diretório
+        // descartável, e ali o pacote precisa cair INTEIRO lá dentro: traduzir
+        // 'storage/...' para o STORAGE_PATH real faria o ensaio escrever na
+        // instalação de produção, que é o oposto de um ensaio.
+        $base = realpath(BASE_PATH);
+        if ($base !== false && $raizReal === $base) {
+            $destino    = Backup::caminhoFisico(rtrim($rel, '/'));
+            $candidatas = [BASE_PATH, defined('STORAGE_PATH') ? STORAGE_PATH : null,
+                           defined('CONFIG_PATH') ? CONFIG_PATH : null];
+        } else {
+            $destino    = $raizReal . '/' . rtrim($rel, '/');
+            $candidatas = [$raizReal];
+        }
+
         // Segunda barreira: se algum diretório do caminho for um link
-        // simbólico para fora da raiz, o realpath do que já existe entrega.
+        // simbólico para fora das raízes conhecidas, o realpath do que já
+        // existe entrega.
+        $raizes = [];
+        foreach ($candidatas as $r) {
+            if ($r !== null && ($rr = realpath($r)) !== false) {
+                $raizes[$rr] = true;
+            }
+        }
+
         $existente = $destino;
         while (!file_exists($existente) && dirname($existente) !== $existente) {
             $existente = dirname($existente);
         }
         $real = realpath($existente);
-        if ($real === false || ($real !== $raizReal && !str_starts_with($real, $raizReal . '/'))) {
+        if ($real === false) {
             return null;
         }
-        return $destino;
+        foreach (array_keys($raizes) as $raiz) {
+            if ($real === $raiz || str_starts_with($real, $raiz . '/')) {
+                return $destino;
+            }
+        }
+        return null;
     }
 
     /** Identificador citado (o nome vem de configuração/manifesto, nunca cru). */

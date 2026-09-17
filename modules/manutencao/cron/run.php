@@ -26,6 +26,19 @@
  * notificação, evitando flood mesmo com múltiplas execuções ao dia.
  */
 
+
+// Este arquivo só existe para ser chamado pelo cron da raiz (cron.php), que é
+// quem confere CLI ou token. Sem esta guarda a frase acima era uma suposição:
+// um GET direto no arquivo executava a rotina inteira, sem autenticação
+// nenhuma — reproduzido em modules/manutencao/cron/run.php, que respondeu
+// HTTP 200 e rodou as cinco tarefas. O .htaccess não salva: o Nginx o ignora,
+// o Apache com AllowOverride None também, e o do próprio módulo manutenção
+// bloqueava o arquivo `cron.php` e não a PASTA `cron/`.
+// 404, e não 403: quem pediu não precisa saber que o arquivo existe.
+if (!defined('CRON_AUTORIZADO')) {
+    http_response_code(404);
+    exit;
+}
 require_once __DIR__ . '/../config.php';
 
 $startedAt = microtime(true);
@@ -113,9 +126,24 @@ try {
              title, description, scheduled_date, created_at)
         VALUES (?, ?, ?, 'preventive', 'medium', 'open', ?, ?, ?, NOW())
     ");
-    $updatePlan = $pdo->prepare("UPDATE man_maintenance_plans SET next_date = ?, last_executed = NOW() WHERE id = ?");
 
     foreach ($plans as $plan) {
+        // Reivindica o plano ANTES de criar a OS, AVANÇANDO next_date: o
+        // UPDATE só afeta uma linha se next_date ainda for a que lemos, e a
+        // coluna que muda é a própria condição — o que importa porque o PDO
+        // daqui conta linhas ALTERADAS: a primeira versão só mexia em
+        // last_executed, e dois processos no mesmo segundo viam "0 alteradas"
+        // ou "1 alterada" por sorte de relógio, não por posse. Dois crons
+        // concorrentes leem a mesma lista; só um vence aqui, o outro pula.
+        // Se a OS falhar depois disto, o plano já avançou e o erro sai no
+        // log — uma OS a menos com rastro é melhor que duas sem.
+        $nextDate = calcNextDate(date('Y-m-d'), $plan['frequency']);
+        $claim = $pdo->prepare("UPDATE man_maintenance_plans SET next_date = ?, last_executed = NOW()
+                                WHERE id = ? AND next_date = ? AND status = 'active'");
+        $claim->execute([$nextDate, $plan['id'], $plan['next_date']]);
+        if ($claim->rowCount() === 0) {
+            continue;
+        }
         $osNumber = generateOsNumber();
         $title    = '[Preventiva] ' . $plan['title'];
         $descr    = trim(($plan['description'] ?? '') . "\nGerado automaticamente pelo plano de manutenção #" . $plan['id']);
@@ -130,8 +158,7 @@ try {
         ]);
         $newOsId = (int) $pdo->lastInsertId();
 
-        $nextDate = calcNextDate(date('Y-m-d'), $plan['frequency']);
-        $updatePlan->execute([$nextDate, $plan['id']]);
+        // (next_date já avançou na reivindicação, acima.)
 
         man_cron_push_notification(
             $pdo,
@@ -238,14 +265,23 @@ try {
  * 4. Limpeza de notificações lidas antigas (somente deste módulo)
  * ------------------------------------------------------------------ */
 try {
-    $st = $pdo->prepare("
-        DELETE FROM notifications
-        WHERE module = ?
-          AND read_at IS NOT NULL
-          AND created_at < DATE_SUB(NOW(), INTERVAL 60 DAY)
-    ");
-    $st->execute([MAN_MODULE_SLUG]);
-    man_cron_log(sprintf('Notificações antigas removidas: %d.', $st->rowCount()));
+    // Obedece à Administração › Configurações: limpeza desligada ou prazo
+    // zero ("nunca apagar") valem aqui também. Antes eram 60 dias cravados,
+    // e o cron do módulo apagava o que o núcleo tinha ordem de não tocar.
+    $diasNotif = (class_exists('Core\\Cleanup') && Core\Cleanup::habilitado())
+        ? Core\Cleanup::dias('notifications') : 0;
+    if ($diasNotif > 0) {
+        $st = $pdo->prepare("
+            DELETE FROM notifications
+            WHERE module = ?
+              AND read_at IS NOT NULL
+              AND created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
+        ");
+        $st->execute([MAN_MODULE_SLUG, $diasNotif]);
+        man_cron_log(sprintf('Notificações antigas removidas: %d.', $st->rowCount()));
+    } else {
+        man_cron_log('Notificações antigas: limpeza desligada na Administração, nada removido.');
+    }
 } catch (Throwable $ex) {
     man_cron_log('ERRO ao limpar notificações: ' . $ex->getMessage());
 }

@@ -402,7 +402,23 @@ body.portal-bare:not(.is-split) .portal-bare-footer { color: rgba(255, 255, 255,
     display: flex; align-items: center; justify-content: center;
     font-size: 1.5rem; color: var(--portal-on-primary);
     background: linear-gradient(135deg, var(--portal-primary), var(--portal-accent));
+    flex: 0 0 auto;
 }
+
+/* Formatos da página inicial (Administração > Aparência > Página inicial).
+   A lista troca o cartão alto por uma linha; o mosaico vira ícone grande com
+   o nome embaixo — útil em instalação com muitos módulos ou em tela tocável,
+   onde a grade de cartões obriga a rolar. */
+.portal-home-lista .module-icon { width: 38px; height: 38px; font-size: 1.1rem; }
+.portal-home-lista:hover { transform: none; }
+
+.portal-home-mosaico .module-icon { width: 60px; height: 60px; font-size: 1.75rem; }
+.portal-home-mosaico .card-body { min-height: 128px; }
+
+/* Mural: o HTML vem do administrador, então as margens do último parágrafo
+   são zeradas para o aviso não ganhar um vão embaixo. */
+.portal-home-mural > :last-child { margin-bottom: 0; }
+.portal-home-mural img { max-width: 100%; height: auto; }
 
 /* ============================================================
    Bootstrap seguindo a identidade visual
