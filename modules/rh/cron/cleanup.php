@@ -78,14 +78,22 @@ echo "[" . date('Y-m-d H:i:s') . "] [rh] Iniciando limpeza...\n";
 try {
     $db = Database::getInstance();
 
-    // 1. Notificações do módulo lidas com mais de 90 dias
-    $stmt = $db->prepare(
-        "DELETE FROM notifications
-         WHERE module = 'rh' AND read_at IS NOT NULL
-           AND created_at < DATE_SUB(NOW(), INTERVAL 90 DAY)"
-    );
-    $stmt->execute();
-    echo "  Notificações antigas removidas: {$stmt->rowCount()}\n";
+    // 1. Notificações do módulo lidas — com o prazo da Administração, que
+    //    também sabe dizer "desligado" e "nunca apagar" (0). Eram 90 dias
+    //    cravados, ignorando as duas.
+    $diasNotif = (class_exists('Core\\Cleanup') && Core\Cleanup::habilitado())
+        ? Core\Cleanup::dias('notifications') : 0;
+    if ($diasNotif > 0) {
+        $stmt = $db->prepare(
+            "DELETE FROM notifications
+             WHERE module = 'rh' AND read_at IS NOT NULL
+               AND created_at < DATE_SUB(NOW(), INTERVAL ? DAY)"
+        );
+        $stmt->execute([$diasNotif]);
+        echo "  Notificações antigas removidas: {$stmt->rowCount()}\n";
+    } else {
+        echo "  Notificações antigas: limpeza desligada na Administração, nada removido\n";
+    }
 
     // 2. Resetar flags de notificação para vencimentos renovados
     // SÓ o vencimento RENOVADO perde a marca. A condição antiga pegava TODO

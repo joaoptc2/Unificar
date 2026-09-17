@@ -75,7 +75,10 @@ try {
                 "SELECT id FROM notifications
                  WHERE user_id = ? AND module = 'documentos' AND type = 'document_expiring'
                    AND message LIKE ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 DAY)",
-                [$user['id'], '%doc_id=' . $doc['id'] . '%']
+                // O padrão FECHA o colchete: '%doc_id=1%' casava com '[doc_id=10]',
+                // e o aviso do documento 1 era engolido pelo do 10 (11, 12, 100…)
+                // sempre que os dois entravam na janela no mesmo período.
+                [$user['id'], '%[doc_id=' . $doc['id'] . ']%']
             );
             if ($exists) continue;
 
@@ -132,7 +135,7 @@ try {
                     "SELECT id FROM notifications
                      WHERE user_id = ? AND module = 'documentos' AND type = 'document_expired'
                        AND message LIKE ? AND created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)",
-                    [$user['id'], '%doc_id=' . $doc['id'] . '%']
+                    [$user['id'], '%[doc_id=' . $doc['id'] . ']%']
                 );
                 if ($exists) continue;
 

@@ -260,14 +260,23 @@ try {
  * 4. Limpeza de notificações lidas antigas (somente deste módulo)
  * ------------------------------------------------------------------ */
 try {
-    $st = $pdo->prepare("
-        DELETE FROM notifications
-        WHERE module = ?
-          AND read_at IS NOT NULL
-          AND created_at < DATE_SUB(NOW(), INTERVAL 60 DAY)
-    ");
-    $st->execute([MAN_MODULE_SLUG]);
-    man_cron_log(sprintf('Notificações antigas removidas: %d.', $st->rowCount()));
+    // Obedece à Administração › Configurações: limpeza desligada ou prazo
+    // zero ("nunca apagar") valem aqui também. Antes eram 60 dias cravados,
+    // e o cron do módulo apagava o que o núcleo tinha ordem de não tocar.
+    $diasNotif = (class_exists('Core\\Cleanup') && Core\Cleanup::habilitado())
+        ? Core\Cleanup::dias('notifications') : 0;
+    if ($diasNotif > 0) {
+        $st = $pdo->prepare("
+            DELETE FROM notifications
+            WHERE module = ?
+              AND read_at IS NOT NULL
+              AND created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
+        ");
+        $st->execute([MAN_MODULE_SLUG, $diasNotif]);
+        man_cron_log(sprintf('Notificações antigas removidas: %d.', $st->rowCount()));
+    } else {
+        man_cron_log('Notificações antigas: limpeza desligada na Administração, nada removido.');
+    }
 } catch (Throwable $ex) {
     man_cron_log('ERRO ao limpar notificações: ' . $ex->getMessage());
 }
