@@ -209,7 +209,13 @@ function core_admin_backup_tab_list(): string
 {
     $itens = Backup::list();
     $dir   = Backup::dir();
-    $foraDoWebroot = !str_starts_with(realpath($dir) ?: $dir, realpath(BASE_PATH) ?: BASE_PATH);
+    // Uma conta só, a de Backup::dirInfo(): esta linha refazia a comparação
+    // contra BASE_PATH (errado numa subpasta do site) e sem a barra final
+    // (uma irmã "<nome>-backups" passava por "dentro"). As duas contas
+    // conviviam no mesmo pedido e se contradiziam.
+    $dentro        = Backup::dirInfo()['dentro_do_webroot'];   // true, false ou null (não sei)
+    $foraDoWebroot = $dentro === false;
+    $webrootIncerto = $dentro === null;
     $ultimo = $itens[0] ?? null;
 
     ob_start(); ?>

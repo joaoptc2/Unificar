@@ -1667,16 +1667,16 @@ PHP;
                 return null;
             }
         }
-        // Só as raízes que o backup empacota (mais config/, tratado à parte).
-        $permitidas = ['uploads/', 'storage/uploads/', 'config/'];
-        $ok = false;
-        foreach ($permitidas as $p) {
-            if (str_starts_with($rel, $p)) {
-                $ok = true;
-                break;
-            }
-        }
-        if (!$ok) {
+        // Só as raízes que o backup empacota. 'config/' NÃO é prefixo: o
+        // único arquivo de configuração que um pacote pode trazer é
+        // config/config.php, e é igualdade exata. Como prefixo, um pacote
+        // adulterado (íntegro, com hashes certos, só com NOMES hostis) fazia
+        // esta rota gravar config/shell.php e config/.ssh/authorized_keys
+        // dentro de CONFIG_PATH — a mesma regra que Backup::destinoSeguro()
+        // já aplicava na outra rota de restauração, e que esta não aplicava.
+        // As duas rotas passam a usar o MESMO predicado, para não divergirem
+        // de novo.
+        if (!Backup::destinoPermitido($rel)) {
             return null;
         }
 

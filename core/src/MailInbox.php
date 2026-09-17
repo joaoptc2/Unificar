@@ -92,7 +92,16 @@ final class MailInbox
 
     public static function passwordIsSet(): bool
     {
-        return (string) Settings::get('mail.inbox.password', '') !== '';
+        // Ao VALOR decifrado, não ao blob — ver MailSecret::unreadable().
+        $blob = (string) Settings::get('mail.inbox.password', '');
+        return $blob !== '' && !MailSecret::unreadable($blob);
+    }
+
+    /** Guardada, mas cifrada com uma chave que este servidor não tem? */
+    public static function passwordUnreadable(): bool
+    {
+        $blob = (string) Settings::get('mail.inbox.password', '');
+        return $blob !== '' && MailSecret::unreadable($blob);
     }
 
     public static function forgetPassword(): void

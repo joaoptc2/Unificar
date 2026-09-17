@@ -154,6 +154,16 @@ final class Exposicao
         $itens = [];
         $seguidos = 0;
 
+        // ISCA DE CONTROLE. Antes de acreditar em qualquer recusa, provar
+        // que app.base_url alcança ESTA instalação. Uma recusa (404, 403) só
+        // é prova de proteção se veio deste servidor — e com app.base_url
+        // apontando para um domínio antigo, uma cópia de homologação, o
+        // www/não-www errado, o 404 vinha de OUTRO lugar e virava "protegida"
+        // para uma pasta escancarada aqui. A isca vai numa pasta que é
+        // obrigatoriamente servida (assets/): se nem ela volta, nenhuma
+        // recusa desta rodada vale como prova.
+        $controle = self::controle();
+
         foreach (self::pastas() as $rel => $meta) {
             // Desiste cedo. Um estouro de tempo por worker único não é
             // azar de uma pasta: se a primeira não respondeu, nenhuma vai.
@@ -163,6 +173,7 @@ final class Exposicao
                 $itens[] = [
                     'pasta'   => $rel,
                     'estado'  => 'indeterminado',
+                'motivo'  => 'tempo',
                     'detalhe' => 'Não testado: as duas primeiras pastas já não responderam a tempo, '
                                . 'o que indica servidor com um processo de PHP só.',
                     'http'    => 0,
@@ -172,13 +183,28 @@ final class Exposicao
 
             $r = self::testarPasta($rel, $meta) + ['pasta' => $rel];
             $seguidos = !empty($r['por_tempo']) ? $seguidos + 1 : 0;
+
+            // Sem controle, "protegida" é palpite. "Exposta" continua valendo
+            // (a prova ali é o segredo recém-gravado voltar), e "fora" é
+            // físico, não depende de URL.
+            if ($r['estado'] === 'protegida' && $controle['ok'] !== true) {
+                $r = [
+                    'pasta'   => $rel,
+                    'estado'  => 'indeterminado',
+                    'motivo'  => 'controle',
+                    'detalhe' => 'O servidor recusou (HTTP ' . (int) ($r['http'] ?? 0) . '), mas não dá para '
+                               . 'afirmar que foi ESTE servidor: ' . $controle['detalhe'],
+                    'http'    => (int) ($r['http'] ?? 0),
+                ];
+            }
             $itens[] = $r;
         }
 
         $resultado = [
-            'em'     => date('Y-m-d H:i:s'),
-            'origem' => $viaWeb ? 'web' : 'cron',
-            'itens'  => $itens,
+            'em'       => date('Y-m-d H:i:s'),
+            'origem'   => $viaWeb ? 'web' : 'cron',
+            'controle' => $controle,
+            'itens'    => $itens,
         ];
 
         // Um teste que não concluiu NADA não pode apagar um resultado que
@@ -213,6 +239,44 @@ final class Exposicao
     }
 
     /**
+     * A isca de controle: app.base_url chega a ESTA instalação?
+     *
+     * @return array{ok:?bool, detalhe:string}  ok=null quando nem dá para tentar.
+     */
+    private static function controle(): array
+    {
+        $base = rtrim(trim((string) Config::get('app.base_url', '')), '/');
+        if ($base === '' || parse_url($base, PHP_URL_SCHEME) === null || parse_url($base, PHP_URL_HOST) === null) {
+            return ['ok' => null, 'detalhe' => 'app.base_url não está preenchida.'];
+        }
+        $dir = BASE_PATH . '/assets';
+        if (!is_dir($dir) || !is_writable($dir)) {
+            return ['ok' => null, 'detalhe' => 'não foi possível gravar a isca de controle em assets/.'];
+        }
+        $segredo = bin2hex(random_bytes(16));
+        $nome    = '.teste-controle-' . substr($segredo, 0, 12) . '.txt';
+        $arquivo = $dir . '/' . $nome;
+        if (@file_put_contents($arquivo, $segredo) === false) {
+            return ['ok' => null, 'detalhe' => 'não foi possível gravar a isca de controle em assets/.'];
+        }
+        try {
+            [$http, $corpo, $erro] = self::buscar($base . '/assets/' . $nome);
+            if ($corpo !== null && str_contains($corpo, $segredo)) {
+                return ['ok' => true, 'detalhe' => 'app.base_url alcança esta instalação.'];
+            }
+            return [
+                'ok'      => false,
+                'detalhe' => 'a isca de controle gravada em assets/ não voltou por ' . $base
+                           . ($erro !== '' ? ' (' . ltrim($erro, self::MARCA_TEMPO) . ')' : ' (HTTP ' . $http . ')')
+                           . '. Ou app.base_url aponta para outro servidor, ou este servidor não '
+                           . 'consegue alcançar o próprio endereço. Confira app.base_url.',
+            ];
+        } finally {
+            @unlink($arquivo);
+        }
+    }
+
+    /**
      * Testa UMA pasta.
      *
      * @param array{rotulo:string, porque:string, nivel:string} $meta
@@ -243,6 +307,7 @@ final class Exposicao
             if (!$veioDoServidor) {
                 return [
                     'estado'  => 'indeterminado',
+                'motivo'  => 'docroot_desconhecido',
                     'detalhe' => 'A pasta (' . $dir . ') está fora da raiz da instalação, o que em '
                                . 'geral significa que nenhuma URL chega nela — mas o sistema ainda '
                                . 'não sabe onde o servidor web começa a servir, e sem isso não dá '
@@ -267,6 +332,7 @@ final class Exposicao
         if ($raizApp !== false && !str_starts_with($dir . DIRECTORY_SEPARATOR, $raizApp . DIRECTORY_SEPARATOR)) {
             return [
                 'estado'  => 'indeterminado',
+                'motivo'  => 'fora_da_instalacao',
                 'detalhe' => 'A pasta (' . $dir . ') está dentro da área servida pelo servidor web, mas '
                            . 'fora da instalação — provavelmente o portal fica numa subpasta do site. '
                            . 'Não dá para montar o endereço dela a partir de app.base_url.',
@@ -284,6 +350,7 @@ final class Exposicao
         if ($base === '' || parse_url($base, PHP_URL_SCHEME) === null || parse_url($base, PHP_URL_HOST) === null) {
             return [
                 'estado'  => 'indeterminado',
+                'motivo'  => 'base_url',
                 'detalhe' => 'app.base_url não está preenchida na configuração. Sem ela não há endereço '
                            . 'para testar: pela linha de comando não existe requisição de onde tirá-lo, e '
                            . 'pela tela o endereço viria do cabeçalho Host — ou seja, de quem faz o pedido.',
@@ -295,6 +362,7 @@ final class Exposicao
         if (!is_writable($dir)) {
             return [
                 'estado'  => 'indeterminado',
+                'motivo'  => 'escrita',
                 'detalhe' => 'A pasta não aceita escrita, então não foi possível deixar o arquivo de teste.',
                 'http'    => 0,
             ];
@@ -307,6 +375,7 @@ final class Exposicao
         if (@file_put_contents($arquivo, $segredo) === false) {
             return [
                 'estado'  => 'indeterminado',
+                'motivo'  => 'escrita',
                 'detalhe' => 'Não foi possível criar o arquivo de teste na pasta.',
                 'http'    => 0,
             ];
@@ -345,9 +414,10 @@ final class Exposicao
             if ($erro !== '') {
                 $porTempo = str_starts_with($erro, self::MARCA_TEMPO);
                 return [
-                    'estado'   => 'indeterminado',
-                    'detalhe'  => 'Não consegui testar: ' . ltrim($erro, self::MARCA_TEMPO),
-                    'http'     => $http,
+                    'estado'    => 'indeterminado',
+                    'motivo'    => $porTempo ? 'tempo' : 'rede',
+                    'detalhe'   => 'Não consegui testar: ' . ltrim($erro, self::MARCA_TEMPO),
+                    'http'      => $http,
                     'por_tempo' => $porTempo,
                 ];
             }
@@ -361,6 +431,7 @@ final class Exposicao
                 if (!$tlsOk) {
                     return [
                         'estado'  => 'indeterminado',
+                'motivo'  => 'tls',
                         'detalhe' => 'Chegou uma recusa (HTTP ' . $http . '), mas o certificado não pôde '
                                    . 'ser verificado — não dá para afirmar que quem respondeu foi este servidor.',
                         'http'    => $http,
@@ -380,6 +451,7 @@ final class Exposicao
             // segurança sem ter verificado.
             return [
                 'estado'  => 'indeterminado',
+                'motivo'  => 'resposta_estranha',
                 'detalhe' => 'Algo respondeu (HTTP ' . $http . '), mas não era o arquivo de teste. '
                            . 'Pode ser a tela de login, um proxy no caminho ou uma regra que responde '
                            . 'qualquer endereço — nenhum dos três prova que a pasta está fechada.',

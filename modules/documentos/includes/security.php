@@ -38,8 +38,15 @@ function csrf_validate() {
  * Escapa string para exibição segura em HTML (anti-XSS).
  * Este é o ÚNICO ponto de sanitização: no output.
  */
-function e($string) {
-    return htmlspecialchars((string) $string, ENT_QUOTES, 'UTF-8');
+// Protegida por function_exists porque o cron unificado, sem proc_open,
+// roda TODOS os módulos no mesmo processo — e manutenção declara um e()
+// igual. O segundo a carregar matava o processo com Fatal error, que o
+// try/catch do cron não pega. Resultado medido: a rotina de manutenção
+// nunca rodava, e nada aparecia com display_errors desligado.
+if (!function_exists('e')) {
+    function e($string) {
+        return htmlspecialchars((string) $string, ENT_QUOTES, 'UTF-8');
+    }
 }
 
 /**

@@ -75,7 +75,17 @@ final class Assistente
 
     public static function temChave(): bool
     {
-        return trim((string) Settings::get('ia.chave', '')) !== '';
+        // Pergunta ao VALOR, não ao blob: um blob cifrado com outra app.key é
+        // não-vazio e ilegível, e dizer "tem chave" sobre ele faz a tela
+        // prometer o que a API vai recusar.
+        return self::chave() !== '';
+    }
+
+    /** A chave está guardada mas este servidor não consegue lê-la? */
+    public static function chaveIlegivel(): bool
+    {
+        $blob = trim((string) Settings::get('ia.chave', ''));
+        return $blob !== '' && MailSecret::unreadable($blob);
     }
 
     public static function chave(): string

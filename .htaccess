@@ -11,6 +11,14 @@ RewriteEngine On
 # vale está dentro do próprio PHP (scripts/_cli.php); esta linha é a
 # segunda tranca, para o dia em que alguém puser um .php novo lá sem ela.
 RewriteRule ^(core|config|sql|storage|docs|scripts)(/|$) - [F,L]
+# Tudo que começa com ponto (.git, .gitignore, .env de quem vier a usar) e
+# a documentação da raiz: com o código junto do público, um /.git/config
+# servido reconstrói o fonte inteiro. Na arrumação com o código na pasta
+# irmã nada disto existe aqui — a regra é para quem ficou na de origem.
+# .well-known fica de fora: é por onde o Let's Encrypt prova o domínio, e
+# bloqueá-lo faria o certificado parar de renovar em silêncio.
+RewriteRule (^|/)\.(?!well-known(/|$))[^/]+ - [F,L]
+RewriteRule ^(README|CHANGELOG)[^/]*\.md$ - [F,L]
 RewriteRule ^modules/.*\.(php|sql|md)$ - [F,L]
 
 # PHP nunca executa dentro de uploads

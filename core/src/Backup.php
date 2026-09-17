@@ -172,7 +172,28 @@ final class Backup
             ];
         }
 
-        $info['dentro_do_webroot'] = str_starts_with($info['caminho'] . '/', BASE_PATH . '/');
+        // "Dentro do webroot" é contra a raiz SERVIDA, não contra a pasta da
+        // instalação. Com o portal numa subpasta do site (public_html/portal),
+        // dirname(BASE_PATH) É o public_html: a pasta irmã de backups nasce
+        // servida pela web, e comparar com BASE_PATH dizia "fora". Provado: o
+        // pacote baixável por URL anônima e a tela com o selo verde.
+        //
+        // Quando a raiz servida não é conhecida (o DOCUMENT_ROOT nunca foi
+        // visto), a resposta honesta é "não sei", e não sei aqui vira
+        // dentro_do_webroot = null — quem exibe trata como aviso, nunca como
+        // selo verde.
+        [$raizServida, $confiavel] = Exposicao::raizPublica();
+        $caminhoReal = realpath($info['caminho']) ?: $info['caminho'];
+        if ($confiavel && $raizServida !== null) {
+            $info['dentro_do_webroot'] = str_starts_with(rtrim($caminhoReal, '/') . '/', rtrim($raizServida, '/') . '/');
+        } else {
+            $info['dentro_do_webroot'] = null;
+        }
+        if ($info['origem'] === 'irmao' && $info['dentro_do_webroot'] === true) {
+            $info['motivo'] = 'diretório irmão da instalação — mas a instalação mora numa SUBPASTA do '
+                            . 'site, e a irmã caiu DENTRO da área servida (' . $raizServida . '). Aponte '
+                            . 'backup.path para fora do site.';
+        }
 
         // Pacotes que ficaram no lugar antigo depois da mudança de padrão: a
         // listagem só enxerga o diretório em uso, e um backup que o admin
@@ -2213,6 +2234,29 @@ final class Backup
         return BASE_PATH . '/' . $rel;
     }
 
+    /**
+     * O caminho lógico é um destino que a restauração pode gravar?
+     *
+     * Um predicado só, usado pelas DUAS rotas de restauração. 'uploads/' e
+     * 'storage/uploads/' são prefixos (o pacote traz árvores inteiras);
+     * 'config/config.php' é igualdade exata (o pacote só pode trazer ESSE
+     * arquivo de configuração, e mais nenhum). Tratar 'config/' como prefixo
+     * abria CONFIG_PATH para qualquer nome que um pacote quisesse gravar.
+     */
+    public static function destinoPermitido(string $rel): bool
+    {
+        $rel = ltrim($rel, '/');
+        if ($rel === 'config/config.php') {
+            return true;
+        }
+        foreach (['uploads/', 'storage/uploads/'] as $p) {
+            if (str_starts_with($rel, $p)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** As raízes físicas em que a restauração pode escrever. */
     private static function raizesPermitidas(): array
     {
@@ -2237,21 +2281,10 @@ final class Backup
                 return false;
             }
         }
-        $permitido = false;
-        foreach (['uploads/', 'storage/uploads/'] as $ok) {
-            if (str_starts_with($rel, $ok)) {
-                $permitido = true;
-                break;
-            }
-        }
-        // config é IGUALDADE EXATA, não prefixo. Com 'config/' como prefixo,
-        // um pacote adulterado podia trazer 'config/shell.php' ou
-        // 'config/.ssh/authorized_keys' e a restauração gravaria os dois —
-        // e o único arquivo que o empacotamento grava ali é config/config.php.
-        if (!$permitido && $rel === 'config/config.php') {
-            $permitido = true;
-        }
-        if (!$permitido) {
+        // A regra do que pode ser gravado mora em destinoPermitido(), e é a
+        // MESMA que BackupRestore::caminhoSeguro() usa. Antes cada rota tinha
+        // a sua, e a outra tratava 'config/' como prefixo.
+        if (!self::destinoPermitido($rel)) {
             return false;
         }
 

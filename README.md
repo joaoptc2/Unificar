@@ -878,6 +878,19 @@ php /caminho/para/cron.php            # CLI
 https://seu-dominio/cron.php?token=<cron_secret do config>   # HTTP
 ```
 
+Cada módulo roda num **subprocesso próprio** (`php cron.php --module=<slug>`),
+porque os módulos declaram funções globais com o mesmo nome (`e`, `redirect`,
+`url`, `paginate`) e não podem conviver no mesmo processo — o segundo a
+carregar mata tudo com *Fatal error*. O cron tenta `proc_open`, depois `popen`,
+depois `exec`. Se a hospedagem desabilitou os três, ele **não finge**: roda só
+o primeiro módulo, imprime a linha exata para agendar cada um dos outros, e o
+checkup mostra em vermelho quais ficaram de fora até isso ser feito. Antes,
+nessa situação, o cron morria no segundo módulo sem uma linha na tela, e a
+rotina de manutenção simplesmente nunca rodava.
+
+```
+```
+
 Executa, nesta ordem: a fila de e-mails, o **backup agendado**, a **limpeza
 automática** (sempre depois do backup — o backup do dia é feito antes de
 qualquer coisa ser apagada) e as rotinas de todos os módulos (vencimentos de
@@ -961,6 +974,8 @@ então a atualização ficou muito mais rápida sem multiplicar os pedidos.
   ```nginx
   location ~ ^/(core|config|sql|storage|docs|scripts)/ { deny all; }
   location ~ ^/uploads/.*\.(php|phar|phtml)$ { deny all; }
+  location ~ /\.(?!well-known) { deny all; }         # .git, .gitignore, .htaccess (não o ACME)
+  location ~ ^/(README|CHANGELOG)[^/]*\.md$ { deny all; }
   ```
 
 ### `scripts/` executava por URL — e a tranca não podia ser o `.htaccess`
@@ -992,7 +1007,12 @@ seguro quando o servidor colabora não é seguro.
 **erro** — é a única pasta da lista que não apenas vaza, mas executa.
 
   Arquivos privados (anexos de comunicados, por exemplo) ficam em
-  `storage/uploads/` e só são entregues pelo download autenticado do módulo;
+  `storage/uploads/` e só são entregues pelo download autenticado do módulo.
+  **Limite honesto:** os anexos do chat e os arquivos de mural continuam em
+  `uploads/`, que é pública por natureza, e a única coisa entre eles e uma URL
+  anônima é o `.htaccess` da pasta — que o Nginx ignora. O nome aleatório do
+  arquivo é o que resta. Fechar isso de verdade é movê-los também para a pasta
+  de dados e servi-los só pela rota autenticada, como já se fez com os do RH;
 - Imagens da identidade visual (`uploads/branding/`) são públicas por
   natureza — o navegador precisa buscá-las —, mas nunca executáveis: SVG
   enviado é sanitizado antes de gravar e a extensão real é decidida pelo
@@ -1078,6 +1098,20 @@ Detalhes que decidem se o teste vale:
   espera uma resposta que só ela poderia dar. Medido: 1 worker estoura o tempo
   com 0 bytes; 4 workers respondem em 1 ms. O botão *Testar agora* existe,
   desiste em 8 s e relata **"não consegui testar"**.
+- **Uma recusa só vale como prova se veio DESTE servidor.** Antes de acreditar
+  em qualquer 403/404, a sonda grava uma **isca de controle** numa pasta que é
+  obrigatoriamente servida (`assets/`) e a pede pela `app.base_url`. Se nem ela
+  volta, `app.base_url` não chega a esta instalação — domínio antigo, cópia de
+  homologação, `www`/não-`www` trocado — e o 404 estava vindo de outro lugar.
+  Nesse caso nenhuma pasta é dada como "protegida": todas viram "não foi
+  possível testar", com o motivo. Antes disso, uma instalação com `sql/` e
+  `core/` escancarados era relatada como protegida porque o domínio errado
+  respondia 404 para tudo.
+- **Cada "não foi possível testar" diz o porquê e o que fazer** — e o que fazer
+  muda com o porquê. "Rode pelo cron" só aparece quando foi estouro de tempo;
+  pasta dentro do site mas fora da instalação manda mover a pasta; `app.base_url`
+  vazia manda preenchê-la. Antes era um conselho só para tudo, e ele saía até
+  quando tinha sido o cron que acabara de rodar.
 - **Um teste inconclusivo não apaga um resultado conclusivo** guardado antes.
 - A isca sai sempre, inclusive se a busca falhar no meio.
 

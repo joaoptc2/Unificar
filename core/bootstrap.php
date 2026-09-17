@@ -163,7 +163,19 @@ $candidatosConfig[] = [
     'pasta irmã',
     dirname(BASE_PATH) . '/' . basename(BASE_PATH) . '-config/config.php',
 ];
-// 4. O lugar de sempre, dentro da área pública.
+// 4. Irmã da pasta PAI. É onde o instalador grava quando a instalação fica
+//    numa subpasta do site (public_html/portal): a irmã da subpasta cairia
+//    dentro da área servida, então ele sobe um nível e grava em
+//    "<site>-config". Sem este degrau, o bootstrap nunca olhava lá — o
+//    instalador gravava, o portal não achava, e o próximo acesso caía no
+//    instalador de novo, oferecendo reinstalar.
+//    Na instalação comum isto resolve para "<home>-config", que não existe;
+//    por isso vem DEPOIS da irmã direta.
+$candidatosConfig[] = [
+    'irmã da pasta pai (instalação em subpasta do site)',
+    dirname(dirname(BASE_PATH)) . '/' . basename(dirname(BASE_PATH)) . '-config/config.php',
+];
+// 5. O lugar de sempre, dentro da área pública.
 $candidatosConfig[] = ['pasta config/ da instalação', BASE_PATH . '/config/config.php'];
 
 $configFile = null;
@@ -195,6 +207,28 @@ if ($configFile === null && $configIlegivel !== null) {
 }
 
 if ($configFile === null) {
+    // "Não achei" só vale como "não instalado" se eu PUDE olhar. Com
+    // open_basedir limitado à pasta pública, @is_file() da irmã devolve false
+    // — não porque ela não existe, mas porque o PHP não pode sondar o pai. E
+    // aí uma instalação VIVA era mandada para o instalador, que oferecia
+    // rodar o schema por cima, recriar o admin e gerar app.key nova.
+    // Se nem o diretório pai é sondável, não é instalação nova: é restrição
+    // de ambiente, e a saída é apontar o config por UNIFICAR_CONFIG.
+    if (!@is_dir(dirname(BASE_PATH))) {
+        $msgBase = "Não consigo olhar a pasta acima da instalação (" . dirname(BASE_PATH) . ").\n"
+                 . "Provavelmente há open_basedir limitando o PHP à pasta pública, e a configuração\n"
+                 . "pode estar na pasta irmã sem que eu consiga vê-la. O instalador NÃO será oferecido:\n"
+                 . "reinstalar por cima apagaria a instalação atual.\n\n"
+                 . "Aponte o arquivo com a variável de ambiente UNIFICAR_CONFIG, ou inclua a pasta irmã\n"
+                 . "no open_basedir.\n";
+        if (PHP_SAPI === 'cli') {
+            fwrite(STDERR, $msgBase);
+            exit(1);
+        }
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=utf-8');
+        exit($msgBase);
+    }
     // Sem configuração: manda para o instalador (quando em contexto web)
     if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_NAME'] ?? '') !== 'install.php') {
         header('Location: install.php');

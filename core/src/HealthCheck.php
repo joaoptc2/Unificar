@@ -163,6 +163,36 @@ final class HealthCheck
                 (int) $r['n'] . ' tabelas · ' . self::bytes((int) $r['bytes']));
         } catch (\Throwable $e) { /* informativo */ }
 
+        // Módulos: o que o banco diz que existe × o que há no disco. Sem a
+        // pasta modules/ (uma mudança de pastas pela metade), Modules::all()
+        // devolve lista vazia sem erro nenhum: o portal sobe perfeito e VAZIO,
+        // o administrador lê "você não tem acesso a nenhum módulo", e o cron
+        // termina com "concluído" sem rodar rotina nenhuma. O erro é
+        // "permissão" para quem lê a tela, e é "pasta" na verdade.
+        try {
+            $noBanco = array_column(DB::query('SELECT slug FROM modules WHERE active = 1'), 'slug');
+            $noDisco = array_keys(Modules::all());
+            $faltam  = array_values(array_diff($noBanco, $noDisco));
+            if ($noBanco !== [] && $noDisco === []) {
+                $out[] = self::item('erro', 'Módulos',
+                    'O banco tem ' . count($noBanco) . ' módulo(s) ativo(s) e NENHUM manifesto foi '
+                    . 'encontrado em ' . MODULES_PATH . '.',
+                    'A pasta modules/ não está onde o código está. Se o código foi movido, confira '
+                    . 'se modules/ subiu junto. Enquanto isso, o portal está vazio e nenhuma rotina '
+                    . 'de módulo roda no cron.');
+            } elseif ($faltam !== []) {
+                $out[] = self::item('erro', 'Módulos',
+                    'Ativo(s) no banco sem pasta no disco: ' . implode(', ', $faltam) . '.',
+                    'Cada um precisa de modules/<slug>/module.php em ' . MODULES_PATH . '. Sem ele o '
+                    . 'módulo responde 404 e o cron dele não roda.');
+            } else {
+                $out[] = self::item('ok', 'Módulos',
+                    count($noDisco) . ' manifesto(s) em ' . MODULES_PATH . ', todos os ativos presentes.');
+            }
+        } catch (\Throwable $e) {
+            $out[] = self::item('aviso', 'Módulos', 'Não verificado: ' . $e->getMessage());
+        }
+
         // max_allowed_packet pequeno quebra a restauração de backups grandes.
         try {
             $p = (int) (DB::queryOne("SHOW VARIABLES LIKE 'max_allowed_packet'")['Value'] ?? 0);
@@ -595,10 +625,25 @@ final class HealthCheck
                 'Mova a pasta para fora do public_html (ver o README) ou bloqueie o caminho na '
                 . 'configuração do servidor. Em Nginx o .htaccess não é lido.');
         }
+        // O conselho depende do MOTIVO. Antes era um só para todos — "rode
+        // pelo cron" — e saía até quando tinha sido o cron que acabara de
+        // rodar, oito vezes na mesma tela, encobrindo o motivo verdadeiro.
+        $conselhos = [
+            'tempo'                => 'Rode o teste pelo cron — sem a disputa por processo do servidor web, ele costuma concluir.',
+            'rede'                 => 'Este servidor não conseguiu alcançar o próprio endereço. Confira se app.base_url é acessível de dentro da hospedagem (NAT sem hairpin e firewall de saída costumam ser a causa).',
+            'controle'             => 'Confira app.base_url na configuração: ela precisa apontar para ESTA instalação. Enquanto a isca de controle não voltar, nenhuma recusa vale como prova.',
+            'base_url'             => 'Preencha app.base_url na configuração com o endereço deste portal.',
+            'fora_da_instalacao'   => 'A pasta está dentro do site mas fora da instalação — provavelmente o portal mora numa subpasta. Mova-a para fora do DocumentRoot (ao lado do SITE, não da subpasta) ou bloqueie o caminho na configuração do servidor.',
+            'docroot_desconhecido' => 'Abra esta tela pelo navegador uma vez: é o que ensina ao sistema onde o servidor começa a servir.',
+            'escrita'              => 'Dê permissão de escrita na pasta ao usuário do servidor web; sem isso não há como deixar o arquivo de teste.',
+            'tls'                  => 'O certificado de app.base_url não pôde ser verificado de dentro do servidor. Corrija o certificado (ou a cadeia) e teste de novo.',
+            'resposta_estranha'    => 'Algo responde nesse endereço com um conteúdo que não é o arquivo de teste — um proxy, uma regra catch-all, a tela de login. Confira app.base_url e a configuração do servidor.',
+        ];
         foreach ($duvidosas as $i) {
+            $motivo = (string) ($i['motivo'] ?? '');
             $out[] = self::item('aviso', 'Não foi possível testar: ' . (string) $i['pasta'],
                 (string) $i['detalhe'] . ' (' . $quando . ')',
-                'Rode o teste pelo cron — sem a disputa por processo do servidor web, ele costuma concluir.');
+                $conselhos[$motivo] ?? 'Veja o detalhe acima: ele diz o que impediu o teste.');
         }
         return $out;
     }
@@ -702,6 +747,22 @@ final class HealthCheck
             $out[] = self::item($nivel, 'Rotina periódica (cron)',
                 'Última execução em ' . date('d/m/Y H:i', strtotime($ultimo)) . ' (' . self::duracao($idade) . ' atrás).',
                 $nivel === 'ok' ? '' : 'A rotina parou. Confira o agendamento no painel da hospedagem.');
+        }
+
+        // Módulos que o cron NÃO conseguiu rodar por falta de isolamento de
+        // processo. Sem isto, o item acima ficava verde ("rodou há 1 h")
+        // enquanto as rotinas de vencimento, calibração e estoque de todos os
+        // módulos menos o primeiro nunca aconteciam — foi assim numa
+        // hospedagem sem proc_open, sem uma linha na tela.
+        $semIso = array_filter(explode(',', (string) Settings::get('cron.sem_isolamento', '')));
+        if ($semIso !== []) {
+            $out[] = self::item('erro', 'Cron: módulos que não rodam',
+                'O servidor não permite abrir subprocesso (proc_open, popen e exec desabilitados), '
+                . 'e os módulos não podem rodar juntos no mesmo processo. Ficaram de fora: '
+                . implode(', ', $semIso) . '.',
+                'No painel da hospedagem, agende uma linha por módulo: '
+                . implode(' ; ', array_map(fn ($s) => 'php cron.php --module=' . $s, $semIso))
+                . ' (além da linha atual). Ou peça à hospedagem para liberar proc_open.');
         }
 
         $out[] = MailConfig::enabled()

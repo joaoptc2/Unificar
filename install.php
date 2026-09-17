@@ -49,6 +49,11 @@ require_once APP_DIR . '/core/src/Migrations.php'; // apenas o parser de SQL
 $configCandidatos = array_filter([
     getenv('UNIFICAR_CONFIG') ?: null,
     dirname(BASE_PATH) . '/' . basename(BASE_PATH) . '-config/config.php',
+    // Irmã da pasta PAI: é onde este próprio instalador grava numa subpasta
+    // do site (ver $configIrmao abaixo). A lista aqui e a do bootstrap têm
+    // de ser a MESMA, senão o instalador grava num lugar que o portal não
+    // procura e oferece reinstalar no acesso seguinte.
+    dirname(dirname(BASE_PATH)) . '/' . basename(dirname(BASE_PATH)) . '-config/config.php',
     BASE_PATH . '/config/config.php',
 ]);
 $configExistente = null;
