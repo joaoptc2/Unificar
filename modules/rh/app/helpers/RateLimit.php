@@ -15,13 +15,27 @@ class RateLimit
      */
     public static function clientIp(): string
     {
-        foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP'] as $h) {
+        // REMOTE_ADDR é o único valor que o cliente NÃO escolhe. Os cabeçalhos
+        // de proxy só valem quando o administrador declarou confiar no proxy
+        // (security.trust_proxy) — a MESMA regra de Core\Audit::ip() e
+        // Core\Https. Antes eles vinham primeiro, de qualquer origem: um
+        // atacante mandava um X-Forwarded-For diferente a cada envio e o
+        // rate-limit do formulário público de vagas nunca acumulava. Sem
+        // proxy confiável, cada valor forjado parecia um IP novo.
+        $remoto = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+        if (!\Core\Https::trustProxy()) {
+            return $remoto;
+        }
+        // Com proxy confiável, o salto mais à DIREITA que não controlamos é o
+        // que o nosso proxy viu (ele acrescenta à direita).
+        foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_REAL_IP', 'HTTP_X_FORWARDED_FOR'] as $h) {
             if (!empty($_SERVER[$h])) {
-                $ip = trim(explode(',', $_SERVER[$h])[0]);
+                $partes = array_map('trim', explode(',', (string) $_SERVER[$h]));
+                $ip = (string) end($partes);
                 if (filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
             }
         }
-        return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+        return $remoto;
     }
 
     // -----------------------------------------------------------------

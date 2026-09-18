@@ -36,10 +36,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             core_redirect($url(['config' => 1]));
         }
         $host = trim((string) ($_POST['host'] ?? '')) ?: 'imap.zoho.com';
-        $seg  = in_array($_POST['seguranca'] ?? '', ['ssl', 'starttls', 'nenhuma'], true)
+        $smtpHost = trim((string) ($_POST['smtp_host'] ?? '')) ?: 'smtp.zoho.com';
+        // Barra SSRF: o host IMAP e o SMTP têm de resolver para endereços
+        // públicos. Sem isto o portal conectava em 127.0.0.1 / 169.254.169.254
+        // / redes internas a pedido de quem tem email.manage.
+        if (!meu_email_host_publico($host) || !meu_email_host_publico($smtpHost)) {
+            Flash::set('error', 'Servidor de e-mail inválido: informe um endereço público (não é permitido apontar para redes internas).');
+            core_redirect($url(['config' => 1]));
+        }
+        // TLS obrigatório na caixa pessoal: a opção "nenhuma" (texto claro,
+        // senha e e-mails passíveis de interceptação) saiu. A trava de SSRF
+        // acima já garante um host público, e todo provedor real (Zoho,
+        // Gmail, Outlook) atende IMAP/SMTP sobre TLS.
+        $seg  = in_array($_POST['seguranca'] ?? '', ['ssl', 'starttls'], true)
               ? (string) $_POST['seguranca'] : 'ssl';
         $porta = (int) ($_POST['porta'] ?? 0) ?: ($seg === 'ssl' ? 993 : 143);
-        $smtpSeg = in_array($_POST['smtp_seg'] ?? '', ['ssl', 'tls', 'nenhuma'], true)
+        $smtpSeg = in_array($_POST['smtp_seg'] ?? '', ['ssl', 'tls'], true)
                  ? (string) $_POST['smtp_seg'] : 'ssl';
 
         DB::execute(
@@ -52,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  smtp_seg = VALUES(smtp_seg), ativo = 1',
             [$uid, mb_substr($host, 0, 190), max(1, min(65535, $porta)), $seg,
              mb_substr($usuario, 0, 190), mb_substr(trim((string) ($_POST['caixa'] ?? 'INBOX')) ?: 'INBOX', 0, 190),
-             mb_substr(trim((string) ($_POST['smtp_host'] ?? '')) ?: 'smtp.zoho.com', 0, 190),
+             mb_substr($smtpHost, 0, 190),
              max(1, min(65535, (int) ($_POST['smtp_porta'] ?? 465))), $smtpSeg]
         );
         Flash::set('success', 'Caixa configurada. Agora informe a senha de aplicativo para abrir.');
@@ -112,6 +124,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!filter_var($para, FILTER_VALIDATE_EMAIL) || $corpo === '') {
             Flash::set('error', 'Confira o destinatário e escreva a resposta.');
             core_redirect($url(['ver' => $uidMsg]));
+        }
+        // Mesma trava SSRF no envio: um smtp_host interno gravado antes da
+        // validação não vira conexão para dentro da rede.
+        if (!meu_email_host_publico((string) $conta['smtp_host'])) {
+            Flash::set('error', 'Servidor SMTP inválido: reconfigure a caixa com um endereço público.');
+            core_redirect($url(['config' => 1]));
         }
         // Envia COM AS CREDENCIAIS DO USUÁRIO, não com o SMTP do portal: a
         // resposta precisa sair do endereço dele, e não do robô do sistema.

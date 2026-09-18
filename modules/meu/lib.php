@@ -406,6 +406,59 @@ function meu_email_trancar(): void
 }
 
 /**
+ * true quando o host resolve APENAS para endereços públicos roteáveis.
+ *
+ * Sem isto, o servidor de e-mail (host IMAP / smtp_host) vinha do POST e o
+ * sistema abria conexão TCP nele: um usuário com email.manage apontava para
+ * 127.0.0.1, 169.254.169.254 (metadados de nuvem) ou 10.0.0.x e usava o
+ * portal como proxy para varrer/alcançar serviços internos que o firewall
+ * externo esconde (SSRF). Resolvemos o nome e recusamos se QUALQUER IP for
+ * privado, loopback, link-local ou reservado — assim um DNS que aponta para
+ * dentro também é barrado.
+ */
+function meu_email_host_publico(string $host): bool
+{
+    $host = trim($host);
+    if ($host === '' || strlen($host) > 253) {
+        return false;
+    }
+    $ehPublico = static function (string $ip): bool {
+        return filter_var(
+            $ip,
+            FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+        ) !== false;
+    };
+    // Host literal (IPv4/IPv6): valida direto.
+    if (filter_var($host, FILTER_VALIDATE_IP)) {
+        return $ehPublico($host);
+    }
+    // Só nomes de host plausíveis (evita entradas exóticas).
+    if (!preg_match('/^[A-Za-z0-9]([A-Za-z0-9\-\.]{0,251}[A-Za-z0-9])?$/', $host)) {
+        return false;
+    }
+    $ips = [];
+    $v4 = @gethostbynamel($host);
+    if (is_array($v4)) {
+        $ips = $v4;
+    }
+    foreach ((@dns_get_record($host, DNS_AAAA) ?: []) as $rec) {
+        if (!empty($rec['ipv6'])) {
+            $ips[] = $rec['ipv6'];
+        }
+    }
+    if ($ips === []) {
+        return false; // não resolveu: não conecte às cegas
+    }
+    foreach ($ips as $ip) {
+        if (!$ehPublico($ip)) {
+            return false; // um único IP interno já reprova
+        }
+    }
+    return true;
+}
+
+/**
  * Abre a conexão IMAP com a conta do usuário e a senha da sessão.
  * Quem chamar é responsável por fechar.
  */
@@ -414,6 +467,11 @@ function meu_email_conectar(array $conta): Core\ImapCliente
     $senha = meu_email_senha();
     if ($senha === '') {
         throw new RuntimeException('A senha desta sessão não foi informada.');
+    }
+    // Defesa também no uso (não só ao salvar): uma conta gravada antes desta
+    // trava, ou um smtp_host interno, não vira SSRF na hora de conectar.
+    if (!meu_email_host_publico((string) $conta['host'])) {
+        throw new RuntimeException('Servidor de e-mail inválido: use um endereço público.');
     }
     $c = new Core\ImapCliente(
         (string) $conta['host'], (int) $conta['porta'], (string) $conta['seguranca'], 20
