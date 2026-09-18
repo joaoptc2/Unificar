@@ -43,6 +43,19 @@ final class Auth
             [$login, $login]
         );
 
+        // Trava reforçada para contas de PRIMEIRO ACESSO (força troca de
+        // senha). A senha inicial do funcionário é a data de nascimento
+        // (ddmmaaaa, baixa entropia e às vezes conhecida). O limite comum
+        // (5/15min) some no caso de um palpite certeiro; um teto estrito por
+        // conta (3 falhas) encarece a tentativa remota de adivinhar a data.
+        // O gate de force_password_change (index.php) completa a defesa:
+        // mesmo autenticado, a conta só alcança a tela de troca de senha.
+        if ($user && (int) ($user['force_password_change'] ?? 0) === 1
+            && self::primeiroAcessoBloqueado($login)) {
+            RateLimit::record($login, false);
+            return ['ok' => false, 'error' => 'Muitas tentativas nesta conta de primeiro acesso. Aguarde e procure o RH se precisar.'];
+        }
+
         // 1) Autenticação local
         if ($user && $user['password_hash'] && password_verify($password, $user['password_hash'])) {
             if (!(int) $user['active']) {
@@ -118,6 +131,10 @@ final class Auth
         $_SESSION['user_avatar']     = $user['avatar'] ?? null;
         $_SESSION['is_global_admin'] = (bool) $user['is_admin'];
         $_SESSION['login_time']      = time();
+        // Época da última troca de senha, no relógio do BANCO (UNIX_TIMESTAMP,
+        // não strtotime), para não sofrer com o fuso da sessão. Auth::user()
+        // compara a cada request e destrói a sessão se a senha mudou depois.
+        $_SESSION['pwd_epoch']       = self::pwdEpoch((int) $user['id']);
 
         // Compatibilidade com módulos multi-tenant legados (hospital único)
         $_SESSION['hospital_id']   = (int) Settings::get('default_hospital_id', '1');
@@ -137,6 +154,49 @@ final class Auth
         Session::destroy();
     }
 
+    /**
+     * true quando uma conta de primeiro acesso (força troca de senha) já
+     * acumulou falhas demais na janela — teto estrito (3) por conta, sobre a
+     * tabela login_attempts que RateLimit já alimenta.
+     */
+    private static function primeiroAcessoBloqueado(string $identifier): bool
+    {
+        $window = (int) Config::get('security.login_lockout_min', 15);
+        $row = DB::queryOne(
+            'SELECT COUNT(*) AS n FROM login_attempts
+             WHERE identifier = ? AND success = 0 AND attempted_at > DATE_SUB(NOW(), INTERVAL ? MINUTE)',
+            [$identifier, $window]
+        );
+        return (int) ($row['n'] ?? 0) >= 3;
+    }
+
+    /**
+     * Época (segundos, relógio do banco) da última troca de senha do usuário,
+     * ou 0 se nunca registrada. Base da invalidação de sessões: gravada na
+     * sessão no login, comparada em Auth::user() a cada request.
+     */
+    public static function pwdEpoch(int $userId): int
+    {
+        $row = DB::queryOne(
+            'SELECT COALESCE(UNIX_TIMESTAMP(password_changed_at), 0) AS e FROM users WHERE id = ?',
+            [$userId]
+        );
+        return (int) ($row['e'] ?? 0);
+    }
+
+    /**
+     * Mantém a sessão ATUAL válida após o próprio usuário trocar a senha
+     * (senão ele se auto-deslogaria na requisição seguinte). Deve ser chamada
+     * logo após gravar a nova senha do usuário logado.
+     */
+    public static function refreshOwnPwdEpoch(int $userId): void
+    {
+        if (self::id() === $userId) {
+            $_SESSION['pwd_epoch'] = self::pwdEpoch($userId);
+            self::$cachedUser = null;
+        }
+    }
+
     public static function check(): bool
     {
         return !empty($_SESSION['user_id']);
@@ -154,9 +214,23 @@ final class Auth
             return null;
         }
         if (self::$cachedUser === null) {
-            self::$cachedUser = DB::queryOne('SELECT * FROM users WHERE id = ? AND active = 1', [self::id()]);
+            self::$cachedUser = DB::queryOne(
+                'SELECT *, COALESCE(UNIX_TIMESTAMP(password_changed_at), 0) AS pwd_epoch
+                 FROM users WHERE id = ? AND active = 1',
+                [self::id()]
+            );
             if (self::$cachedUser === null) {
                 Session::destroy(); // usuário removido/desativado
+            } elseif (isset($_SESSION['pwd_epoch'])
+                      && (int) self::$cachedUser['pwd_epoch'] > (int) $_SESSION['pwd_epoch']) {
+                // A senha foi trocada/redefinida DEPOIS que esta sessão nasceu:
+                // uma sessão anterior (cookie furtado, dispositivo esquecido,
+                // outro navegador) é justamente o que a troca de senha deve
+                // revogar. Antes disso só a inatividade de 8h ou a desativação
+                // do usuário derrubavam a sessão; trocar a senha não.
+                self::$cachedUser = null;
+                Session::destroy();
+                return null;
             }
         }
         return self::$cachedUser;

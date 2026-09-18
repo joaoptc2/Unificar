@@ -104,8 +104,8 @@ class EmployeeAccess
         $email    = self::availableEmail((string)($employee['email'] ?? ''), $cpf);
 
         Core\DB::execute(
-            'INSERT INTO users (name, username, email, password_hash, is_admin, active, force_password_change)
-             VALUES (?, ?, ?, ?, 0, 1, 1)',
+            'INSERT INTO users (name, username, email, password_hash, is_admin, active, force_password_change, password_changed_at)
+             VALUES (?, ?, ?, ?, 0, 1, 1, NOW())',
             [(string)$employee['full_name'], $cpf, $email, password_hash($password, PASSWORD_BCRYPT, ['cost' => 12])]
         );
         $userId = Core\DB::lastId();
@@ -129,7 +129,7 @@ class EmployeeAccess
         }
         $password = self::defaultPassword($employee);
         Core\DB::execute(
-            'UPDATE users SET password_hash = ?, force_password_change = 1, active = 1 WHERE id = ?',
+            'UPDATE users SET password_hash = ?, force_password_change = 1, active = 1, password_changed_at = NOW() WHERE id = ?',
             [password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]), $linked['id']]
         );
         Core\Audit::log('employee_access.reset', 'users', (string)$linked['id'], ['employee_id' => (int)$employee['id']], $by, 'rh');

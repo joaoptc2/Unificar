@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
     two_factor_secret VARCHAR(64) NULL,
     two_factor_enabled TINYINT(1) NOT NULL DEFAULT 0,
     force_password_change TINYINT(1) NOT NULL DEFAULT 0,
+    password_changed_at DATETIME    NULL COMMENT 'Época da última troca de senha; invalida sessões antigas',
     last_login_at   DATETIME      NULL,
     created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

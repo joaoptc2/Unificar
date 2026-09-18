@@ -694,8 +694,8 @@ final class HealthCheck
 
         $chave = (string) Config::get('app.key', '');
         $out[] = ($chave === '' || str_contains($chave, 'troque-esta-chave'))
-            ? self::item('erro', 'Chave da aplicação', 'app.key está vazia ou ainda é a do exemplo.',
-                'Defina uma chave longa e aleatória em config/config.php: ela cifra a senha do SMTP e assina dados da sessão.')
+            ? self::item('erro', 'Chave da aplicação', 'app.key está vazia ou ainda é a do exemplo — a senha do SMTP e a chave da API de IA ficam recuperáveis a partir de um dump do banco (risco LGPD).',
+                'Defina uma chave longa e aleatória em config/config.php: ela cifra a senha do SMTP/IA e assina dados da sessão. Depois de trocá-la, redigite as senhas de e-mail e da API (o blob antigo fica ilegível, o que é o esperado).')
             : self::item(strlen($chave) >= 32 ? 'ok' : 'aviso', 'Chave da aplicação',
                 strlen($chave) >= 32 ? 'Definida e com tamanho adequado.' : 'Definida, mas curta (' . strlen($chave) . ' caracteres).',
                 strlen($chave) >= 32 ? '' : 'Use pelo menos 32 caracteres aleatórios.');

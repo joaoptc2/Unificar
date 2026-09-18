@@ -191,9 +191,12 @@ switch ($action) {
             Flash::set('error', 'A confirmação não confere.');
         } else {
             DB::execute(
-                'UPDATE users SET password_hash = ?, force_password_change = 0 WHERE id = ?',
+                'UPDATE users SET password_hash = ?, force_password_change = 0, password_changed_at = NOW() WHERE id = ?',
                 [password_hash($new, PASSWORD_BCRYPT, ['cost' => 12]), Auth::id()]
             );
+            // O próprio usuário trocou a senha: mantém ESTA sessão válida
+            // (senão ele se auto-deslogaria); qualquer OUTRA sessão dele cai.
+            Auth::refreshOwnPwdEpoch((int) Auth::id());
             Core\Audit::log('password.change', 'users', (string) Auth::id());
             Flash::set('success', 'Senha alterada com sucesso.');
             core_redirect('index.php');
@@ -288,7 +291,7 @@ switch ($action) {
             Flash::set('error', 'Senha muito curta ou confirmação divergente.');
             core_redirect('index.php?m=auth&a=reset&token=' . urlencode($token));
         }
-        DB::execute('UPDATE users SET password_hash = ?, force_password_change = 0 WHERE id = ?', [password_hash($new, PASSWORD_BCRYPT, ['cost' => 12]), $row['user_id']]);
+        DB::execute('UPDATE users SET password_hash = ?, force_password_change = 0, password_changed_at = NOW() WHERE id = ?', [password_hash($new, PASSWORD_BCRYPT, ['cost' => 12]), $row['user_id']]);
         DB::execute('UPDATE password_resets SET used_at = NOW() WHERE id = ?', [$row['id']]);
         Flash::set('success', 'Senha redefinida. Faça login.');
         core_redirect('index.php?m=auth&a=login');
