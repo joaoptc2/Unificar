@@ -108,7 +108,9 @@
         <!-- Tabs -->
         <ul class="nav nav-tabs" role="tablist">
             <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tabDados">Dados</a></li>
+            <?php if (!empty($canSeeSalary)): ?>
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabSalario">Salário <span class="badge bg-secondary"><?= count($salaryHistory) ?></span></a></li>
+            <?php endif; ?>
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabDocumentos">Documentos <span class="badge bg-secondary"><?= count($documents) ?></span></a></li>
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabTreinamentos">Treinamentos <span class="badge bg-secondary"><?= count($trainings) ?></span></a></li>
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabEpis">EPIs <span class="badge bg-secondary"><?= count($epis) ?></span></a></li>
@@ -195,6 +197,7 @@
             </div>
 
             <!-- Tab Salário -->
+            <?php if (!empty($canSeeSalary)): ?>
             <div class="tab-pane fade" id="tabSalario">
                 <div class="card border-0 shadow-sm border-top-0 rounded-top-0">
                     <div class="card-body">
@@ -307,6 +310,7 @@
                     </div>
                 </div>
             </div>
+            <?php endif; ?>
 
             <!-- Tab Documentos -->
             <div class="tab-pane fade" id="tabDocumentos">

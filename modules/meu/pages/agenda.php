@@ -161,6 +161,22 @@ if ($vista === 'semana') {
     $tsProx = (int) strtotime(date('Y-m-01', $baseTs) . ' +1 month');
     $rotulo = $mesesNome[(int) date('n', $baseTs)] . ' de ' . date('Y', $baseTs);
 }
+
+// Contagem do PERÍODO nomeado. Nas vistas semana/ano a faixa consultada é o
+// próprio período. Na vista mês a faixa é maior (inclui a cauda dos meses
+// vizinhos que a grade mostra), então conta só os eventos que tocam o mês real.
+if ($vista === 'mes') {
+    $mesIniTs = (int) strtotime(date('Y-m-01 00:00:00', $baseTs));
+    $mesFimTs = (int) strtotime(date('Y-m-t 23:59:59', $baseTs));
+    $totalPeriodo = 0;
+    foreach ($eventos as $e) {
+        if ((int) strtotime($e['inicio']) <= $mesFimTs && (int) strtotime($e['fim']) >= $mesIniTs) {
+            $totalPeriodo++;
+        }
+    }
+} else {
+    $totalPeriodo = count($eventos);
+}
 ob_start(); ?>
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
     <h1 class="h4 mb-0"><i class="bi bi-calendar3 me-2"></i>Agenda</h1>
@@ -178,7 +194,7 @@ ob_start(); ?>
         <a class="btn btn-outline-secondary" href="<?= $urlRef($vista, $tsProx) ?>" aria-label="Próximo"><i class="bi bi-chevron-right"></i></a>
     </div>
     <span class="fw-semibold text-capitalize"><?= core_e($rotulo) ?></span>
-    <span class="text-muted small"><?= count($eventos) ?> compromisso(s)</span>
+    <span class="text-muted small"><?= $totalPeriodo ?> compromisso(s)</span>
 </div>
 
 <div class="row g-3">
@@ -340,8 +356,12 @@ ob_start(); ?>
         <div class="card">
             <div class="card-header"><?= $editando ? 'Editar compromisso' : 'Novo compromisso' ?></div>
             <div class="card-body">
-                <?php $diaNovoPadrao = (isset($_GET['dia']) && strtotime((string) $_GET['dia']))
-                        ? date('Y-m-d', (int) strtotime((string) $_GET['dia'])) : date('Y-m-d'); ?>
+                <?php // Data padrão do novo compromisso: o dia clicado, senão a
+                      // âncora do período exibido (dia 1 do mês / segunda da semana
+                      // / 1º de janeiro do ano), e não "hoje" — que cairia fora do
+                      // mês exibido e sumiria da grade.
+                      $diaNovoPadrao = (isset($_GET['dia']) && strtotime((string) $_GET['dia']))
+                        ? date('Y-m-d', (int) strtotime((string) $_GET['dia'])) : $refAtual; ?>
                 <form method="post" id="form-compromisso">
                     <?= Csrf::field() ?>
                     <input type="hidden" name="op" value="<?= $editando ? 'editar' : 'criar' ?>">
@@ -435,6 +455,9 @@ ob_start(); ?>
 .agenda-fora .agenda-dianum { color: #adb5bd; }
 .agenda-add { color: #adb5bd; font-size: .8rem; line-height: 1; opacity: 0; transition: opacity .12s; }
 .agenda-cel:hover .agenda-add { opacity: 1; }
+/* Em toque não há hover persistente: o "+" ficaria invisível e a interação de
+   clicar o dia para criar sumiria. Deixa sempre visível onde não há hover. */
+@media (hover: none) { .agenda-add { opacity: .6; } }
 .agenda-chip { font-size: .72rem; line-height: 1.35; padding: 0 .3rem; margin-top: 2px; border-radius: .25rem;
     background: color-mix(in srgb, var(--chip, #0d6efd) 16%, transparent); color: #1a1a1a; border-left: 3px solid var(--chip, #0d6efd); }
 .agenda-chip .agenda-hora { font-weight: 600; opacity: .75; }

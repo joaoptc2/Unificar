@@ -183,14 +183,17 @@ class ShiftController
         $employees = $stmt->fetchAll();
 
         // Plantões do mês, indexados por funcionário → dia.
+        // Sem filtro por setor NA CONSULTA de plantões: o escopo já vem do
+        // conjunto de funcionários (dept-filtrado). Filtrar aqui também
+        // descartaria um plantão que o funcionário listado fez marcado em
+        // outro setor (cobertura), sumindo da sua linha. Só os plantões de
+        // funcionários listados entram na grade (indexados por employee_id).
         $sqlSh = "SELECT s.employee_id, s.shift_date, s.start_time, s.end_time, s.type, s.status,
                          st.color, st.name AS template_name
                   FROM rh_shifts s LEFT JOIN rh_shift_templates st ON s.template_id = st.id
                   WHERE s.shift_date BETWEEN ? AND ?";
-        $ps = [$primeiro, $ultimo];
-        if ($deptId) { $sqlSh .= ' AND s.department_id = ?'; $ps[] = $deptId; }
         $stmt = $this->db->prepare($sqlSh);
-        $stmt->execute($ps);
+        $stmt->execute([$primeiro, $ultimo]);
         $shiftsByEmpDay = [];
         foreach ($stmt->fetchAll() as $s) {
             $dia = (int) substr((string) $s['shift_date'], 8, 2);
@@ -224,8 +227,12 @@ class ShiftController
             $eid = (int) $e['id'];
             $linha = [];
             $tP = $tF = $tA = 0;
-            // Janela de afastamento do próprio funcionário.
-            $afIni = ($e['status'] === 'afastado' && $e['leave_date']) ? (string) $e['leave_date'] : null;
+            // Janela de afastamento do próprio funcionário. Quando o status é
+            // "afastado" mas o RH não preencheu a data de afastamento, marca o
+            // mês inteiro exibido (senão "quem está afastado" — o objetivo da
+            // lista — nunca apareceria marcado). return_date nulo mantém "A"
+            // até o fim do mês.
+            $afIni = ($e['status'] === 'afastado') ? (string) ($e['leave_date'] ?: $primeiro) : null;
             $afFim = $e['return_date'] ? (string) $e['return_date'] : null;
             for ($dia = 1; $dia <= $diasNoMes; $dia++) {
                 $dataDia = sprintf('%s-%02d', $mes, $dia);
