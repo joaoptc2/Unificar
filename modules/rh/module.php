@@ -211,6 +211,7 @@ return [
         'salary_history' => [
             'label'   => 'Histórico salarial',
             'actions' => [
+                'view'   => 'Ver',
                 'create' => 'Lançar',
                 'delete' => 'Excluir',
             ],

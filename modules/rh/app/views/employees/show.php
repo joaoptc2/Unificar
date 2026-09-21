@@ -108,6 +108,9 @@
         <!-- Tabs -->
         <ul class="nav nav-tabs" role="tablist">
             <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tabDados">Dados</a></li>
+            <?php if (!empty($canSeeSalary)): ?>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabSalario">Salário <span class="badge bg-secondary"><?= count($salaryHistory) ?></span></a></li>
+            <?php endif; ?>
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabDocumentos">Documentos <span class="badge bg-secondary"><?= count($documents) ?></span></a></li>
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabTreinamentos">Treinamentos <span class="badge bg-secondary"><?= count($trainings) ?></span></a></li>
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabEpis">EPIs <span class="badge bg-secondary"><?= count($epis) ?></span></a></li>
@@ -192,6 +195,122 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Tab Salário -->
+            <?php if (!empty($canSeeSalary)): ?>
+            <div class="tab-pane fade" id="tabSalario">
+                <div class="card border-0 shadow-sm border-top-0 rounded-top-0">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-stretch mb-3">
+                            <div class="col-md-5">
+                                <div class="border rounded-3 p-3 h-100 bg-body-tertiary">
+                                    <div class="text-muted small text-uppercase fw-semibold">Salário atual</div>
+                                    <?php if ($currentSalary): ?>
+                                        <div class="display-6 fw-bold">R$ <?= number_format((float) $currentSalary['salary'], 2, ',', '.') ?></div>
+                                        <div class="small text-muted">
+                                            Vigente desde <?= Sanitize::formatDate($currentSalary['effective_date']) ?>
+                                            <?php if (!empty($currentSalary['reason'])): ?>· <?= Sanitize::e($currentSalary['reason']) ?><?php endif; ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="h4 text-muted mt-2 mb-0">Não informado</div>
+                                        <div class="small text-muted">Lance o primeiro salário para começar o histórico.</div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <?php if (core_can('salary_history.create') && empty($employee['anonymized_at'])): ?>
+                            <div class="col-md-7">
+                                <div class="border rounded-3 p-3 h-100">
+                                    <div class="fw-semibold mb-2"><i class="bi bi-plus-circle me-1"></i>Lançar alteração salarial</div>
+                                    <form method="post" action="index.php?m=rh&page=salary_history&action=store" class="row g-2">
+                                        <?= Csrf::field() ?>
+                                        <input type="hidden" name="employee_id" value="<?= (int) $employee['id'] ?>">
+                                        <div class="col-sm-6">
+                                            <label class="form-label small mb-1" for="sh_salary">Novo salário (R$)</label>
+                                            <input type="text" inputmode="decimal" class="form-control form-control-sm" id="sh_salary"
+                                                   name="salary" placeholder="0,00" required>
+                                        </div>
+                                        <div class="col-sm-6">
+                                            <label class="form-label small mb-1" for="sh_date">Vigência a partir de</label>
+                                            <input type="date" class="form-control form-control-sm" id="sh_date"
+                                                   name="effective_date" value="<?= date('Y-m-d') ?>" required>
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label small mb-1" for="sh_reason">Motivo</label>
+                                            <input type="text" class="form-control form-control-sm" id="sh_reason"
+                                                   name="reason" maxlength="200" placeholder="Ex.: promoção, dissídio, mudança de função">
+                                        </div>
+                                        <div class="col-12">
+                                            <button class="btn btn-primary btn-sm"><i class="bi bi-check-lg me-1"></i>Lançar</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <?php if (empty($salaryHistory)): ?>
+                            <p class="text-muted text-center py-3">Nenhum lançamento salarial ainda.</p>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Vigência</th>
+                                            <th class="text-end">Salário</th>
+                                            <th class="text-end">Variação</th>
+                                            <th>Motivo</th>
+                                            <th>Registrado por</th>
+                                            <?php if (core_can('salary_history.delete')): ?><th></th><?php endif; ?>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php
+                                        // A lista vem da mais recente para a mais antiga; a variação
+                                        // compara cada lançamento com o imediatamente anterior no tempo
+                                        // (a próxima linha, que é o registro anterior).
+                                        $n = count($salaryHistory);
+                                        foreach ($salaryHistory as $i => $sh):
+                                            $val = (float) $sh['salary'];
+                                            $prev = ($i + 1 < $n) ? (float) $salaryHistory[$i + 1]['salary'] : null;
+                                            $delta = $prev !== null ? $val - $prev : null;
+                                            $pct = ($prev !== null && $prev > 0) ? ($delta / $prev) * 100 : null;
+                                        ?>
+                                        <tr>
+                                            <td><?= Sanitize::formatDate($sh['effective_date']) ?></td>
+                                            <td class="text-end fw-semibold">R$ <?= number_format($val, 2, ',', '.') ?></td>
+                                            <td class="text-end">
+                                                <?php if ($delta === null): ?>
+                                                    <span class="text-muted small">—</span>
+                                                <?php else: ?>
+                                                    <span class="badge <?= $delta > 0 ? 'bg-success' : ($delta < 0 ? 'bg-danger' : 'bg-secondary') ?>">
+                                                        <?= $delta >= 0 ? '+' : '−' ?>R$ <?= number_format(abs($delta), 2, ',', '.') ?>
+                                                        <?php if ($pct !== null): ?>(<?= ($delta >= 0 ? '+' : '−') . number_format(abs($pct), 1, ',', '.') ?>%)<?php endif; ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="small"><?= $sh['reason'] ? Sanitize::e($sh['reason']) : '<span class="text-muted">—</span>' ?></td>
+                                            <td class="small text-muted"><?= Sanitize::e($sh['created_by_name'] ?? '') ?: '—' ?></td>
+                                            <?php if (core_can('salary_history.delete')): ?>
+                                            <td class="text-end">
+                                                <form method="post" action="index.php?m=rh&page=salary_history&action=delete" class="d-inline"
+                                                      onsubmit="return confirm('Remover este lançamento salarial?');">
+                                                    <?= Csrf::field() ?>
+                                                    <input type="hidden" name="id" value="<?= (int) $sh['id'] ?>">
+                                                    <input type="hidden" name="employee_id" value="<?= (int) $employee['id'] ?>">
+                                                    <button class="btn btn-outline-danger btn-action" title="Remover"><i class="bi bi-trash"></i></button>
+                                                </form>
+                                            </td>
+                                            <?php endif; ?>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <!-- Tab Documentos -->
             <div class="tab-pane fade" id="tabDocumentos">

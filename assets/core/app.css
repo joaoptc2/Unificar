@@ -150,6 +150,30 @@ body.portal-body {
 .portal-notif-menu { width: 340px; max-width: 92vw; }
 .portal-notif-list { max-height: 340px; overflow-y: auto; }
 
+/* Contador de notificações no sino.
+   As utilitárias do Bootstrap (top-0 start-100 translate-middle) ancoram o
+   badge no canto do .nav-link, que tem padding, jogando o número para longe
+   do sino e apertando-o contra o item seguinte. Aqui ele vira um disco
+   compacto encostado no topo-direita do próprio ícone. */
+#portalBell { position: relative; display: inline-flex; align-items: center; }
+#portalBell .badge#portalBellBadge,
+#portalBellBadge {
+    top: .15rem !important;
+    left: auto !important;
+    right: .1rem !important;
+    transform: translate(45%, 0) !important;
+    min-width: 1.05rem;
+    height: 1.05rem;
+    padding: 0 .3em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .65rem;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, .18);
+}
+
 /* ---------- Shell: sidebar + conteúdo ---------- */
 .portal-shell { display: flex; min-height: calc(100vh - var(--portal-topbar-h)); }
 
