@@ -1,5 +1,8 @@
-<div class="page-header">
-    <h1><i class="bi bi-calendar2-week me-2"></i>Escalas de Plantao</h1>
+<div class="page-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <h1 class="mb-0"><i class="bi bi-calendar2-week me-2"></i>Escalas de Plantao</h1>
+    <a class="btn btn-outline-primary btn-sm" href="index.php?m=rh&page=shifts&action=monthly&department=<?= (int) $deptId ?>">
+        <i class="bi bi-calendar2-range me-1"></i>Escala mensal (lista de presença)
+    </a>
 </div>
 <div class="card border-0 shadow-sm mb-3"><div class="card-body py-2">
     <form class="row g-2 align-items-end">

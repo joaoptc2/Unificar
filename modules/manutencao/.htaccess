@@ -46,9 +46,22 @@ Options -Indexes
     RewriteRule (^|/)\.OLD(/|$) - [F,L]
 </IfModule>
 
-# Limitar tamanho de upload (10MB)
-php_value upload_max_filesize 10M
-php_value post_max_size 12M
+# Limitar tamanho de upload (10MB).
+# Guardado por <IfModule>: `php_value` puro derruba (HTTP 500) o Apache que
+# roda PHP por FPM/FastCGI, sem o módulo mod_php. Onde o módulo não existe, o
+# limite vem do php.ini/pool do FPM.
+<IfModule mod_php.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 12M
+</IfModule>
+<IfModule mod_php7.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 12M
+</IfModule>
+<IfModule mod_php8.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 12M
+</IfModule>
 
 # Charset UTF-8
 AddDefaultCharset UTF-8

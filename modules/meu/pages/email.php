@@ -299,6 +299,19 @@ ob_start(); ?>
         <p class="small text-muted">
             <?= core_e((string) $conta['usuario']) ?> · <?= core_e((string) $conta['host']) ?>
         </p>
+        <div class="alert alert-info small py-2">
+            <i class="bi bi-info-circle me-1"></i>
+            Se a conta tem <strong>verificação em duas etapas</strong> (o normal no Zoho), a senha
+            comum da conta <strong>é recusada</strong> aqui. Use uma <strong>senha de aplicativo</strong>:
+            <ol class="mb-1 mt-1 ps-3">
+                <li>Zoho Mail › <em>Minha Conta</em> › <em>Segurança</em> › <em>Senhas de aplicativo</em>.</li>
+                <li>Gere uma para <em>IMAP</em> (ou "Mail") e copie o código.</li>
+                <li>Cole abaixo <strong>sem os espaços</strong> que aparecem só para facilitar a leitura.</li>
+            </ol>
+            <a href="https://mail.zoho.com/zm/#settings/security/apppasswords" target="_blank" rel="noopener">
+                Abrir as senhas de aplicativo do Zoho <i class="bi bi-box-arrow-up-right small"></i>
+            </a>
+        </div>
         <form method="post">
             <?= Csrf::field() ?>
             <input type="hidden" name="op" value="destrancar">
@@ -308,6 +321,7 @@ ob_start(); ?>
                        autocomplete="off" <?= $seguro ? '' : 'disabled' ?>>
                 <div class="form-text small">
                     Ela <strong>não é guardada</strong>: vale só nesta sessão e some quando você sair.
+                    Não é a senha normal do Zoho, e vai <strong>sem espaços</strong>.
                 </div>
             </div>
             <button class="btn btn-primary" <?= $seguro ? '' : 'disabled' ?>>

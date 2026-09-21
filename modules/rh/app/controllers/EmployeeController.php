@@ -286,6 +286,12 @@ class EmployeeController
         $scoresTotal     = EmployeeScore::totalFor($id);
         $compliments     = EmployeeCompliment::listFor($id);
 
+        // Histórico salarial (salário atual = lançamento mais recente).
+        // A exibição fica sob employees.view (que esta tela já exige); lançar
+        // e excluir têm as micropermissões salary_history.create/.delete.
+        $salaryHistory = SalaryHistory::forEmployee($id);
+        $currentSalary = $salaryHistory[0] ?? null;
+
         // Acesso ao sistema (usuário global vinculado via rh_user_profile).
         $portalUser    = EmployeeAccess::linkedUser($id);
         $unlinkedUsers = (!$portalUser && core_can('employees.edit')) ? EmployeeAccess::unlinkedUsers() : [];

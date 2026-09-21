@@ -1,5 +1,30 @@
-# Nunca executar código dentro de uploads
-<FilesMatch "\.(php|phar|phtml|php\d)$">
-    Require all denied
+# Nunca executar código dentro de uploads.
+#
+# ATENÇÃO: `php_flag engine off` puro DERRUBA o Apache (HTTP 500 "Invalid
+# command 'php_flag'") em toda hospedagem que roda PHP por FPM/FastCGI/CGI em
+# vez do módulo mod_php — o caso comum em hospedagem compartilhada. Como este
+# arquivo cobre a pasta uploads/ inteira, o 500 atingia TODA imagem servida
+# direto (logotipo, favicon, fundo do login), que apareciam como "imagem
+# perdida". A desativação por extensão abaixo não depende de mod_php; o
+# php_flag fica guardado para quando o módulo existir.
+<FilesMatch "\.(php|phar|phtml|php[0-9]|phps)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
 </FilesMatch>
-php_flag engine off
+Options -ExecCGI
+RemoveHandler .php .phar .phtml .php3 .php4 .php5 .php7 .php8 .phps
+AddType text/plain .php .phar .phtml .php3 .php4 .php5 .php7 .php8 .phps
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php8.c>
+    php_flag engine off
+</IfModule>
