@@ -692,7 +692,8 @@ switch ($action) {
             if ($password !== '') {
                 // Reset por admin: registra a época e derruba as sessões
                 // ativas daquele usuário (Auth::user() confere a cada request).
-                DB::execute('UPDATE users SET password_hash = ?, password_changed_at = NOW() WHERE id = ?', [password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]), $id]);
+                DB::execute('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]), $id]);
+                Auth::stampPwdChange((int) $id);
                 if ((int) $id === (int) Auth::id()) {
                     Auth::refreshOwnPwdEpoch((int) $id);
                 }
@@ -704,10 +705,11 @@ switch ($action) {
                 core_redirect('index.php?m=admin&a=user_form');
             }
             DB::execute(
-                'INSERT INTO users (name, username, email, password_hash, is_admin, active, force_password_change, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())',
+                'INSERT INTO users (name, username, email, password_hash, is_admin, active, force_password_change) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [$name, $username, $email, password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]), $isAdmin, $active, $forcePw]
             );
             $id = DB::lastId();
+            Auth::stampPwdChange((int) $id);
             Audit::log('user.create', 'users', (string) $id, null, null, 'admin');
         }
 

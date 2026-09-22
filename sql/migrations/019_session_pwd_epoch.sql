@@ -12,13 +12,17 @@
 --  e destrói a sessão cuja época seja anterior à última troca. A comparação
 --  é feita com UNIX_TIMESTAMP (relógio do banco), sem depender do fuso do PHP.
 --
---  Idempotente (ADD COLUMN IF NOT EXISTS — MariaDB 10.x).
+--  Idempotente E portável (MySQL 8 e MariaDB): NÃO usa "ADD COLUMN IF NOT
+--  EXISTS", que é sintaxe exclusiva do MariaDB e o MySQL 8 rejeita com erro de
+--  sintaxe — o que fazia a migração falhar e a coluna nunca ser criada,
+--  derrubando o login inteiro. Numa reaplicação, o ADD COLUMN retorna o erro
+--  1060 (coluna duplicada), que o runner de migração tolera e pula.
 -- ============================================================================
 
 SET NAMES utf8mb4;
 
 ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS password_changed_at DATETIME NULL
+    ADD COLUMN password_changed_at DATETIME NULL
         COMMENT 'Época da última troca de senha; invalida sessões antigas'
         AFTER force_password_change;
 
