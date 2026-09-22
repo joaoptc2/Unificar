@@ -19,6 +19,8 @@ namespace Core;
 final class Auth
 {
     private static ?array $cachedUser = null;
+    /** Cache por request: users.password_changed_at existe? (migração 019) */
+    private static ?bool $pwdCol = null;
 
     /** @return array{ok: bool, error?: string, user?: array} */
     public static function attempt(string $login, string $password): array
@@ -175,13 +177,51 @@ final class Auth
      * ou 0 se nunca registrada. Base da invalidação de sessões: gravada na
      * sessão no login, comparada em Auth::user() a cada request.
      */
+    /**
+     * A coluna users.password_changed_at existe? (migração 019 aplicada?)
+     * O recurso de invalidar sessões ao trocar a senha depende dela; enquanto
+     * a migração não roda, tudo aqui vira no-op para o sistema NUNCA quebrar
+     * por causa de uma coluna ausente. Verificado uma vez por request.
+     */
+    public static function pwdEpochColumn(): bool
+    {
+        if (self::$pwdCol === null) {
+            try {
+                $row = DB::queryOne(
+                    "SELECT COUNT(*) AS n FROM information_schema.COLUMNS
+                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'
+                       AND COLUMN_NAME = 'password_changed_at'"
+                );
+                self::$pwdCol = ((int) ($row['n'] ?? 0)) > 0;
+            } catch (\Throwable) {
+                self::$pwdCol = false;
+            }
+        }
+        return self::$pwdCol;
+    }
+
     public static function pwdEpoch(int $userId): int
     {
+        if (!self::pwdEpochColumn()) {
+            return 0;
+        }
         $row = DB::queryOne(
             'SELECT COALESCE(UNIX_TIMESTAMP(password_changed_at), 0) AS e FROM users WHERE id = ?',
             [$userId]
         );
         return (int) ($row['e'] ?? 0);
+    }
+
+    /**
+     * Registra a época da troca de senha (base da invalidação de sessões).
+     * No-op se a coluna ainda não existe — assim toda troca/redefinição de
+     * senha funciona mesmo antes de a migração 019 ser aplicada.
+     */
+    public static function stampPwdChange(int $userId): void
+    {
+        if ($userId > 0 && self::pwdEpochColumn()) {
+            DB::execute('UPDATE users SET password_changed_at = NOW() WHERE id = ?', [$userId]);
+        }
     }
 
     /**
@@ -214,14 +254,21 @@ final class Auth
             return null;
         }
         if (self::$cachedUser === null) {
+            // Só consulta a época quando a coluna existe (migração 019). Sem
+            // ela, um SELECT com UNIX_TIMESTAMP(password_changed_at) lançava
+            // PDOException e derrubava TODA requisição autenticada com a tela
+            // "sistema temporariamente indisponível".
+            $temEpoca = self::pwdEpochColumn();
             self::$cachedUser = DB::queryOne(
-                'SELECT *, COALESCE(UNIX_TIMESTAMP(password_changed_at), 0) AS pwd_epoch
-                 FROM users WHERE id = ? AND active = 1',
+                $temEpoca
+                    ? 'SELECT *, COALESCE(UNIX_TIMESTAMP(password_changed_at), 0) AS pwd_epoch
+                       FROM users WHERE id = ? AND active = 1'
+                    : 'SELECT * FROM users WHERE id = ? AND active = 1',
                 [self::id()]
             );
             if (self::$cachedUser === null) {
                 Session::destroy(); // usuário removido/desativado
-            } elseif (isset($_SESSION['pwd_epoch'])
+            } elseif ($temEpoca && isset($_SESSION['pwd_epoch'])
                       && (int) self::$cachedUser['pwd_epoch'] > (int) $_SESSION['pwd_epoch']) {
                 // A senha foi trocada/redefinida DEPOIS que esta sessão nasceu:
                 // uma sessão anterior (cookie furtado, dispositivo esquecido,

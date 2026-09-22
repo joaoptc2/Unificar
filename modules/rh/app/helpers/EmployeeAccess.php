@@ -104,11 +104,12 @@ class EmployeeAccess
         $email    = self::availableEmail((string)($employee['email'] ?? ''), $cpf);
 
         Core\DB::execute(
-            'INSERT INTO users (name, username, email, password_hash, is_admin, active, force_password_change, password_changed_at)
-             VALUES (?, ?, ?, ?, 0, 1, 1, NOW())',
+            'INSERT INTO users (name, username, email, password_hash, is_admin, active, force_password_change)
+             VALUES (?, ?, ?, ?, 0, 1, 1)',
             [(string)$employee['full_name'], $cpf, $email, password_hash($password, PASSWORD_BCRYPT, ['cost' => 12])]
         );
         $userId = Core\DB::lastId();
+        Core\Auth::stampPwdChange((int) $userId);
 
         self::link($employeeId, $userId, $employee['department_id'] ?? null, $by);
         Core\Audit::log('employee_access.create', 'users', (string)$userId, ['employee_id' => $employeeId], $by, 'rh');
@@ -129,9 +130,10 @@ class EmployeeAccess
         }
         $password = self::defaultPassword($employee);
         Core\DB::execute(
-            'UPDATE users SET password_hash = ?, force_password_change = 1, active = 1, password_changed_at = NOW() WHERE id = ?',
+            'UPDATE users SET password_hash = ?, force_password_change = 1, active = 1 WHERE id = ?',
             [password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]), $linked['id']]
         );
+        Core\Auth::stampPwdChange((int) $linked['id']);
         Core\Audit::log('employee_access.reset', 'users', (string)$linked['id'], ['employee_id' => (int)$employee['id']], $by, 'rh');
         return $password;
     }
