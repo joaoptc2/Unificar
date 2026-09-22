@@ -329,7 +329,10 @@ $pal = Tokens::printPalette();
     .ql-indent-1 { padding-left: 3em; } .ql-indent-2 { padding-left: 6em; } .ql-indent-3 { padding-left: 9em; }
     .doc-table { width: 100%; border-collapse: collapse; }
     .doc-table td { padding: 0; vertical-align: top; }
-    .doc-cell { padding: 0 <?= $mr ?>mm 0 <?= $ml ?>mm; }
+    /* Especificidade: `.doc-table td` (0,1,1) vencia `.doc-cell` (0,1,0) e
+       zerava as margens esquerda/direita do corpo — o texto colava na borda.
+       Qualificar por td.doc-cell (0,2,1) devolve as margens laterais. */
+    .doc-table td.doc-cell { padding: 0 <?= $mr ?>mm 0 <?= $ml ?>mm; }
     .doc-space-top { height: <?= $spaceTop ?>mm; }
     .doc-space-bottom { height: <?= $spaceBottom ?>mm; }
     .doc-hf { padding: 0 <?= $mr ?>mm 0 <?= $ml ?>mm; }
