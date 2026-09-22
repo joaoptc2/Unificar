@@ -358,6 +358,25 @@ $pal = Tokens::printPalette();
     .cover-content { position: absolute; top: <?= $cmt ?>mm; bottom: <?= $cmb ?>mm; left: <?= $cml ?>mm; right: <?= $cmr ?>mm; overflow: hidden; }
     <?php endif; ?>
 
+    /* --------- pré-visualização PAGINADA na tela ---------
+       A impressão usa a paginação nativa (thead/tfoot repetem por página).
+       Na tela, sem paginação, um documento de várias páginas virava UMA folha
+       contínua: o cabeçalho/rodapé apareciam uma vez só e o texto corria pelas
+       fronteiras de página, ignorando as margens de topo/rodapé "após a
+       primeira página". O JS abaixo monta folhas A4 separadas (repetindo
+       cabeçalho, rodapé, fundo e margens). É só para a TELA. */
+    .doc-screen-pages { display: none; }
+    body.js-paginado .sheet-body { display: none; }
+    body.js-paginado .doc-screen-pages { display: block; }
+    .doc-screen-pages .doc-page {
+        width: <?= $w ?>mm; height: <?= $h ?>mm; position: relative; margin: 16px auto;
+        background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.18); overflow: hidden;
+        <?= $bgUrl !== '' ? 'background-image: url(' . core_e($bgUrl) . '); background-size: ' . $w . 'mm ' . $h . 'mm; background-repeat: no-repeat;' : '' ?>
+    }
+    .doc-screen-pages .doc-page-head { position: absolute; top: <?= $mt ?>mm; left: 0; right: 0; padding: 0 <?= $mr ?>mm 0 <?= $ml ?>mm; overflow: hidden; }
+    .doc-screen-pages .doc-page-foot { position: absolute; bottom: <?= $mb ?>mm; left: 0; right: 0; padding: 0 <?= $mr ?>mm 0 <?= $ml ?>mm; overflow: hidden; }
+    .doc-screen-pages .doc-page-body { position: absolute; left: 0; right: 0; padding: 0 <?= $mr ?>mm 0 <?= $ml ?>mm; overflow: hidden; }
+
     /* --------- barra de ações (some na impressão) --------- */
     .intra-toolbar {
         position: sticky; top: 0; z-index: 100; background: <?= $pal['primary'] ?>; color: <?= $pal['on_primary'] ?>;
@@ -373,6 +392,10 @@ $pal = Tokens::printPalette();
     @media print {
         body { background: #fff; }
         .intra-toolbar { display: none !important; }
+        /* A impressão SEMPRE usa a folha nativa (paginação por thead/tfoot);
+           a versão paginada por JS, que é só da tela, nunca vai para o papel. */
+        .doc-screen-pages { display: none !important; }
+        body.js-paginado .sheet-body { display: block !important; }
         .sheet { width: <?= $w ?>mm; min-height: 0; margin: 0; box-shadow: none; overflow: visible; }
         .sheet-body { background: transparent; }
         .sheet-cover { height: <?= $h ?>mm; break-after: page; page-break-after: always; position: relative; }
@@ -416,6 +439,93 @@ $pal = Tokens::printPalette();
         <tbody><tr><td class="doc-cell"><div class="doc-content"><?= $opts['content_html'] ?></div></td></tr></tbody>
     </table>
 </div>
+<div class="doc-screen-pages" aria-hidden="true"></div>
+<script>
+/* Pré-visualização paginada NA TELA (a impressão usa a paginação nativa).
+   Monta folhas A4 separadas a partir do conteúdo contínuo, repetindo
+   cabeçalho, rodapé e margens em cada página. Falha em silêncio, mantendo a
+   folha contínua, se algo der errado — nunca quebra a tela nem a impressão. */
+(function () {
+    var C = {
+        w: <?= $w ?>, h: <?= $h ?>, mt: <?= $mt ?>, mb: <?= $mb ?>,
+        hh: <?= $hh ?>, fh: <?= $fh ?>, rh: <?= $repeatHead ? 1 : 0 ?>, rf: <?= $repeatFoot ? 1 : 0 ?>
+    };
+    var MM = 96 / 25.4; // px por mm na tela
+    function ready(fn) {
+        if (document.readyState !== 'loading') { fn(); }
+        else { document.addEventListener('DOMContentLoaded', fn); }
+    }
+    ready(function () { setTimeout(paginar, 40); });
+
+    function paginar() {
+        try {
+            montar();
+        } catch (e) {
+            // Qualquer falha: volta à folha contínua, nunca deixa a tela em branco.
+            document.body.classList.remove('js-paginado');
+            if (window.console) { console.warn('Pré-visualização paginada indisponível:', e); }
+        }
+    }
+    function montar() {
+        // Não roda quando a página já está sendo impressa.
+        if (window.matchMedia && window.matchMedia('print').matches) { return; }
+        var body  = document.querySelector('.sheet-body');
+        var wrap  = document.querySelector('.doc-screen-pages');
+        if (!body || !wrap) { return; }
+        var content = body.querySelector('.doc-content');
+        if (!content) { return; }
+        var headSrc = body.querySelector('.doc-header-fixed, .doc-header-flow');
+        var footSrc = body.querySelector('.doc-footer-fixed, .doc-footer-flow');
+        var headHTML = headSrc ? headSrc.innerHTML : '';
+        var footHTML = footSrc ? footSrc.innerHTML : '';
+        var blocks = Array.prototype.slice.call(content.children);
+        if (!blocks.length) { return; }
+
+        wrap.textContent = '';
+        // Ativa a versão paginada ANTES de medir: com o contêiner display:none
+        // as alturas viriam todas zero e tudo cairia numa página só. A troca é
+        // síncrona (a montagem termina antes de qualquer repintura), sem piscar.
+        document.body.classList.add('js-paginado');
+
+        function novaPagina() {
+            var pg = document.createElement('div'); pg.className = 'doc-page';
+            var headH = 0, footH = 0;
+            if (headHTML) {
+                var h = document.createElement('div'); h.className = 'doc-page-head'; h.innerHTML = headHTML;
+                pg.appendChild(h); wrap.appendChild(pg);
+                headH = C.hh > 0 ? C.hh * MM : h.offsetHeight;
+            } else { wrap.appendChild(pg); }
+            if (footHTML) {
+                var f = document.createElement('div'); f.className = 'doc-page-foot'; f.innerHTML = footHTML;
+                pg.appendChild(f);
+                footH = C.fh > 0 ? C.fh * MM : f.offsetHeight;
+            }
+            var b = document.createElement('div'); b.className = 'doc-page-body doc-content';
+            var topPx = C.mt * MM + (headHTML ? headH + 4 * MM : 0);
+            var botPx = C.mb * MM + (footHTML ? footH + 4 * MM : 0);
+            b.style.top = topPx + 'px';
+            b.style.bottom = botPx + 'px';
+            pg.appendChild(b);
+            return b;
+        }
+
+        var alvo = novaPagina();
+        var limite = alvo.clientHeight;
+        for (var i = 0; i < blocks.length; i++) {
+            var clone = blocks[i].cloneNode(true);
+            alvo.appendChild(clone);
+            if (alvo.scrollHeight > limite && alvo.childNodes.length > 1) {
+                alvo.removeChild(clone);
+                alvo = novaPagina();
+                limite = alvo.clientHeight;
+                alvo.appendChild(clone);
+                // Um único bloco maior que a página fica sozinho e transborda
+                // (raro: tabela/imagem gigante). Melhor do que sumir.
+            }
+        }
+    }
+})();
+</script>
 <?php if (!empty($opts['autoprint'])): ?>
 <script>window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 400); });</script>
 <?php endif; ?>
