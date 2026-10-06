@@ -34,7 +34,7 @@
     background: var(--portal-surface, #fff); color: var(--portal-text, #212529);
     border-color: var(--portal-border, #dee2e6);
     border-radius: .4rem .4rem 0 0; position: sticky; top: var(--portal-topbar-h, 56px); z-index: 5;
-    max-width: min(var(--sheet-w), 100%); margin: 0 auto;
+    width: var(--sheet-w); max-width: none; margin: 0 auto;
 }
 /* Os ícones do Quill são traçados em cinza-escuro fixo: sobre a barra do tema
    escuro eles sumiriam, então seguem a cor do texto. O estado "ativo" do
@@ -50,7 +50,10 @@
 
 /* ── A FOLHA: branca e com texto preto nos dois temas (é o que se imprime) ── */
 .doc-editor-wrap .ql-container {
-    background: #fff; color: #111; max-width: min(var(--sheet-w), 100%); margin: 0 auto; min-height: 60vh;
+    /* Largura FIXA da folha (210 mm): encolher a folha em janela estreita
+       mudava a quebra de linha em relação ao papel — a bandeja rola
+       horizontalmente (overflow-x: auto) em vez disso. */
+    background: #fff; color: #111; width: var(--sheet-w); max-width: none; margin: 0 auto; min-height: 60vh;
     font-size: 12pt; box-shadow: 0 2px 10px rgba(0, 0, 0, .12); border-radius: 0 0 .4rem .4rem;
 }
 .doc-editor-wrap .ql-editor {

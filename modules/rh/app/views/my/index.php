@@ -19,7 +19,9 @@ $reqBadge = fn (string $s): string => match ($s) {
     'aprovada' => 'bg-success', 'rejeitada' => 'bg-danger', 'em_analise' => 'bg-info text-dark', default => 'bg-warning text-dark',
 };
 $annBadge = fn (string $t): string => match ($t) { 'urgente' => 'bg-danger', 'celebracao' => 'bg-success', default => 'bg-info text-dark' };
-$initialTab = in_array($tab, ['inicio', 'ferias', 'solicitacoes', 'comunicados', 'pesquisas', 'brindes'], true) ? $tab : '';
+$initialTab = in_array($tab, ['inicio', 'ferias', 'solicitacoes', 'comunicados', 'pesquisas', 'brindes', 'vacinas', 'denuncias'], true) ? $tab : '';
+$vacAlert = count(array_filter($myVaccines ?? [], fn ($x) => in_array($x['status'], ['vencida', 'vencendo'], true)))
+          + count(array_filter($myVaccineRequests ?? [], fn ($r) => $r['status'] === 'aberta'));
 require __DIR__ . '/_top.php';
 ?>
 
@@ -35,6 +37,10 @@ require __DIR__ . '/_top.php';
         <?php endif; ?>
         <?php if (core_can('rewards.view')): ?>
             <a href="#brindes" data-tab="brindes"><i class="bi bi-bag-heart"></i> Brindes</a>
+        <?php endif; ?>
+        <a href="#vacinas" data-tab="vacinas"><i class="bi bi-shield-plus"></i> Vacinas <?= $vacAlert ? '<span class="badge bg-danger">' . $vacAlert . '</span>' : '' ?></a>
+        <?php if (core_can('complaints.create')): ?>
+            <a href="#denuncias" data-tab="denuncias"><i class="bi bi-shield-exclamation"></i> Denúncias</a>
         <?php endif; ?>
     </nav>
 
@@ -402,6 +408,11 @@ require __DIR__ . '/_top.php';
             </div>
         <?php endif; ?>
     </section>
+    <?php endif; ?>
+
+    <?php require __DIR__ . '/_vacinas.php'; ?>
+    <?php if (core_can('complaints.create')): ?>
+        <?php require __DIR__ . '/_denuncias.php'; ?>
     <?php endif; ?>
 
 <?php

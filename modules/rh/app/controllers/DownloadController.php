@@ -96,6 +96,23 @@ class DownloadController
                 $row = $stmt->fetch();
                 return $row ? [$row['resume_path'], $row['full_name']] : [null, null];
 
+            case 'vaccine': // comprovante de vacina: RH (vaccines.view) ou o PRÓPRIO funcionário
+                $stmt = $this->db->prepare('SELECT employee_id, file_path, file_original_name FROM rh_employee_vaccines WHERE id = ?');
+                $stmt->execute([$id]);
+                $row = $stmt->fetch();
+                if ($row && !core_can('vaccines.view')
+                    && EmployeeAccess::employeeIdOf(Session::userId()) !== (int) $row['employee_id']) {
+                    $this->abort(403, 'Sem permissão.');
+                }
+                return $row ? [$row['file_path'], $row['file_original_name']] : [null, null];
+
+            case 'complaint': // anexo de denúncia: só a comissão
+                core_require('complaints.view');
+                $stmt = $this->db->prepare('SELECT attachment_path, attachment_name FROM rh_complaints WHERE id = ?');
+                $stmt->execute([$id]);
+                $row = $stmt->fetch();
+                return $row ? [$row['attachment_path'], $row['attachment_name']] : [null, null];
+
             default:
                 $this->abort(400, 'Tipo inválido.');
         }

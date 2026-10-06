@@ -51,6 +51,8 @@ class MyController
             'rewards'       => core_can('rewards.view') ? Reward::catalog() : [],
             'redemptions'   => core_can('rewards.view') ? RewardRedemption::forEmployee($employeeId) : [],
             'requestTypes'  => EmployeeRequest::TYPES,
+            'myVaccines'    => Vaccine::evaluateEmployee($employeeId),
+            'myVaccineRequests' => VaccineRequest::forEmployee($employeeId),
             'tab'           => preg_replace('/[^a-z]/', '', (string)($_GET['tab'] ?? '')),
         ]);
     }

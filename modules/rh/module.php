@@ -237,6 +237,23 @@ return [
                 'delete' => 'Excluir',
             ],
         ],
+        'vaccines' => [
+            'label'   => 'Vacinas dos funcionários',
+            'actions' => [
+                'view'   => 'Visualizar (painel e aba da ficha)',
+                'edit'   => 'Registrar doses, validar comprovantes e solicitar renovação',
+                'delete' => 'Excluir registros',
+                'config' => 'Gerenciar o catálogo de vacinas (configuração)',
+            ],
+        ],
+        'complaints' => [
+            'label'   => 'Canal de denúncias (anônimo)',
+            'actions' => [
+                'create'  => 'Abrir denúncia anônima (portal)',
+                'view'    => 'Ver as denúncias (comissão de ética)',
+                'respond' => 'Apurar, responder e encerrar denúncias',
+            ],
+        ],
         'signatures' => [
             'label'   => 'Assinaturas digitais',
             'actions' => [
@@ -280,6 +297,7 @@ return [
                 'scores.*',
                 'compliments.*',
                 'signatures.*',
+                'vaccines.*',
                 'onboarding.*',
                 'departments.*',
                 'positions.*',
@@ -301,6 +319,7 @@ return [
                 'recruitment.view',
                 'talent_pool.view',
                 'onboarding.view', 'onboarding.edit',
+                'vaccines.view',
                 'announcements.view',
                 'surveys.view',
                 'requests.view',
@@ -320,7 +339,13 @@ return [
         // do funcionário (EmployeeController) e em "Acessos dos funcionários".
         'funcionario' => [
             'label' => 'Funcionário',
-            'keys'  => ['my.view', 'requests.view', 'requests.create', 'announcements.view', 'surveys.view', 'rewards.view'],
+            'keys'  => ['my.view', 'requests.view', 'requests.create', 'announcements.view', 'surveys.view', 'rewards.view', 'complaints.create'],
+        ],
+        // Comissão de ética / compliance: apura as denúncias anônimas. Fica
+        // FORA do preset 'rh' de propósito — a denúncia pode ser sobre o RH.
+        'comissao' => [
+            'label' => 'Comissão de ética (denúncias)',
+            'keys'  => ['complaints.view', 'complaints.respond'],
         ],
     ],
 
@@ -360,6 +385,8 @@ return [
         if ($can('requests.view'))      { $main[] = ['label' => 'Solicitações',        'url' => $url('requests'),      'icon' => 'bi-envelope-paper', 'key' => 'requests']; }
         if ($can('rewards.view'))       { $main[] = ['label' => 'Brindes',             'url' => $url('rewards'),       'icon' => 'bi-bag-heart',      'key' => 'rewards']; }
         if ($can('onboarding.view'))    { $main[] = ['label' => 'Onboarding',          'url' => $url('onboarding'),    'icon' => 'bi-list-check',     'key' => 'onboarding']; }
+        if ($can('vaccines.view'))      { $main[] = ['label' => 'Vacinas',             'url' => $url('vaccines'),      'icon' => 'bi-shield-plus',    'key' => 'vaccines']; }
+        if ($can('complaints.view'))    { $main[] = ['label' => 'Denúncias',           'url' => $url('complaints'),    'icon' => 'bi-shield-exclamation', 'key' => 'complaints']; }
         if ($main) {
             $sections[] = ['heading' => 'RH', 'items' => $main];
         }
@@ -379,12 +406,13 @@ return [
             'positions'   => ['label' => 'Cargos',                  'icon' => 'bi-diagram-3',    'perm' => 'positions.view'],
             'access'      => ['label' => 'Acessos dos funcionários','icon' => 'bi-person-lock',  'perm' => 'employee_access.view'],
             'birthdays'   => ['label' => 'Aniversariantes (A4)',    'icon' => 'bi-gift',         'perm' => 'birthdays.configure'],
+            'vaccines'    => ['label' => 'Vacinas (catálogo)',      'icon' => 'bi-shield-plus',  'perm' => 'vaccines.config'],
         ],
     ],
 
     // Rotas públicas (sem login): vagas públicas e política de privacidade.
     'is_public' => fn (array $get): bool =>
-        in_array($get['page'] ?? '', ['public_recruitment', 'privacy'], true),
+        in_array($get['page'] ?? '', ['public_recruitment', 'privacy', 'complaint_track'], true),
 
     // Rotina de cron unificada (o núcleo autentica/agenda — sem token próprio).
     'cron' => function (): void {
@@ -395,6 +423,7 @@ return [
         }
         require __DIR__ . '/cron/check_birthdays.php';
         require __DIR__ . '/cron/check_expirations.php';
+        require __DIR__ . '/cron/check_vaccines.php';
         require __DIR__ . '/cron/cleanup.php';
     },
 ];

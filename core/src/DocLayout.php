@@ -237,6 +237,71 @@ final class DocLayout
              . '<script src="' . core_asset('core/doc-editor.js') . '"></script>';
     }
 
+    /**
+     * CSS do CONTEÚDO na impressão/visualização — paridade com o editor.
+     *
+     * O editor (Quill "snow") zera as margens de parágrafos/títulos/listas,
+     * desenha os marcadores de lista com `li[data-list]` + `.ql-ui::before`
+     * e contadores, recua `.ql-indent-N` até o nível 9, preserva espaços
+     * (white-space: pre-wrap) e estiliza citação/tabela do seu jeito. O papel
+     * tinha regras próprias (p com margem, listas do navegador, td com outro
+     * padding): o mesmo texto ficava 10% mais alto, listas de marcadores
+     * saíam numeradas e a paginação mudava. Aqui o papel copia o editor,
+     * regra a regra, para o que se vê ser o que se imprime.
+     *
+     * Listas antigas sem data-list (conteúdo importado) mantêm o marcador
+     * nativo do navegador: as regras do Quill só valem para li[data-list].
+     */
+    public static function contentCss(): string
+    {
+        $css = <<<'CSS'
+    .doc-content { word-wrap: break-word; tab-size: 4; counter-reset: list-0 list-1 list-2 list-3 list-4 list-5 list-6 list-7 list-8 list-9; }
+    /* Espaços/quebras preservados só DENTRO dos blocos (como o Quill grava):
+       no contêiner, pre-wrap transformaria as quebras de linha do código-fonte
+       de capas e HTML legado em linhas em branco. */
+    .doc-content p, .doc-content li, .doc-content td, .doc-content th, .doc-content blockquote,
+    .doc-content h1, .doc-content h2, .doc-content h3, .doc-content h4, .doc-content h5, .doc-content h6 { white-space: pre-wrap; }
+    .doc-content p, .doc-content ol, .doc-content ul, .doc-content pre, .doc-content blockquote,
+    .doc-content h1, .doc-content h2, .doc-content h3, .doc-content h4, .doc-content h5, .doc-content h6 { margin: 0; padding: 0; }
+    .doc-content p, .doc-content h1, .doc-content h2, .doc-content h3, .doc-content h4, .doc-content h5, .doc-content h6 { counter-set: list-0 list-1 list-2 list-3 list-4 list-5 list-6 list-7 list-8 list-9; }
+    .doc-content h1 { font-size: 2em; } .doc-content h2 { font-size: 1.5em; } .doc-content h3 { font-size: 1.17em; }
+    .doc-content h4 { font-size: 1em; } .doc-content h5 { font-size: .83em; } .doc-content h6 { font-size: .67em; }
+    .doc-content a { color: #0b57d0; }
+    .doc-content img { max-width: 100%; }
+    .doc-content blockquote { border-left: 4px solid #ccc; margin: 5px 0; padding-left: 16px; }
+    .doc-content pre { white-space: pre-wrap; margin: 5px 0; padding: 5px 10px; border-radius: 3px; background: #f0f0f0; }
+    .doc-content table { border-collapse: collapse; table-layout: fixed; width: 100%; }
+    .doc-content td, .doc-content th { border: 1px solid #000; padding: 2px 5px; }
+    .doc-content ol, .doc-content ul { padding-left: 1.5em; }
+    .doc-content li[data-list] { list-style-type: none; padding-left: 1.5em; position: relative; }
+    .doc-content .ql-ui { position: absolute; }
+    .doc-content li > .ql-ui:before { display: inline-block; margin-left: -1.5em; margin-right: .3em; text-align: right; white-space: nowrap; width: 1.2em; }
+    .doc-content li[data-list=bullet] > .ql-ui:before { content: '\2022'; }
+    .doc-content li[data-list=checked] > .ql-ui:before { content: '\2611'; }
+    .doc-content li[data-list=unchecked] > .ql-ui:before { content: '\2610'; }
+    .doc-content li[data-list] { counter-set: list-1 list-2 list-3 list-4 list-5 list-6 list-7 list-8 list-9; }
+    .doc-content li[data-list=ordered] { counter-increment: list-0; }
+    .doc-content li[data-list=ordered] > .ql-ui:before { content: counter(list-0, decimal) '. '; }
+    .ql-align-center { text-align: center; } .ql-align-right { text-align: right; } .ql-align-justify { text-align: justify; }
+
+CSS;
+        // Níveis de recuo 1..9: parágrafo recua 3em por nível; item de lista
+        // 3em + 1.5em; listas numeradas alternam decimal / alfa / romano.
+        $estilos = ['decimal', 'lower-alpha', 'lower-roman'];
+        for ($n = 1; $n <= 9; $n++) {
+            $resto = [];
+            for ($k = $n + 1; $k <= 9; $k++) { $resto[] = 'list-' . $k; }
+            $css .= "    .doc-content .ql-indent-{$n}:not(.ql-direction-rtl) { padding-left: " . (3 * $n) . "em; }\n";
+            $css .= "    .doc-content li.ql-indent-{$n}:not(.ql-direction-rtl) { padding-left: " . (3 * $n + 1.5) . "em; }\n";
+            $css .= "    .doc-content li[data-list=ordered].ql-indent-{$n} { counter-increment: list-{$n}; }\n";
+            $css .= "    .doc-content li[data-list=ordered].ql-indent-{$n} > .ql-ui:before { content: counter(list-{$n}, " . $estilos[$n % 3] . ") '. '; }\n";
+            if ($resto) {
+                $css .= "    .doc-content li[data-list].ql-indent-{$n} { counter-set: " . implode(' ', $resto) . "; }\n";
+            }
+        }
+        return $css;
+    }
+
     // ------------------------------------------------------------------
     // Renderização
     // ------------------------------------------------------------------
@@ -295,11 +360,17 @@ final class DocLayout
         $fontFamily = trim((string) ($opts['font_family'] ?? '')) ?: (string) ($layout['default_font'] ?? '');
         $fontSize   = trim((string) ($opts['font_size'] ?? '')) ?: (string) ($layout['default_font_size'] ?? '');
         $fontFamily = $fontFamily !== '' ? "'" . addslashes($fontFamily) . "', Arial, Helvetica, sans-serif" : 'Arial, Helvetica, sans-serif';
-        $fontSize   = $fontSize !== '' ? preg_replace('/[^0-9a-z.]/', '', strtolower($fontSize)) : '11pt';
+        // Sem tamanho no documento nem no layout, o editor mostra 12pt
+        // (.ql-container) — o papel usa o MESMO valor, senão o texto reflui.
+        $fontSize   = $fontSize !== '' ? preg_replace('/[^0-9a-z.]/', '', strtolower($fontSize)) : '12pt';
         $fontCss    = self::fontCss(self::fontsOf($layout), self::sizesOf($layout));
 
-        $spaceTop    = $mt + ($repeatHead ? $hh + 3 : 0);
-        $spaceBottom = $mb + ($repeatFoot ? $fh + 3 : 0);
+        // UM único respiro entre cabeçalho/rodapé e o corpo, usado pelo papel
+        // (thead/tfoot) e pela tela (paginador JS). Eram 3 mm aqui e 4 mm no
+        // JS — 1 mm de diferença em toda página.
+        $gap         = 4;
+        $spaceTop    = $mt + ($repeatHead ? $hh + $gap : 0);
+        $spaceBottom = $mb + ($repeatFoot ? $fh + $gap : 0);
 
         ob_start(); ?>
 <!DOCTYPE html>
@@ -321,23 +392,22 @@ $pal = Tokens::printPalette();
     body { font-family: <?= $pal['font'] ?>; font-size: 11pt; color: <?= $pal['text'] ?>; background: #e9edf1; }
     <?= $fontCss ?>
     .doc-content { font-family: <?= $fontFamily ?>; font-size: <?= $fontSize ?>; line-height: 1.5; }
-    .doc-content img { max-width: 100%; }
-    .doc-content table { border-collapse: collapse; width: 100%; }
-    .doc-content td, .doc-content th { border: 1px solid #999; padding: 4px 6px; }
-    .doc-content p { margin: 0 0 .6em; }
-    .ql-align-center { text-align: center; } .ql-align-right { text-align: right; } .ql-align-justify { text-align: justify; }
-    .ql-indent-1 { padding-left: 3em; } .ql-indent-2 { padding-left: 6em; } .ql-indent-3 { padding-left: 9em; }
+<?= self::contentCss() ?>
     .doc-table { width: 100%; border-collapse: collapse; }
-    .doc-table td { padding: 0; vertical-align: top; }
-    /* Especificidade: `.doc-table td` (0,1,1) vencia `.doc-cell` (0,1,0) e
-       zerava as margens esquerda/direita do corpo — o texto colava na borda.
-       Qualificar por td.doc-cell (0,2,1) devolve as margens laterais. */
-    .doc-table td.doc-cell { padding: 0 <?= $mr ?>mm 0 <?= $ml ?>mm; }
+    /* Só as células da MOLDURA (filhas diretas da .doc-table): uma regra
+       `.doc-table td` genérica vazava para as tabelas escritas no documento
+       e zerava o padding delas. */
+    .doc-table > thead > tr > td, .doc-table > tbody > tr > td, .doc-table > tfoot > tr > td { padding: 0; vertical-align: top; }
+    .doc-table > tbody > tr > td.doc-cell { padding: 0 <?= $mr ?>mm 0 <?= $ml ?>mm; }
     .doc-space-top { height: <?= $spaceTop ?>mm; }
     .doc-space-bottom { height: <?= $spaceBottom ?>mm; }
     .doc-hf { padding: 0 <?= $mr ?>mm 0 <?= $ml ?>mm; }
-    .doc-header-flow { padding-top: <?= $mt ?>mm; margin-bottom: 4mm; }
-    .doc-footer-flow { margin-top: 8mm; padding-bottom: <?= $mb ?>mm; }
+    /* Em fluxo (header_height/footer_height = 0): o espaçador .doc-space-top
+       JÁ reserva a margem superior; dar padding-top: margem aqui também
+       aplicava a margem DUAS vezes em toda página (medido: +25 mm no topo e
+       +20 mm no pé). Fica só o respiro até o corpo. */
+    .doc-header-flow { margin-bottom: <?= $gap ?>mm; }
+    .doc-footer-flow { margin-top: <?= $gap ?>mm; }
 
     /* --------- folhas na tela (emulam o papel) --------- */
     .sheet {
@@ -403,12 +473,18 @@ $pal = Tokens::printPalette();
         .doc-bg-fixed { display: block; position: fixed; top: 0; left: 0; width: <?= $w ?>mm; height: <?= $h ?>mm; z-index: -1; }
         .doc-bg-fixed img { width: 100%; height: 100%; }
         <?php endif; ?>
-        <?php if ($repeatHead): ?>
+        /* Sem condição: só existe no DOM quando há cabeçalho/rodapé fixo —
+           inclusive o "em fluxo" que o JS promove a fixo depois de medir. */
         .doc-header-fixed { position: fixed; top: <?= $mt ?>mm; left: 0; right: 0; width: <?= $w ?>mm; }
-        <?php endif; ?>
-        <?php if ($repeatFoot): ?>
         .doc-footer-fixed { position: fixed; bottom: <?= $mb ?>mm; left: 0; right: 0; width: <?= $w ?>mm; }
-        <?php endif; ?>
+        /* PARIDADE DE PAGINAÇÃO com a tela: o paginador JS move blocos
+           inteiros e, em listas/tabelas, itens/linhas inteiros. Sem isto o
+           Chromium partia parágrafos entre páginas e o papel ficava com
+           outra contagem de páginas e outro conteúdo por folha a partir da
+           2ª. Um bloco maior que a página continua sendo partido. */
+        .doc-content > *:not(ol):not(ul):not(table) { break-inside: avoid; page-break-inside: avoid; }
+        .doc-content li, .doc-content tr { break-inside: avoid; page-break-inside: avoid; }
+        .doc-content h1, .doc-content h2, .doc-content h3, .doc-content h4 { break-after: avoid; page-break-after: avoid; }
     }
     <?= (string) ($layout['custom_css'] ?? '') ?>
     <?= (string) ($opts['extra_css'] ?? '') ?>
@@ -441,21 +517,61 @@ $pal = Tokens::printPalette();
 </div>
 <div class="doc-screen-pages" aria-hidden="true"></div>
 <script>
-/* Pré-visualização paginada NA TELA (a impressão usa a paginação nativa).
-   Monta folhas A4 separadas a partir do conteúdo contínuo, repetindo
-   cabeçalho, rodapé e margens em cada página. Falha em silêncio, mantendo a
-   folha contínua, se algo der errado — nunca quebra a tela nem a impressão. */
+/* Pré-visualização paginada NA TELA + preparação da impressão.
+   1. Cabeçalho/rodapé EM FLUXO (altura não informada no layout) são MEDIDOS
+      e promovidos a fixos: assim repetem em toda página, o rodapé vai ao pé
+      também na última, e o espaçador do papel recebe a altura real.
+   2. A tela monta folhas separadas a partir do conteúdo contínuo, com a
+      MESMA geometria do papel (margens, cabeçalho, rodapé e respiro), movendo
+      blocos inteiros — e, em listas/tabelas, itens/linhas inteiros, como a
+      impressão faz com break-inside:avoid. Numeração de lista continua na
+      folha seguinte.
+   Falha em silêncio, mantendo a folha contínua, se algo der errado. */
 (function () {
     var C = {
-        w: <?= $w ?>, h: <?= $h ?>, mt: <?= $mt ?>, mb: <?= $mb ?>,
-        hh: <?= $hh ?>, fh: <?= $fh ?>, rh: <?= $repeatHead ? 1 : 0 ?>, rf: <?= $repeatFoot ? 1 : 0 ?>
+        w: <?= $w ?>, h: <?= $h ?>, mt: <?= $mt ?>, mb: <?= $mb ?>, gap: <?= $gap ?>,
+        hh: <?= $hh ?>, fh: <?= $fh ?>, rh: <?= $repeatHead ? 1 : 0 ?>, rf: <?= $repeatFoot ? 1 : 0 ?>,
+        hhpx: 0, fhpx: 0
     };
     var MM = 96 / 25.4; // px por mm na tela
-    function ready(fn) {
-        if (document.readyState !== 'loading') { fn(); }
-        else { document.addEventListener('DOMContentLoaded', fn); }
+    function quandoCarregar(fn) {
+        if (document.readyState === 'complete') { fn(); }
+        else { window.addEventListener('load', fn); } // imagens do timbrado já medidas
     }
-    ready(function () { setTimeout(paginar, 40); });
+    quandoCarregar(function () { try { promover(); } catch (e) { if (window.console) { console.warn('cabeçalho em fluxo não promovido:', e); } } paginar(); });
+
+    /* Mede o cabeçalho/rodapé em fluxo e os transforma em fixos (fora da
+       tabela), ajustando os espaçadores do papel para a altura real. */
+    function promover() {
+        var body = document.querySelector('.sheet-body');
+        if (!body) { return; }
+        var hf = body.querySelector('.doc-header-flow');
+        if (hf && !C.rh) {
+            var hpx = hf.offsetHeight;
+            var fixo = document.createElement('div');
+            fixo.className = 'doc-header-fixed doc-hf';
+            fixo.innerHTML = hf.innerHTML;
+            fixo.style.height = hpx + 'px';
+            body.insertBefore(fixo, body.querySelector('.doc-table'));
+            hf.parentNode.removeChild(hf);
+            var sp = body.querySelector('.doc-space-top');
+            if (sp) { sp.style.height = (C.mt * MM + hpx + C.gap * MM) + 'px'; }
+            C.hhpx = hpx; C.rh = 1;
+        }
+        var ff = body.querySelector('.doc-footer-flow');
+        if (ff && !C.rf) {
+            var fpx = ff.offsetHeight;
+            var fixoF = document.createElement('div');
+            fixoF.className = 'doc-footer-fixed doc-hf';
+            fixoF.innerHTML = ff.innerHTML;
+            fixoF.style.height = fpx + 'px';
+            body.insertBefore(fixoF, body.querySelector('.doc-table'));
+            ff.parentNode.removeChild(ff);
+            var sb = body.querySelector('.doc-space-bottom');
+            if (sb) { sb.style.height = (C.mb * MM + fpx + C.gap * MM) + 'px'; }
+            C.fhpx = fpx; C.rf = 1;
+        }
+    }
 
     function paginar() {
         try {
@@ -487,41 +603,94 @@ $pal = Tokens::printPalette();
         // síncrona (a montagem termina antes de qualquer repintura), sem piscar.
         document.body.classList.add('js-paginado');
 
+        var alvo, limite;
         function novaPagina() {
             var pg = document.createElement('div'); pg.className = 'doc-page';
             var headH = 0, footH = 0;
+            wrap.appendChild(pg);
             if (headHTML) {
                 var h = document.createElement('div'); h.className = 'doc-page-head'; h.innerHTML = headHTML;
-                pg.appendChild(h); wrap.appendChild(pg);
-                headH = C.hh > 0 ? C.hh * MM : h.offsetHeight;
-            } else { wrap.appendChild(pg); }
+                pg.appendChild(h);
+                // Mesma caixa do papel: altura fixa, conteúdo alinhado ao topo.
+                headH = C.hhpx || (C.hh > 0 ? C.hh * MM : h.offsetHeight);
+                h.style.height = headH + 'px';
+            }
             if (footHTML) {
                 var f = document.createElement('div'); f.className = 'doc-page-foot'; f.innerHTML = footHTML;
                 pg.appendChild(f);
-                footH = C.fh > 0 ? C.fh * MM : f.offsetHeight;
+                footH = C.fhpx || (C.fh > 0 ? C.fh * MM : f.offsetHeight);
+                f.style.height = footH + 'px';
             }
             var b = document.createElement('div'); b.className = 'doc-page-body doc-content';
-            var topPx = C.mt * MM + (headHTML ? headH + 4 * MM : 0);
-            var botPx = C.mb * MM + (footHTML ? footH + 4 * MM : 0);
-            b.style.top = topPx + 'px';
-            b.style.bottom = botPx + 'px';
+            b.style.top = (C.mt * MM + (headHTML ? headH + C.gap * MM : 0)) + 'px';
+            b.style.bottom = (C.mb * MM + (footHTML ? footH + C.gap * MM : 0)) + 'px';
             pg.appendChild(b);
+            alvo = b; limite = b.clientHeight;
             return b;
         }
+        function cabe() { return alvo.scrollHeight <= limite + 0.5; }
+        function divisivel(el) {
+            var t = el.tagName;
+            return (t === 'OL' || t === 'UL' || t === 'TABLE') && el.children.length > 1;
+        }
+        // Clona o elemento SEM os filhos (a "casca" de uma lista/tabela).
+        function casca(el) {
+            var c = el.cloneNode(false);
+            if (el.tagName === 'TABLE') {
+                Array.prototype.forEach.call(el.children, function (ch) {
+                    if (ch.tagName !== 'TBODY') { c.appendChild(ch.cloneNode(true)); }
+                });
+                c.appendChild(document.createElement('tbody'));
+            }
+            return c;
+        }
+        function destino(cont) { return cont.tagName === 'TABLE' ? cont.querySelector('tbody') : cont; }
+        function itensDe(el) {
+            if (el.tagName === 'TABLE') {
+                var tb = el.querySelector('tbody');
+                return Array.prototype.slice.call((tb || el).children);
+            }
+            return Array.prototype.slice.call(el.children);
+        }
+        // Lista/tabela que não cabe: distribui os itens/linhas pelas folhas,
+        // repetindo a casca (e o thead) e continuando a numeração.
+        function dividir(el) {
+            var itens = itensDe(el), cont = casca(el), ordinais = 0;
+            alvo.appendChild(cont);
+            for (var j = 0; j < itens.length; j++) {
+                var it = itens[j].cloneNode(true);
+                destino(cont).appendChild(it);
+                if (!cabe() && (destino(cont).children.length > 1 || alvo.children.length > 1)) {
+                    destino(cont).removeChild(it);
+                    if (!destino(cont).children.length) { alvo.removeChild(cont); }
+                    novaPagina();
+                    cont = casca(el);
+                    if (ordinais > 0) { cont.style.counterReset = 'list-0 ' + ordinais; }
+                    alvo.appendChild(cont);
+                    destino(cont).appendChild(it);
+                }
+                if (it.getAttribute && it.getAttribute('data-list') === 'ordered' && !/ql-indent-/.test(it.className || '')) { ordinais++; }
+            }
+        }
 
-        var alvo = novaPagina();
-        var limite = alvo.clientHeight;
+        novaPagina();
         for (var i = 0; i < blocks.length; i++) {
             var clone = blocks[i].cloneNode(true);
             alvo.appendChild(clone);
-            if (alvo.scrollHeight > limite && alvo.childNodes.length > 1) {
+            if (cabe()) { continue; }
+            if (divisivel(blocks[i])) {
                 alvo.removeChild(clone);
-                alvo = novaPagina();
-                limite = alvo.clientHeight;
-                alvo.appendChild(clone);
-                // Um único bloco maior que a página fica sozinho e transborda
-                // (raro: tabela/imagem gigante). Melhor do que sumir.
+                dividir(blocks[i]);
+                continue;
             }
+            if (alvo.children.length === 1) {
+                // Um único bloco maior que a página fica sozinho e transborda
+                // (raro: imagem gigante) — o papel faz o mesmo.
+                continue;
+            }
+            alvo.removeChild(clone);
+            novaPagina();
+            alvo.appendChild(clone);
         }
     }
 })();
