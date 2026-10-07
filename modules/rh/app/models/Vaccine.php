@@ -139,8 +139,12 @@ class Vaccine extends Model
         $limiteAlerta = date('Y-m-d', strtotime('+' . self::ALERT_DAYS . ' days'));
         $total = max(1, (int) $vaccine['doses_total']);
 
+        // Só registros VERIFICADOS contam para o status: um comprovante que o
+        // funcionário acabou de enviar aparece como "aguardando validação",
+        // não como "em dia" — senão a validação do RH seria cosmética.
         $doses = []; $dispensa = null; $sorologia = null;
         foreach ($records as $r) {
+            if ((int) ($r['verified'] ?? 1) !== 1) { continue; }
             if ($r['kind'] === 'dose')           { $doses[] = $r; }
             elseif ($r['kind'] === 'dispensa')   { $dispensa = $r; }
             elseif ($r['kind'] === 'sorologia')  { $sorologia = $r; } // a mais recente vence (ordem por data)
@@ -158,6 +162,7 @@ class Vaccine extends Model
             'status'     => 'pendente',
             'unverified' => count(array_filter($records, fn ($r) => (int) $r['verified'] === 0)),
             'serology'   => $sorologia,
+            'inactive'   => (int) ($vaccine['active'] ?? 1) === 0,
         ];
 
         if ($dispensa) {
@@ -168,14 +173,26 @@ class Vaccine extends Model
             $out['status'] = 'em_dia';
             return $out;
         }
+        // Sorologia NÃO reagente depois da última dose = não respondedor:
+        // continua cobrando (dose extra + nova sorologia), nunca "em dia".
+        if ($sorologia && strtolower((string) $sorologia['result']) === 'nao_reagente'
+            && (!$ultima || (string) $sorologia['applied_at'] >= (string) $ultima['applied_at'])) {
+            $out['status'] = 'incompleta';
+            $out['next_due'] = (string) $sorologia['applied_at'] !== '' ? self::addDays((string) $sorologia['applied_at'], (int) ($vaccine['next_dose_days'] ?: 30)) : null;
+            $out['note'] = 'Sorologia não reagente: dose extra e nova sorologia.';
+            return $out;
+        }
         if (!$doses) {
-            $out['status'] = (int) $vaccine['applies_to_all'] === 1 ? 'pendente' : 'nao_aplica';
+            // Vacina inativada no catálogo não gera pendência; fica só como histórico.
+            $out['status'] = ((int) $vaccine['applies_to_all'] === 1 && !$out['inactive']) ? 'pendente' : 'nao_aplica';
             return $out;
         }
 
         // Reforço/anual: cada dose recomeça a contagem — a última decide.
+        // "Completa" é contar as doses: um número de dose digitado à mão não
+        // encerra o esquema sozinho (uma 2ª dose avulsa não é esquema de 2).
         $months = (int) ($vaccine['booster_months'] ?? 0);
-        $completa = count($doses) >= $total || (int) ($ultima['dose_number'] ?? 0) >= $total;
+        $completa = count($doses) >= $total;
 
         if (!$completa && $months === 0) {
             $out['status'] = 'incompleta';
@@ -215,16 +232,37 @@ class Vaccine extends Model
         return $out;
     }
 
-    /** Avalia TODO o catálogo para um funcionário. @return array<int, array> por vaccine_id */
+    /**
+     * Avalia TODO o catálogo para um funcionário: as vacinas ativas e também
+     * as INATIVAS em que ele tem registro (o histórico não some ao inativar).
+     * @return array<int, array> por vaccine_id
+     */
     public static function evaluateEmployee(int $employeeId, ?array $catalog = null, ?array $records = null): array
     {
         $catalog ??= self::catalog();
         $records ??= self::recordsOf($employeeId);
         $out = [];
+        $ids = [];
         foreach ($catalog as $v) {
+            $ids[(int) $v['id']] = true;
             $out[(int) $v['id']] = self::evaluate($v, $records[(int) $v['id']] ?? []);
         }
+        $faltam = array_diff(array_keys($records), array_keys($ids));
+        if ($faltam) {
+            foreach (self::catalog(false) as $v) {
+                if (in_array((int) $v['id'], $faltam, true)) {
+                    $out[(int) $v['id']] = self::evaluate($v, $records[(int) $v['id']]);
+                }
+            }
+        }
         return $out;
+    }
+
+    /** Soma dias a uma data Y-m-d. */
+    public static function addDays(string $date, int $days): ?string
+    {
+        $ts = strtotime($date);
+        return $ts ? date('Y-m-d', strtotime("+{$days} days", $ts)) : null;
     }
 
     /** Resumo (contagem por status) de uma avaliação. */

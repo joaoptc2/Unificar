@@ -129,6 +129,7 @@ class VaccineController
         $recId = (int) $this->db->lastInsertId();
         AuditLog::log('create', 'employee_vaccines', $recId, null, ['employee_id' => $employeeId, 'vaccine_id' => $vaccineId, 'kind' => $kind]);
         $this->closeRequestsIfResolved($employeeId, $vaccineId, $recId);
+        FileCache::forget('dashboard.global.' . date('Y-m-d'));
         Session::flash('success', 'Registro de vacina salvo.');
         header('Location: ' . $back); exit;
     }
@@ -144,6 +145,7 @@ class VaccineController
         if (!$r) { Session::flash('error', 'Registro não encontrado.'); header('Location: index.php?m=rh&page=vaccines'); exit; }
         $back = 'index.php?m=rh&page=employees&action=show&id=' . (int) $r['employee_id'] . '#tabVacinas';
         if (!empty($_POST['reject'])) {
+            if (!empty($r['file_path'])) { Upload::delete($r['file_path']); }
             $this->db->prepare('DELETE FROM rh_employee_vaccines WHERE id = ?')->execute([$id]);
             $this->db->prepare("UPDATE rh_vaccine_requests SET status = 'aberta', employee_vaccine_id = NULL WHERE employee_vaccine_id = ?")->execute([$id]);
             AuditLog::log('reject', 'employee_vaccines', $id);
@@ -159,6 +161,7 @@ class VaccineController
                  ->execute([$applied, $dose, $validUntil, Session::userId(), $id]);
         AuditLog::log('verify', 'employee_vaccines', $id);
         $this->closeRequestsIfResolved((int) $r['employee_id'], (int) $r['vaccine_id'], $id);
+        FileCache::forget('dashboard.global.' . date('Y-m-d'));
         Session::flash('success', 'Comprovante validado.');
         header('Location: ' . $back); exit;
     }
@@ -174,6 +177,7 @@ class VaccineController
             if (!empty($r['file_path'])) { Upload::delete($r['file_path']); }
             $this->db->prepare('DELETE FROM rh_employee_vaccines WHERE id = ?')->execute([$id]);
             AuditLog::log('delete', 'employee_vaccines', $id);
+            FileCache::forget('dashboard.global.' . date('Y-m-d'));
             Session::flash('success', 'Registro excluído.');
         }
         header('Location: index.php?m=rh&page=employees&action=show&id=' . (int) ($r['employee_id'] ?? 0) . '#tabVacinas'); exit;
@@ -342,12 +346,19 @@ class VaccineController
             Session::flash('success', 'Vacina atualizada.');
         } else {
             $key = preg_replace('/[^a-z0-9]+/', '_', strtolower(iconv('UTF-8', 'ASCII//TRANSLIT', $name) ?: $name));
-            $key = trim((string) $key, '_') ?: 'vacina';
-            $base = $key; $n = 1;
+            // Trunca ANTES de testar a unicidade (a coluna tem 40 chars) e
+            // deixa espaço para o sufixo numérico.
+            $base = mb_substr(trim((string) $key, '_') ?: 'vacina', 0, 36);
+            $key = $base; $n = 1;
             while (self::keyExists($key)) { $key = $base . '_' . (++$n); }
-            $data['key'] = mb_substr($key, 0, 40);
+            $data['key'] = $key;
             $data['active'] = 1;
-            $id = Vaccine::insert($data);
+            try {
+                $id = Vaccine::insert($data);
+            } catch (\Throwable $e) {
+                Session::flash('error', 'Não foi possível adicionar a vacina (nome já existente?).');
+                header('Location: ' . $back); exit;
+            }
             AuditLog::log('create', 'vaccines', $id);
             Session::flash('success', 'Vacina adicionada ao catálogo.');
         }
@@ -367,10 +378,10 @@ class VaccineController
     {
         core_require('vaccines.config'); Csrf::check();
         $id = Sanitize::int($_POST['id'] ?? 0);
-        $st = $this->db->prepare('SELECT COUNT(*) FROM rh_employee_vaccines WHERE vaccine_id = ?');
-        $st->execute([$id]);
+        $st = $this->db->prepare('SELECT (SELECT COUNT(*) FROM rh_employee_vaccines WHERE vaccine_id = ?) + (SELECT COUNT(*) FROM rh_vaccine_requests WHERE vaccine_id = ?)');
+        $st->execute([$id, $id]);
         if ((int) $st->fetchColumn() > 0) {
-            Session::flash('error', 'Esta vacina tem registros de funcionários — inative em vez de excluir.');
+            Session::flash('error', 'Esta vacina tem registros ou solicitações de funcionários — inative em vez de excluir.');
         } else {
             $this->db->prepare('DELETE FROM rh_vaccines WHERE id = ?')->execute([$id]);
             AuditLog::log('delete', 'vaccines', $id);

@@ -74,7 +74,9 @@ class Lgpd
             }
             $db->prepare('UPDATE rh_employee_vaccines SET file_path = NULL, file_original_name = NULL, batch = NULL, manufacturer = NULL, notes = NULL, reason = NULL WHERE employee_id = ?')
                ->execute([$employeeId]);
-            $db->prepare("UPDATE rh_vaccine_requests SET status = 'cancelada', message = NULL, employee_note = NULL, closed_at = COALESCE(closed_at, NOW()) WHERE employee_id = ?")
+            $db->prepare("UPDATE rh_vaccine_requests SET message = NULL, employee_note = NULL,
+                    status = CASE WHEN status IN ('aberta','enviada') THEN 'cancelada' ELSE status END,
+                    closed_at = COALESCE(closed_at, NOW()) WHERE employee_id = ?")
                ->execute([$employeeId]);
 
             // Anonimiza histórico (mantém datas e tipos).

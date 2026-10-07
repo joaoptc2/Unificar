@@ -90,8 +90,13 @@ class ComplaintController
         core_require('complaints.respond'); Csrf::check();
         $id   = Sanitize::int($_POST['id'] ?? 0);
         $body = mb_substr(trim((string) ($_POST['body'] ?? '')), 0, 5000);
-        if (!Complaint::find($id) || $body === '') {
+        $c = Complaint::find($id);
+        if (!$c || $body === '') {
             Session::flash('error', 'Escreva a mensagem.');
+            header('Location: index.php?m=rh&page=complaints&action=show&id=' . $id); exit;
+        }
+        if (in_array($c['status'], ['concluida', 'arquivada'], true)) {
+            Session::flash('error', 'Denúncia encerrada: reabra (status "em apuração") para conversar com o denunciante.');
             header('Location: index.php?m=rh&page=complaints&action=show&id=' . $id); exit;
         }
         Complaint::addMessage($id, 'comissao', $body, Session::userId());
@@ -130,11 +135,21 @@ class ComplaintController
                 Session::flash('error', 'Anexo recusado: ' . $up['error']);
                 header('Location: index.php?m=rh&page=my&tab=denuncias'); exit;
             }
-            $attachmentPath = $up['path'];
             // O nome original pode identificar o autor ("relatorio-da-maria.pdf"):
-            // guarda só a extensão com um nome neutro.
+            // guarda só a extensão com um nome neutro. E o nome físico que o
+            // Upload gera leva time() (segundo exato da abertura): renomeia
+            // para um nome só aleatório e alinha o mtime à hora truncada.
             $ext = strtolower(pathinfo((string) $up['original_name'], PATHINFO_EXTENSION));
             $attachmentName = 'anexo' . ($ext ? '.' . $ext : '');
+            $attachmentPath = $up['path'];
+            $abs = Upload::resolvePath($up['path']);
+            if ($abs && is_file($abs)) {
+                $novo = dirname($abs) . '/' . bin2hex(random_bytes(20)) . ($ext ? '.' . $ext : '');
+                if (@rename($abs, $novo)) {
+                    $attachmentPath = dirname($up['path']) . '/' . basename($novo);
+                    @touch($novo, (int) (floor(time() / 3600) * 3600));
+                }
+            }
         }
 
         [$id, $protocol, $key] = Complaint::open([
@@ -200,18 +215,18 @@ class ComplaintController
                 "SELECT COUNT(*) FROM login_attempts WHERE identifier = " . $this->db->quote($ipKey)
                 . " AND success = 0 AND attempted_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)"
             )->fetchColumn() ?: 0);
-            if ($falhas >= 15 || $porIp >= 10) {
-                $erro = 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
+            // Num hospital todo mundo sai pelo mesmo IP (NAT): o freio não
+            // pode negar quem ACERTA protocolo+chave — só torna as falhas
+            // lentas (atraso crescente) e, acima do limite, as recusa.
+            $bloqueado = $falhas >= 15 || $porIp >= 30;
+            $c = Complaint::findByCredentials($protocol, $key);
+            if (!$c) {
+                usleep(min(3000000, 400000 * (1 + min($falhas, 6))));
+                Session::set('_complaint_track_fail', $falhas + 1);
+                $this->db->prepare('INSERT INTO login_attempts (identifier, success) VALUES (?, 0)')->execute([$ipKey]);
+                $erro = $bloqueado ? 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' : 'Protocolo ou chave não conferem.';
             } else {
-                $c = Complaint::findByCredentials($protocol, $key);
-                if (!$c) {
-                    usleep(400000);
-                    Session::set('_complaint_track_fail', $falhas + 1);
-                    $this->db->prepare('INSERT INTO login_attempts (identifier, success) VALUES (?, 0)')->execute([$ipKey]);
-                    $erro = 'Protocolo ou chave não conferem.';
-                } else {
-                    Session::set('_complaint_track_fail', 0);
-                }
+                Session::set('_complaint_track_fail', 0);
             }
         }
 

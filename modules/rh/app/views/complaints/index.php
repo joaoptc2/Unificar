@@ -26,7 +26,7 @@
 <?php foreach ($items as $c): ?>
 <tr class="<?= $c['status'] === 'nova' ? 'fw-semibold' : '' ?>">
     <td class="text-nowrap"><code><?= Sanitize::e($c['protocol']) ?></code>
-        <?php if ((int) $c['unread_from_reporter'] > 0): ?><span class="badge bg-danger ms-1" title="Mensagem nova do denunciante"><i class="bi bi-chat-dots"></i></span><?php endif; ?>
+        <?php if ((int) $c['awaiting_reply'] > 0): ?><span class="badge bg-danger ms-1" title="Mensagem do denunciante aguardando resposta da comissão"><i class="bi bi-chat-dots"></i></span><?php endif; ?>
         <?php if (!empty($c['attachment_path'])): ?><i class="bi bi-paperclip text-muted ms-1" title="Com anexo"></i><?php endif; ?>
     </td>
     <td><span class="badge bg-light text-dark border"><?= Sanitize::e(Complaint::CATEGORIES[$c['category']] ?? $c['category']) ?></span></td>

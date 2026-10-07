@@ -73,7 +73,11 @@ class Complaint extends Model
             $data['involved'] ?: null, $data['occurred_at'] ?: null, $data['location'] ?: null,
             $data['contact'] ?: null, $data['attachment_path'] ?: null, $data['attachment_name'] ?: null,
         ]);
-        return [(int) $db->lastInsertId(), $protocol, $key];
+        $id = (int) $db->lastInsertId();
+        // updated_at tem DEFAULT CURRENT_TIMESTAMP: sem isto o segundo exato
+        // da abertura ficava gravado ali, anulando a truncagem de created_at.
+        $db->prepare('UPDATE rh_complaints SET updated_at = created_at WHERE id = ?')->execute([$id]);
+        return [$id, $protocol, $key];
     }
 
     /**
@@ -107,7 +111,7 @@ class Complaint extends Model
             "SELECT c.*, u.name AS handled_by_name,
                     (SELECT COUNT(*) FROM rh_complaint_messages m WHERE m.complaint_id = c.id) AS messages,
                     (SELECT COUNT(*) FROM rh_complaint_messages m WHERE m.complaint_id = c.id AND m.author = 'denunciante'
-                        AND m.created_at > COALESCE(c.responded_at, c.created_at)) AS unread_from_reporter
+                        AND m.created_at >= COALESCE(c.responded_at, c.created_at)) AS awaiting_reply
              FROM rh_complaints c
              LEFT JOIN users u ON u.id = c.handled_by
              $wc
@@ -150,7 +154,8 @@ class Complaint extends Model
     public static function notifyCommittee(int $id, string $protocol, string $category): void
     {
         $label = self::CATEGORIES[$category] ?? 'Outro';
-        foreach (Core\Perms::usersWith('rh', 'complaints.view') as $uid) {
+        $ids = Core\Perms::usersWith('rh', 'complaints.view');
+        foreach ($ids as $uid) {
             Core\Notifications::add(
                 (int) $uid,
                 'Nova denúncia ' . $protocol,
@@ -159,6 +164,13 @@ class Complaint extends Model
                 'warning',
                 'rh'
             );
+        }
+        // A notificação também carregava o segundo exato da abertura.
+        if ($ids) {
+            self::db()->prepare(
+                "UPDATE notifications SET created_at = DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00')
+                  WHERE module = 'rh' AND title = ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 MINUTE)"
+            )->execute(['Nova denúncia ' . $protocol]);
         }
     }
 }

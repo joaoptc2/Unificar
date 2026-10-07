@@ -259,15 +259,14 @@ final class DocLayout
     /* Espaços/quebras preservados só DENTRO dos blocos (como o Quill grava):
        no contêiner, pre-wrap transformaria as quebras de linha do código-fonte
        de capas e HTML legado em linhas em branco. */
-    .doc-content p, .doc-content li, .doc-content td, .doc-content th, .doc-content blockquote,
-    .doc-content h1, .doc-content h2, .doc-content h3, .doc-content h4, .doc-content h5, .doc-content h6 { white-space: pre-wrap; }
+    .doc-content p, .doc-content h1, .doc-content h2, .doc-content h3, .doc-content h4, .doc-content h5, .doc-content h6 { white-space: pre-wrap; }
     .doc-content p, .doc-content ol, .doc-content ul, .doc-content pre, .doc-content blockquote,
     .doc-content h1, .doc-content h2, .doc-content h3, .doc-content h4, .doc-content h5, .doc-content h6 { margin: 0; padding: 0; }
     .doc-content p, .doc-content h1, .doc-content h2, .doc-content h3, .doc-content h4, .doc-content h5, .doc-content h6 { counter-set: list-0 list-1 list-2 list-3 list-4 list-5 list-6 list-7 list-8 list-9; }
     .doc-content h1 { font-size: 2em; } .doc-content h2 { font-size: 1.5em; } .doc-content h3 { font-size: 1.17em; }
     .doc-content h4 { font-size: 1em; } .doc-content h5 { font-size: .83em; } .doc-content h6 { font-size: .67em; }
     .doc-content a { color: #0b57d0; }
-    .doc-content img { max-width: 100%; }
+    .doc-content img { max-width: 100%; max-height: var(--doc-body-h, 240mm); object-fit: contain; }
     .doc-content blockquote { border-left: 4px solid #ccc; margin: 5px 0; padding-left: 16px; }
     .doc-content pre { white-space: pre-wrap; margin: 5px 0; padding: 5px 10px; border-radius: 3px; background: #f0f0f0; }
     .doc-content table { border-collapse: collapse; table-layout: fixed; width: 100%; }
@@ -399,6 +398,7 @@ $pal = Tokens::printPalette();
        e zerava o padding delas. */
     .doc-table > thead > tr > td, .doc-table > tbody > tr > td, .doc-table > tfoot > tr > td { padding: 0; vertical-align: top; }
     .doc-table > tbody > tr > td.doc-cell { padding: 0 <?= $mr ?>mm 0 <?= $ml ?>mm; }
+    :root { --doc-body-h: <?= max(40, $h - $spaceTop - $spaceBottom - 2) ?>mm; }
     .doc-space-top { height: <?= $spaceTop ?>mm; }
     .doc-space-bottom { height: <?= $spaceBottom ?>mm; }
     .doc-hf { padding: 0 <?= $mr ?>mm 0 <?= $ml ?>mm; }
@@ -408,6 +408,12 @@ $pal = Tokens::printPalette();
        +20 mm no pé). Fica só o respiro até o corpo. */
     .doc-header-flow { margin-bottom: <?= $gap ?>mm; }
     .doc-footer-flow { margin-top: <?= $gap ?>mm; }
+    /* flow-root: a medição (offsetHeight) e o clone fixo (overflow hidden)
+       passam a incluir as margens de <p>/<h1> do timbrado do mesmo jeito —
+       sem isto a 2ª linha de um cabeçalho em parágrafos era cortada. */
+    .doc-header-flow, .doc-footer-flow, .doc-hf { display: flow-root; }
+    .doc-hf > :first-child { margin-top: 0; } .doc-hf > :last-child { margin-bottom: 0; }
+    .doc-screen-pages .doc-page-head > :first-child, .doc-screen-pages .doc-page-foot > :first-child { margin-top: 0; }
 
     /* --------- folhas na tela (emulam o papel) --------- */
     .sheet {
@@ -482,8 +488,8 @@ $pal = Tokens::printPalette();
            Chromium partia parágrafos entre páginas e o papel ficava com
            outra contagem de páginas e outro conteúdo por folha a partir da
            2ª. Um bloco maior que a página continua sendo partido. */
-        .doc-content > *:not(ol):not(ul):not(table) { break-inside: avoid; page-break-inside: avoid; }
-        .doc-content li, .doc-content tr { break-inside: avoid; page-break-inside: avoid; }
+        .doc-content p, .doc-content h1, .doc-content h2, .doc-content h3, .doc-content h4, .doc-content h5, .doc-content h6,
+        .doc-content li, .doc-content tr, .doc-content img { break-inside: avoid; page-break-inside: avoid; }
         .doc-content h1, .doc-content h2, .doc-content h3, .doc-content h4 { break-after: avoid; page-break-after: avoid; }
     }
     <?= (string) ($layout['custom_css'] ?? '') ?>
@@ -545,8 +551,22 @@ $pal = Tokens::printPalette();
     function promover() {
         var body = document.querySelector('.sheet-body');
         if (!body) { return; }
+        // O Chromium só repete um thead/tfoot com menos de 1/4 da página;
+        // acima disso o espaçador não repetiria e o fixo cobriria o texto.
+        var limite = C.h * MM / 4 - 1;
         var hf = body.querySelector('.doc-header-flow');
-        if (hf && !C.rh) {
+        var cell = body.querySelector('td.doc-cell');
+        if (hf && !C.rh && (C.mt * MM + hf.offsetHeight + C.gap * MM) >= limite && cell) {
+            // Alto demais para repetir: vira o primeiro bloco do corpo (só na
+            // 1ª página), e o thead fica só com a margem — que repete sempre.
+            var uma = document.createElement('div'); uma.className = 'doc-header-once doc-hf';
+            uma.innerHTML = hf.innerHTML; uma.style.marginBottom = C.gap + 'mm';
+            cell.insertBefore(uma, cell.firstChild);
+            hf.parentNode.removeChild(hf);
+            C.headOnce = uma; hf = null;
+            if (window.console) { console.warn('Cabeçalho em fluxo maior que 1/4 da página: aparece só na primeira.'); }
+        }
+        if (hf && !C.rh && (C.mt * MM + hf.offsetHeight + C.gap * MM) < limite) {
             var hpx = hf.offsetHeight;
             var fixo = document.createElement('div');
             fixo.className = 'doc-header-fixed doc-hf';
@@ -559,7 +579,14 @@ $pal = Tokens::printPalette();
             C.hhpx = hpx; C.rh = 1;
         }
         var ff = body.querySelector('.doc-footer-flow');
-        if (ff && !C.rf) {
+        if (ff && !C.rf && (C.mb * MM + ff.offsetHeight + C.gap * MM) >= limite && cell) {
+            var ult = document.createElement('div'); ult.className = 'doc-footer-once doc-hf';
+            ult.innerHTML = ff.innerHTML; ult.style.marginTop = C.gap + 'mm';
+            cell.appendChild(ult);
+            ff.parentNode.removeChild(ff);
+            C.footOnce = ult; ff = null;
+        }
+        if (ff && !C.rf && (C.mb * MM + ff.offsetHeight + C.gap * MM) < limite) {
             var fpx = ff.offsetHeight;
             var fixoF = document.createElement('div');
             fixoF.className = 'doc-footer-fixed doc-hf';
@@ -571,6 +598,10 @@ $pal = Tokens::printPalette();
             if (sb) { sb.style.height = (C.mb * MM + fpx + C.gap * MM) + 'px'; }
             C.fhpx = fpx; C.rf = 1;
         }
+        // Altura útil do corpo para o limite das imagens (tela e papel).
+        var topMm = C.mt + (C.rh ? (C.hhpx ? C.hhpx / MM : C.hh) + C.gap : 0);
+        var botMm = C.mb + (C.rf ? (C.fhpx ? C.fhpx / MM : C.fh) + C.gap : 0);
+        document.documentElement.style.setProperty('--doc-body-h', Math.max(40, C.h - topMm - botMm - 2) + 'mm');
     }
 
     function paginar() {
@@ -595,6 +626,8 @@ $pal = Tokens::printPalette();
         var headHTML = headSrc ? headSrc.innerHTML : '';
         var footHTML = footSrc ? footSrc.innerHTML : '';
         var blocks = Array.prototype.slice.call(content.children);
+        if (C.headOnce) { blocks.unshift(C.headOnce); }
+        if (C.footOnce) { blocks.push(C.footOnce); }
         if (!blocks.length) { return; }
 
         wrap.textContent = '';
@@ -631,8 +664,13 @@ $pal = Tokens::printPalette();
         function cabe() { return alvo.scrollHeight <= limite + 0.5; }
         function divisivel(el) {
             var t = el.tagName;
-            return (t === 'OL' || t === 'UL' || t === 'TABLE') && el.children.length > 1;
+            if (t === 'TABLE') { return itensDe(el).length > 1; }          // linhas, não seções
+            if (t === 'OL' || t === 'UL') { return el.children.length > 1; }
+            if (t === 'PRE') { return (el.textContent || '').indexOf('\n') > 0; }
+            if (t === 'DIV' || t === 'SECTION' || t === 'BLOCKQUOTE') { return el.children.length > 1; }
+            return false;
         }
+        function ehTitulo(el) { return el && /^H[1-4]$/.test(el.tagName); }
         // Clona o elemento SEM os filhos (a "casca" de uma lista/tabela).
         function casca(el) {
             var c = el.cloneNode(false);
@@ -647,29 +685,55 @@ $pal = Tokens::printPalette();
         function destino(cont) { return cont.tagName === 'TABLE' ? cont.querySelector('tbody') : cont; }
         function itensDe(el) {
             if (el.tagName === 'TABLE') {
-                var tb = el.querySelector('tbody');
-                return Array.prototype.slice.call((tb || el).children);
+                var linhas = [];
+                Array.prototype.forEach.call(el.children, function (sec) {
+                    if (sec.tagName === 'TBODY') { Array.prototype.push.apply(linhas, sec.children); }
+                });
+                return linhas;
+            }
+            if (el.tagName === 'PRE') {
+                // Um <pre> longo é dividido por linha (clones com parte do texto).
+                return (el.textContent || '').split('\n').map(function (l) { var d = document.createElement('div'); d.textContent = l; return d; });
             }
             return Array.prototype.slice.call(el.children);
         }
+        function nivelDe(li) { var m = /ql-indent-(\d)/.exec(li.className || ''); return m ? parseInt(m[1], 10) : 0; }
         // Lista/tabela que não cabe: distribui os itens/linhas pelas folhas,
         // repetindo a casca (e o thead) e continuando a numeração.
         function dividir(el) {
-            var itens = itensDe(el), cont = casca(el), ordinais = 0;
+            var itens = itensDe(el), cont = casca(el), pre = el.tagName === 'PRE';
+            var ordinais = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; // contadores por nível de recuo
+            if (alvo.children.length > 1 && ehTitulo(alvo.lastElementChild)) {
+                // não deixar o título órfão no pé: ele vai com a lista/tabela
+                var t = alvo.removeChild(alvo.lastElementChild);
+                alvo.appendChild(t);
+                if (!cabe()) { alvo.removeChild(t); novaPagina(); alvo.appendChild(t); }
+            }
             alvo.appendChild(cont);
+            function continuar() {
+                var c = casca(el), reset = [];
+                for (var n = 0; n < 10; n++) { if (ordinais[n] > 0) { reset.push('list-' + n + ' ' + ordinais[n]); } }
+                if (reset.length) { c.style.counterReset = reset.join(' '); }
+                return c;
+            }
             for (var j = 0; j < itens.length; j++) {
-                var it = itens[j].cloneNode(true);
-                destino(cont).appendChild(it);
-                if (!cabe() && (destino(cont).children.length > 1 || alvo.children.length > 1)) {
-                    destino(cont).removeChild(it);
-                    if (!destino(cont).children.length) { alvo.removeChild(cont); }
+                var it = pre ? itens[j] : itens[j].cloneNode(true);
+                if (pre) { destino(cont).appendChild(document.createTextNode((j ? '\n' : '') + it.textContent)); }
+                else { destino(cont).appendChild(it); }
+                if (!cabe() && (destino(cont).childNodes.length > 1 || alvo.children.length > 1)) {
+                    destino(cont).removeChild(destino(cont).lastChild);
+                    if (!destino(cont).childNodes.length) { alvo.removeChild(cont); }
                     novaPagina();
-                    cont = casca(el);
-                    if (ordinais > 0) { cont.style.counterReset = 'list-0 ' + ordinais; }
+                    cont = continuar();
                     alvo.appendChild(cont);
-                    destino(cont).appendChild(it);
+                    if (pre) { destino(cont).appendChild(document.createTextNode(it.textContent)); }
+                    else { destino(cont).appendChild(it); }
                 }
-                if (it.getAttribute && it.getAttribute('data-list') === 'ordered' && !/ql-indent-/.test(it.className || '')) { ordinais++; }
+                if (!pre && it.getAttribute && it.getAttribute('data-list') === 'ordered') {
+                    var nv = nivelDe(it);
+                    ordinais[nv]++;
+                    for (var k = nv + 1; k < 10; k++) { ordinais[k] = 0; }
+                }
             }
         }
 
@@ -684,12 +748,16 @@ $pal = Tokens::printPalette();
                 continue;
             }
             if (alvo.children.length === 1) {
-                // Um único bloco maior que a página fica sozinho e transborda
-                // (raro: imagem gigante) — o papel faz o mesmo.
+                // Um único bloco indivisível maior que a página fica sozinho e
+                // transborda (imagens já são limitadas à altura útil).
                 continue;
             }
             alvo.removeChild(clone);
+            // Título órfão: o papel (break-after: avoid) leva o título junto do
+            // bloco seguinte; aqui também.
+            var orfao = (alvo.children.length > 1 && ehTitulo(alvo.lastElementChild)) ? alvo.removeChild(alvo.lastElementChild) : null;
             novaPagina();
+            if (orfao) { alvo.appendChild(orfao); }
             alvo.appendChild(clone);
         }
     }

@@ -128,7 +128,9 @@ if ($minPerm !== null) {
 
 if (class_exists($controllerName)) {
     $controller = new $controllerName();
-    if (method_exists($controller, $action)) {
+    // method_exists() também devolve true para métodos privados/protegidos:
+    // chamá-los dispara um Error (500 com stack trace). Só ações públicas.
+    if (method_exists($controller, $action) && (new ReflectionMethod($controller, $action))->isPublic()) {
         $controller->$action();
     } else {
         $controller->index();
