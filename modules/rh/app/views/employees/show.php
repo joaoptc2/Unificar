@@ -116,6 +116,9 @@
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabEpis">EPIs <span class="badge bg-secondary"><?= count($epis) ?></span></a></li>
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabVencimentos">Vencimentos <span class="badge bg-secondary"><?= count($expirations) ?></span></a></li>
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabAtestados">Atestados <span class="badge bg-secondary"><?= count($certificates) ?></span></a></li>
+            <?php if (!empty($canSeeVaccines)): ?>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabVacinas">Vacinas <span class="badge <?= $vaccineAlerts ? 'bg-danger' : 'bg-success' ?>"><?= (int) $vaccineAlerts ?></span></a></li>
+            <?php endif; ?>
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabPontos">
                 Pontuação
                 <span class="badge <?= $scoresTotal >= 0 ? 'bg-success' : 'bg-danger' ?>"><?= ($scoresTotal >= 0 ? '+' : '') . $scoresTotal ?></span>
@@ -388,6 +391,13 @@
                 </div>
             </div>
 
+            <!-- Tab Vacinas -->
+            <?php if (!empty($canSeeVaccines)): ?>
+            <div class="tab-pane fade" id="tabVacinas">
+                <?php require __DIR__ . '/_vaccines_tab.php'; ?>
+            </div>
+            <?php endif; ?>
+
             <!-- Tab Atestados -->
             <div class="tab-pane fade" id="tabAtestados">
                 <div class="card border-0 shadow-sm border-top-0 rounded-top-0">
@@ -656,3 +666,11 @@
         </div>
     </div>
 </div>
+<script>
+// Abre a aba indicada no hash (ex.: #tabVacinas ao voltar de um registro).
+(function () {
+    var h = location.hash; if (!h || !/^#tab[A-Za-z]+$/.test(h)) return;
+    var link = document.querySelector('a[data-bs-toggle="tab"][href="' + h + '"]');
+    if (link && window.bootstrap) { new bootstrap.Tab(link).show(); }
+})();
+</script>

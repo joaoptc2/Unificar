@@ -12,6 +12,7 @@
  *   positions    CRUD de cargos          (PositionController)
  *   access       acessos dos funcionários (EmployeeAccessController)
  *   birthdays    layout do cartaz A4     (BirthdayController::configure/save_config/preview)
+ *   vaccines     catálogo de vacinas     (VaccineController::catalog/catalog_save/...)
  *
  * Os POSTs de departamentos/cargos continuam nas rotas do módulo
  * (?m=rh&page=departments|positions&action=store|update|delete) e voltam para cá.
@@ -36,6 +37,7 @@ $panels = [
     'positions'   => ['PositionController',       ['index', 'create', 'edit']],
     'access'      => ['EmployeeAccessController', ['index', 'ensure', 'reset', 'create_all']],
     'birthdays'   => ['BirthdayController',       ['configure', 'save_config', 'preview', 'to_advanced', 'reset_visual']],
+    'vaccines'    => ['VaccineController',        ['catalog', 'catalog_save', 'catalog_toggle', 'catalog_delete']],
 ];
 
 if (!isset($panels[$tab])) {
@@ -46,6 +48,9 @@ if (!isset($panels[$tab])) {
 [$controllerName, $allowed] = $panels[$tab];
 if ($tab === 'birthdays' && $action === 'index') {
     $action = 'configure';
+}
+if ($tab === 'vaccines' && $action === 'index') {
+    $action = 'catalog';
 }
 if (!in_array($action, $allowed, true)) {
     $action = $allowed[0];

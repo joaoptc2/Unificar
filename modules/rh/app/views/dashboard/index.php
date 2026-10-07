@@ -61,6 +61,39 @@
     </div>
 </div>
 
+<?php if (core_can('vaccines.view') || !empty($openComplaints)): $va = $vaccineAlerts ?? ['vencida' => 0, 'vencendo' => 0, 'pendente' => 0]; ?>
+<div class="row g-3 mb-4">
+    <?php if (core_can('vaccines.view')): ?>
+    <div class="col-md-<?= !empty($openComplaints) ? '8' : '12' ?>">
+        <a class="card stat-card shadow-sm text-decoration-none" href="index.php?m=rh&page=vaccines">
+            <div class="card-body d-flex align-items-center flex-wrap gap-3">
+                <div class="stat-icon bg-danger bg-opacity-10 text-danger"><i class="bi bi-shield-plus"></i></div>
+                <div class="flex-grow-1">
+                    <div class="stat-label">Vacinas dos funcionários</div>
+                    <div class="small">
+                        <span class="badge bg-danger"><?= (int) $va['vencida'] ?></span> com vacina vencida ·
+                        <span class="badge bg-warning text-dark"><?= (int) $va['vencendo'] ?></span> vencendo ·
+                        <span class="badge bg-secondary"><?= (int) $va['pendente'] ?></span> com esquema pendente
+                        <?php if (!empty($vaccineValidations)): ?> · <span class="badge bg-info text-dark"><?= (int) $vaccineValidations ?></span> comprovante(s) para validar<?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+    <?php endif; ?>
+    <?php if (!empty($openComplaints)): ?>
+    <div class="col-md-4">
+        <a class="card stat-card shadow-sm text-decoration-none" href="index.php?m=rh&page=complaints">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-warning bg-opacity-10 text-warning me-3"><i class="bi bi-shield-exclamation"></i></div>
+                <div><div class="stat-value text-warning"><?= (int) $openComplaints ?></div><div class="stat-label">Denúncias em aberto</div></div>
+            </div>
+        </a>
+    </div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
 <div class="row g-3">
     <!-- Coluna esquerda -->
     <div class="col-lg-8">

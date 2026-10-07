@@ -300,6 +300,15 @@ class EmployeeController
             if ($sh['effective_date'] <= $hojeStr) { $currentSalary = $sh; break; }
         }
 
+        // Vacinas: status calculado pelo catálogo (só para quem pode ver).
+        $canSeeVaccines  = core_can('vaccines.view');
+        $vaccineEval     = $canSeeVaccines ? Vaccine::evaluateEmployee($id) : [];
+        $vaccineRequests = $canSeeVaccines ? VaccineRequest::forEmployee($id) : [];
+        $vaccineAlerts   = 0;
+        foreach ($vaccineEval as $vx) {
+            if (in_array($vx['status'], ['vencida', 'vencendo', 'pendente', 'incompleta'], true)) { $vaccineAlerts++; }
+        }
+
         // Acesso ao sistema (usuário global vinculado via rh_user_profile).
         $portalUser    = EmployeeAccess::linkedUser($id);
         $unlinkedUsers = (!$portalUser && core_can('employees.edit')) ? EmployeeAccess::unlinkedUsers() : [];

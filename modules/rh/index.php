@@ -103,6 +103,9 @@ $routes = [
     'warnings'           => ['WarningController',           null], // gates por ação (warnings.create/.delete)
     'signatures'         => ['SignatureController',         null], // gates por ação (signatures.create/.view)
     'files'              => ['DownloadController',          null], // valida a .view do recurso dono do arquivo
+    'vaccines'           => ['VaccineController',           null], // gates por ação (vaccines.view/.edit/.delete/.config; my_submit = my.view)
+    'complaints'         => ['ComplaintController',         null], // gates por ação (complaints.view/.respond; store/receipt = my.view + complaints.create)
+    'complaint_track'    => ['ComplaintController',         null], // pública (is_public): acompanhar pelo protocolo + chave
 ];
 
 if (!isset($routes[$page])) {
@@ -112,6 +115,11 @@ if (!isset($routes[$page])) {
 }
 
 [$controllerName, $minPerm] = $routes[$page];
+
+// A página pública de acompanhamento de denúncia tem UMA ação só.
+if ($page === 'complaint_track') {
+    $action = 'track';
+}
 
 // Gate de rota: usuário sem a permissão mínima recebe 403.
 if ($minPerm !== null) {

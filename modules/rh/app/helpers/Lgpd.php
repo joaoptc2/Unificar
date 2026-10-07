@@ -64,6 +64,19 @@ class Lgpd
                  WHERE employee_id = ?'
             )->execute([$employeeId]);
 
+            // Vacinas: apaga comprovantes e dados identificáveis (lote/notas),
+            // mantendo doses/datas para a estatística ocupacional; fecha e
+            // limpa as solicitações.
+            $vac = $db->prepare('SELECT id, file_path FROM rh_employee_vaccines WHERE employee_id = ?');
+            $vac->execute([$employeeId]);
+            foreach ($vac->fetchAll() as $v) {
+                if ($v['file_path']) Upload::delete($v['file_path']);
+            }
+            $db->prepare('UPDATE rh_employee_vaccines SET file_path = NULL, file_original_name = NULL, batch = NULL, manufacturer = NULL, notes = NULL, reason = NULL WHERE employee_id = ?')
+               ->execute([$employeeId]);
+            $db->prepare("UPDATE rh_vaccine_requests SET status = 'cancelada', message = NULL, employee_note = NULL, closed_at = COALESCE(closed_at, NOW()) WHERE employee_id = ?")
+               ->execute([$employeeId]);
+
             // Anonimiza histórico (mantém datas e tipos).
             $db->prepare(
                 "UPDATE rh_employee_records

@@ -62,6 +62,7 @@ class DashboardController
                 'expByType'          => $expByType,
                 'expByMonth'         => $expByMonth,
                 'candidatesByStatus' => $candidatesByStatus,
+                'vaccineAlerts'      => Vaccine::alertCounts(),
             ];
         });
 
@@ -74,6 +75,8 @@ class DashboardController
         $chartsData = self::buildCharts($cached);
 
         $viewData = array_merge($cached, [
+            'openComplaints'      => core_can('complaints.view') ? Complaint::openCount() : null,
+            'vaccineValidations'  => core_can('vaccines.view') ? VaccineRequest::pendingValidationCount() : null,
             'currentMonth'        => $currentMonth,
             'unreadNotifications' => $unreadNotifications,
             'chartsData'          => $chartsData,
